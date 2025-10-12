@@ -55,7 +55,8 @@ Game::Game() noexcept :
     m_isDamaged(false),
     m_points(500),
     m_weaponSystem(std::make_unique<WeaponSystem>()),
-    m_enemySystem(std::make_unique<EnemySystem>())
+    m_enemySystem(std::make_unique<EnemySystem>()),
+    m_particleSystem(std::make_unique<ParticleSystem>())
 {
     static bool firstFrame = true;
     if (firstFrame && m_gameState == GameState::PLAYING)
@@ -284,91 +285,7 @@ void Game::CreateRenderResources()
 
 }
 
-void Game::CreateExplosion(DirectX::XMFLOAT3 position)
-{
-    // 爆発エフェクト用パーティクル生成
-    for (int i = 0; i < 20; i++)
-    {
-        Particle particle;
-        particle.position = position;
 
-        // ランダムな方向に飛び散る
-        float angle = (float)rand() / RAND_MAX * 2.0f * 3.14159f;
-        float speed = 5.0f + (float)rand() / RAND_MAX * 10.0f;
-
-        particle.velocity.x = cosf(angle) * speed;
-        particle.velocity.y = 5.0f + (float)rand() / RAND_MAX * 10.0f;
-        particle.velocity.z = sinf(angle) * speed;
-
-        particle.color = DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);
-
-        particle.lifetime = 1.0f + (float)rand() / RAND_MAX * 2.0f;
-        particle.maxLifetime = particle.lifetime;
-
-        m_particles.push_back(particle);
-    }
-}
-
-void Game::CreateMuzzleFlash()
-{
-    m_showMuzzleFlash = true;
-    m_muzzleFlashTimer = 0.05f;
-
-    CreateMuzzleParticles();
-}
-void Game::CreateMuzzleParticles()
-{
-    // 銃口位置を計算
-    DirectX::XMFLOAT3 muzzlePosition;
-    muzzlePosition.x = m_cameraPos.x + 0.45f;
-    muzzlePosition.y = m_cameraPos.y - 0.15f;
-    muzzlePosition.z = m_cameraPos.z + 0.8f;
-
-    // 火花パーティクル生成（少数で短時間）
-    // 白熱した火花（高温の金属片）
-    for (int i = 0; i < 6; i++)
-    {
-        Particle particle;
-        particle.position = muzzlePosition;
-
-        float spreadAngle = ((float)rand() / RAND_MAX - 0.5f) * 0.8f;
-        float speed = 20.0f + (float)rand() / RAND_MAX * 15.0f;
-
-        particle.velocity.x = sinf(m_cameraRot.y + spreadAngle) * speed;
-        particle.velocity.y = -sinf(m_cameraRot.x) * speed + ((float)rand() / RAND_MAX - 0.5f) * 3.0f;
-        particle.velocity.z = cosf(m_cameraRot.y + spreadAngle) * speed;
-
-        // 白～薄黄色（高温の金属）
-        particle.color = DirectX::XMFLOAT4(1.0f, 1.0f, 0.9f + (float)rand() / RAND_MAX * 0.1f, 1.0f);
-
-        particle.lifetime = 0.15f + (float)rand() / RAND_MAX * 0.1f;
-        particle.maxLifetime = particle.lifetime;
-
-        m_particles.push_back(particle);
-    }
-
-    // 燃焼ガス（オレンジ色）
-    for (int i = 0; i < 4; i++)
-    {
-        Particle particle;
-        particle.position = muzzlePosition;
-
-        float spreadAngle = ((float)rand() / RAND_MAX - 0.5f) * 0.5f;
-        float speed = 8.0f + (float)rand() / RAND_MAX * 8.0f;
-
-        particle.velocity.x = sinf(m_cameraRot.y + spreadAngle) * speed;
-        particle.velocity.y = -sinf(m_cameraRot.x) * speed + ((float)rand() / RAND_MAX) * 5.0f;
-        particle.velocity.z = cosf(m_cameraRot.y + spreadAngle) * speed;
-
-        // オレンジ～赤色（燃焼ガス）
-        particle.color = DirectX::XMFLOAT4(1.0f, 0.4f + (float)rand() / RAND_MAX * 0.4f, 0.1f, 1.0f);
-
-        particle.lifetime = 0.3f + (float)rand() / RAND_MAX * 0.2f;
-        particle.maxLifetime = particle.lifetime;
-
-        m_particles.push_back(particle);
-    }
-}
 
 
 void Game::DrawGrid()
@@ -637,7 +554,7 @@ void Game::DrawBillboard()
 
 void Game::DrawParticles()
 {
-    if (m_particles.empty())
+    if (m_particleSystem->IsEmpty())
         return;
 
     auto context = m_d3dContext.Get();
@@ -671,7 +588,7 @@ void Game::DrawParticles()
     auto primitiveBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
     primitiveBatch->Begin();
 
-    for (const auto& particle : m_particles)
+    for (const auto& particle : m_particleSystem->GetParticles())
     {
         float size = 0.1f; // サイズを大きくして見やすく
 
@@ -1215,8 +1132,13 @@ void Game::UpdatePlaying()
             m_weaponSystem->SetFireRateTimer(weapon.fireRate);
             m_weaponSystem->SaveAmmoStatus();   //  弾薬状態を保存
 
-            CreateMuzzleFlash();
-            
+            // 銃口位置を計算
+            DirectX::XMFLOAT3 muzzlePosition;
+            muzzlePosition.x = m_cameraPos.x + 0.45f;
+            muzzlePosition.y = m_cameraPos.y - 0.15f;
+            muzzlePosition.z = m_cameraPos.z + 0.8f;
+
+            m_particleSystem->CreateMuzzleFlash(muzzlePosition, m_cameraRot);
 
             // ショットガンは複数の弾を発射
             int pellets = (m_weaponSystem->GetCurrentWeapon() == WeaponType::SHOTGUN) ? 8 : 1;
@@ -1267,7 +1189,7 @@ void Game::UpdatePlaying()
                             {
                                 //  敵を倒した
                                 enemy.isAlive = false;
-                                CreateExplosion(enemy.position);
+                                m_particleSystem->CreateExplosion(enemy.position);
                                 m_points += isHeadshot ? 100 : 60;  //  ヘッドショットボーナス
                                 m_enemiesKilledThisWave++;
 
@@ -1345,7 +1267,7 @@ void Game::UpdatePlaying()
     }
 
 
-    UpdateParticles();
+    m_particleSystem->Update(1.0f / 60.0f);
 
     //  m_cameraPOs
     //  【型】DirectX::XMFLOAT3
@@ -1500,50 +1422,6 @@ void Game::UpdateFade()
         {
             m_fadeAlpha = 1.0f;
             m_fadeActive = false;
-        }
-    }
-}
-
-void Game::UpdateParticles()
-{
-    float deltaTime = 1.0f / 60.0f; // 60FPS想定
-
-    // パーティクルの更新
-    for (auto it = m_particles.begin(); it != m_particles.end();)
-    {
-        // 位置更新
-        it->position.x += it->velocity.x * deltaTime;
-        it->position.y += it->velocity.y * deltaTime;
-        it->position.z += it->velocity.z * deltaTime;
-
-        // 重力適用
-        it->velocity.y -= 9.8f * deltaTime;
-
-        // ライフタイム更新
-        it->lifetime -= deltaTime;
-
-        // フェードアウト
-        float alpha = it->lifetime / it->maxLifetime;
-        it->color.w = alpha;
-
-        // 寿命切れのパーティクルを削除
-        if (it->lifetime <= 0.0f)
-        {
-            it = m_particles.erase(it);
-        }
-        else
-        {
-            ++it;
-        }
-    }
-
-    // 銃口フラッシュタイマー更新
-    if (m_showMuzzleFlash)
-    {
-        m_muzzleFlashTimer -= deltaTime;
-        if (m_muzzleFlashTimer <= 0.0f)
-        {
-            m_showMuzzleFlash = false;
         }
     }
 }

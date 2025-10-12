@@ -30,6 +30,7 @@
 #include "Entities.h"
 #include "WeaponSystem.h"
 #include "EnemySystem.h"
+#include "ParticleSystem.h"
 
 class Game
 {
@@ -53,6 +54,9 @@ private:
     //  m_enemySystem->Update()     みたいに使う
     std::unique_ptr<EnemySystem> m_enemySystem;     //  敵管理システム      unique_ptr 自動でメモリ管理
 
+    //  m_particleSystem->Update()  みたいに使う
+    std::unique_ptr<ParticleSystem> m_particleSystem;
+
     // === ゲームループの内部処理 ===
     void Update();     // ゲームロジック更新
     void Render();     // 描画処理
@@ -62,9 +66,6 @@ private:
     void CreateDevice();
     void CreateResources();
     void CreateRenderResources();
-    void CreateExplosion(DirectX::XMFLOAT3 position);
-    void CreateMuzzleFlash();
-    void CreateMuzzleParticles();
 
     void DrawGrid();
     //void DrawCubes();
@@ -77,14 +78,11 @@ private:
     void DrawSimpleNumber(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch, int digit, float x, float y, DirectX::XMFLOAT4 color);
 
 
-    void SpawnEnemy();
 
     void UpdateTitle();
     void UpdatePlaying();
     void UpdateGameOver();
     void UpdateFade();
-    void UpdateParticles();
-    void UpdateEnemies();
 
     void RenderTitle();
     void RenderPlaying();
@@ -134,7 +132,7 @@ private:
     float m_lastCameraRotY;
 
     
-    std::vector<Particle> m_particles;
+    
     bool m_showMuzzleFlash;
     float m_muzzleFlashTimer;
 
