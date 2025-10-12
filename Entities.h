@@ -45,6 +45,7 @@ struct Enemy {
 	float nextDirectionChange;
 	int health;
 	int maxHealth;
+	bool touchingPlayer;
 };
 
 //	パーティクル

@@ -26,8 +26,10 @@
 #include <WICTextureLoader.h>   // PNG/JPGなど
 #include <DDSTextureLoader.h>   // DDSテクスチャ
 #include <CommonStates.h>
+
 #include "Entities.h"
 #include "WeaponSystem.h"
+#include "EnemySystem.h"
 
 class Game
 {
@@ -45,8 +47,11 @@ public:
     void OnWindowSizeChanged(int width, int height);      // ウィンドウサイズ変更
 
 private:
+    //  m_weaponSystem->Update()    みたいに使う
+    std::unique_ptr<WeaponSystem> m_weaponSystem;   //  武器管理システム    unique_ptr 自動でメモリ管理
 
-    std::unique_ptr<WeaponSystem> m_weaponSystem;   //  武器管理システム
+    //  m_enemySystem->Update()     みたいに使う
+    std::unique_ptr<EnemySystem> m_enemySystem;     //  敵管理システム      unique_ptr 自動でメモリ管理
 
     // === ゲームループの内部処理 ===
     void Update();     // ゲームロジック更新
@@ -133,13 +138,8 @@ private:
     bool m_showMuzzleFlash;
     float m_muzzleFlashTimer;
 
-   
-    std::vector<Enemy> m_enemies;
-    float m_enemySpawnTimer = 0.0f;
-    int m_maxEnemies;
 
     std::unique_ptr<DirectX::SpriteBatch> m_spriteBatch;
-
 
 
     bool m_mouseClicked;
@@ -170,6 +170,7 @@ private:
     int m_totalEnemiesThisWave;
     bool m_betweenWaves;
     float m_waveStartTimer;
+    float m_enemySpawnTimer;
 
     //  プレイヤー
     int m_playerHealth;
