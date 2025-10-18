@@ -20,15 +20,8 @@ Game::Game() noexcept :
     m_outputWidth(1280),
     m_outputHeight(720),
 
-    //カメラポジション
-    m_cameraPos(0.0f, 0.5f, -0.5f),
-    m_cameraRot(0.0f, 0.0f, 0.0f),
-    m_firstMouse(true),
-    m_lastMouseX(0),
-    m_lastMouseY(0),
     m_cube(nullptr),
     m_lastMouseState(false),
-    m_mouseCaptured(false),
     m_score(0),
     m_damageDisplayTimer(0.0f),
     m_showDamageDisplay(false),
@@ -43,14 +36,11 @@ Game::Game() noexcept :
     m_lastCameraRotY(0.0f),
     m_showMuzzleFlash(false),
     m_muzzleFlashTimer(0.0f),
-    m_playerHealth(100),
-    m_damageTimer(0.0f),
-    m_isDamaged(false),
-    m_points(500),
     m_weaponSystem(std::make_unique<WeaponSystem>()),
     m_enemySystem(std::make_unique<EnemySystem>()),
     m_particleSystem(std::make_unique<ParticleSystem>()),
-    m_waveManager(std::make_unique<WaveManager>())
+    m_waveManager(std::make_unique<WaveManager>()),
+    m_player(std::make_unique<Player>())
 {
    
 }
@@ -282,13 +272,14 @@ void Game::DrawGrid()
     auto context = m_d3dContext.Get();
 
     // ビュー行列（カメラ位置・向き）の作成
-    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&m_cameraPos);
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&playerPos);
 
     // カメラが向いている方向を計算
     DirectX::XMVECTOR cameraTarget = DirectX::XMVectorSet(
-        m_cameraPos.x + sinf(m_cameraRot.y) * cosf(m_cameraRot.x),
-        m_cameraPos.y - sinf(m_cameraRot.x),
-        m_cameraPos.z + cosf(m_cameraRot.y) * cosf(m_cameraRot.x),
+        m_player->GetPosition().x + sinf(m_player->GetRotation().y) * cosf(m_player->GetRotation().x),
+        m_player->GetPosition().y - sinf(m_player->GetRotation().x),
+        m_player->GetPosition().z + cosf(m_player->GetRotation().y) * cosf(m_player->GetRotation().x),
         0.0f
     );
 
@@ -342,11 +333,16 @@ void Game::DrawGrid()
 void Game::DrawEnemies()
 {
     // ビュー・プロジェクション行列の計算
-    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&m_cameraPos);
+   // 位置と回転を変数に保存
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+    DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+
+    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&playerPos);
+
     DirectX::XMVECTOR cameraTarget = DirectX::XMVectorSet(
-        m_cameraPos.x + sinf(m_cameraRot.y) * cosf(m_cameraRot.x),
-        m_cameraPos.y - sinf(m_cameraRot.x),
-        m_cameraPos.z + cosf(m_cameraRot.y) * cosf(m_cameraRot.x),
+        playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
+        playerPos.y - sinf(playerRot.x),
+        playerPos.z + cosf(playerRot.y) * cosf(playerRot.x),
         0.0f
     );
     DirectX::XMVECTOR upVector = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -476,11 +472,15 @@ void Game::DrawBillboard()
         return;
 
     // 既存のDrawCubesと同じ描画設定
-    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&m_cameraPos);
+   // 位置と回転を変数に保存
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+    DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+
+    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&playerPos);
     DirectX::XMVECTOR cameraTarget = DirectX::XMVectorSet(
-        m_cameraPos.x + sinf(m_cameraRot.y) * cosf(m_cameraRot.x),
-        m_cameraPos.y - sinf(m_cameraRot.x),
-        m_cameraPos.z + cosf(m_cameraRot.y) * cosf(m_cameraRot.x),
+        playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
+        playerPos.y - sinf(playerRot.x),
+        playerPos.z + cosf(playerRot.y) * cosf(playerRot.x),
         0.0f
     );
     DirectX::XMVECTOR upVector = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -508,11 +508,15 @@ void Game::DrawParticles()
     auto context = m_d3dContext.Get();
 
     // ビュー・プロジェクション行列の計算
-    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&m_cameraPos);
+    // 位置と回転を変数に保存
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+    DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+
+    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&playerPos);
     DirectX::XMVECTOR cameraTarget = DirectX::XMVectorSet(
-        m_cameraPos.x + sinf(m_cameraRot.y) * cosf(m_cameraRot.x),
-        m_cameraPos.y - sinf(m_cameraRot.x),
-        m_cameraPos.z + cosf(m_cameraRot.y) * cosf(m_cameraRot.x),
+        playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
+        playerPos.y - sinf(playerRot.x),
+        playerPos.z + cosf(playerRot.y) * cosf(playerRot.x),
         0.0f
     );
     DirectX::XMVECTOR upVector = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -581,12 +585,16 @@ void Game::UpdateTitle()
 
 void Game::DrawWeapon()
 {
+    // 位置と回転を変数に保存
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+    DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+
     // カメラ相対座標で武器を配置（HUD的な表示）
-    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&m_cameraPos);
+    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&playerPos);
     DirectX::XMVECTOR cameraTarget = DirectX::XMVectorSet(
-        m_cameraPos.x + sinf(m_cameraRot.y) * cosf(m_cameraRot.x),
-        m_cameraPos.y - sinf(m_cameraRot.x),
-        m_cameraPos.z + cosf(m_cameraRot.y) * cosf(m_cameraRot.x),
+        playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
+        playerPos.y - sinf(playerRot.x),
+        playerPos.z + cosf(playerRot.y) * cosf(playerRot.x),
         0.0f
     );
     DirectX::XMVECTOR upVector = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -599,16 +607,16 @@ void Game::DrawWeapon()
 
     // カメラの前方・右方・上方ベクトルを計算
     DirectX::XMVECTOR forward = DirectX::XMVectorSet(
-        sinf(m_cameraRot.y) * cosf(m_cameraRot.x),
-        -sinf(m_cameraRot.x),
-        cosf(m_cameraRot.y) * cosf(m_cameraRot.x),
+        sinf(playerRot.y) * cosf(playerRot.x),
+        -sinf(playerRot.x),
+        cosf(playerRot.y) * cosf(playerRot.x),
         0.0f
     );
 
     DirectX::XMVECTOR right = DirectX::XMVectorSet(
-        cosf(m_cameraRot.y),
+        cosf(playerRot.y),
         0.0f,
-        -sinf(m_cameraRot.y),
+        -sinf(playerRot.y),
         0.0f
     );
 
@@ -622,30 +630,11 @@ void Game::DrawWeapon()
 
     // 武器をカメラの向きに合わせて回転
     DirectX::XMMATRIX weaponWorld = DirectX::XMMatrixRotationRollPitchYaw(
-        m_cameraRot.x, m_cameraRot.y, 0.0f) *
+        playerRot.x, playerRot.y, 0.0f) *
         DirectX::XMMatrixTranslationFromVector(weaponPos);
 
     m_weaponModel->Draw(weaponWorld, viewMatrix, projectionMatrix, DirectX::Colors::Black);
-
-
-    //// 銃口フラッシュの描画
-    //if (m_showMuzzleFlash)
-    //{
-    //    // 武器の先端位置を計算
-    //    DirectX::XMVECTOR muzzlePos = cameraPosition +
-    //        right * (0.35f + m_weaponSwayX * 0.1f) +
-    //        up * (-0.15f + m_weaponSwayY * 0.1f) +
-    //        forward * 0.8f;
-
-    //    DirectX::XMMATRIX flashWorld = DirectX::XMMatrixTranslationFromVector(muzzlePos);
-
-    //    m_muzzleFlashModel->Draw(flashWorld, viewMatrix, projectionMatrix, DirectX::Colors::Yellow);
-    //}
-
-
 }
-
-
 
 
 // =================================================================
@@ -688,7 +677,7 @@ void Game::RenderPlaying()
     DrawUI();
 
     // ダメージエフェクトを一番上に重ねる
-    if (m_isDamaged)
+    if (m_player->IsDamaged())
     {
         RenderDamageFlash();
     }
@@ -725,7 +714,7 @@ void Game::DrawUI()
         for (float i = 0; i < barHeight; ++i) {
             primitiveBatch->DrawLine(DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX, startY + i, 1.0f), bgColor), DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX + barWidth, startY + i, 1.0f), bgColor));
         }
-        float healthPercent = (float)m_playerHealth / 100.0f;
+        float healthPercent = (float)m_player->GetHealth() / 100.0f;
         float currentBarWidth = barWidth * healthPercent;
         if (currentBarWidth > 0) {
             DirectX::XMFLOAT4 healthColor;
@@ -767,7 +756,7 @@ void Game::DrawUI()
     // (4) ポイントの描画 (右上)
     {
         DirectX::XMFLOAT4 color(0.1f, 1.0f, 1.0f, 1.0f); float digitWidth = 15.0f; float digitSpacing = 20.0f; float padding = 50.0f;
-        int points = m_points;
+        int points = m_player->GetPoints();
         if (points == 0) { DrawSimpleNumber(primitiveBatch.get(), 0, m_outputWidth - padding - digitWidth, padding, color); }
         else {
             std::vector<int> digits; while (points > 0) { digits.push_back(points % 10); points /= 10; }
@@ -866,128 +855,12 @@ void Game::UpdatePlaying()
 {
     char debug[256];
     sprintf_s(debug, "Wave:%d | Points:%d | Health:%d | Reloading:%s",
-        m_waveManager->GetCurrentWave(), m_points, m_playerHealth,
+        m_waveManager->GetCurrentWave(), m_player->GetPoints(), m_player->GetHealth(),
         m_weaponSystem->IsReloading() ? "YES" : "NO");  // ← リロード状態を表示
     SetWindowTextA(m_window, debug);
 
-    //  前後移動
-    if (GetAsyncKeyState('W') & 0x8000)
-    {
-        float forwardX = sinf(m_cameraRot.y);   //  X方向成分
-        float forwardZ = cosf(m_cameraRot.y);   //  Z方向成分
-
-        float moveSpeed = 0.1f;
-        m_cameraPos.x += forwardX * moveSpeed;
-        m_cameraPos.z += forwardZ * moveSpeed;
-    }
-
-    if (GetAsyncKeyState('S') & 0x8000)
-    {
-        float forwardX = sinf(m_cameraRot.y);
-        float forwardZ = cosf(m_cameraRot.y);
-
-        float moveSpeed = 0.1f;
-        m_cameraPos.x -= forwardX * moveSpeed;
-        m_cameraPos.z -= forwardZ * moveSpeed;
-    }
-
-
-    //  左右移動
-    if (GetAsyncKeyState('A') & 0x8000)
-    {
-        float leftX = sinf(m_cameraRot.y - 1.57f);
-        float leftZ = cosf(m_cameraRot.y - 1.57f);
-
-        float moveSpeed = 0.1f;
-        m_cameraPos.x += leftX * moveSpeed;
-        m_cameraPos.z += leftZ * moveSpeed;
-    }
-
-    if (GetAsyncKeyState('D') & 0x8000)
-    {
-        float rightX = sinf(m_cameraRot.y + 1.57f);
-        float rightZ = cosf(m_cameraRot.y + 1.57f);
-
-        float moveSpeed = 0.1f;
-        m_cameraPos.x += rightX * moveSpeed;
-        m_cameraPos.z += rightZ * moveSpeed;
-    }
-
-    //  マウス固定制御
-    if (GetAsyncKeyState(VK_TAB) & 0x8000)
-    {
-        static bool tabPressed = false;
-        if (!tabPressed)
-        {
-            m_mouseCaptured = !m_mouseCaptured;
-            if (m_mouseCaptured)
-            {
-                ShowCursor(FALSE);  //  カーソル非表示
-
-                //  ウィンドウ中央にマスを移動
-                RECT rect;
-                GetClientRect(m_window, &rect);
-                POINT center = { rect.right / 2, rect.bottom / 2 };
-                ClientToScreen(m_window, &center);
-                SetCursorPos(center.x, center.y);
-
-                SetWindowTextA(m_window, "マウス固定: ON (Tabで解除)");
-            }
-            else
-            {
-                ShowCursor(TRUE);
-                SetWindowTextA(m_window, "マウス固定: OFF (Tabで有効)");
-            }
-            tabPressed = true;
-        }
-    }
-    else
-    {
-        static bool tabPressed = false;
-        tabPressed = false;
-    }
-
-
-
-    //  マウス
-    POINT mousePos;
-    GetCursorPos(&mousePos);                //  画面上の座標
-    ScreenToClient(m_window, &mousePos);    //  ウィンドウ内座標に変換
-
-    if (m_mouseCaptured)
-    {
-        if (!m_firstMouse) {
-            //  マウスの移動量を計算
-            int deltaX = mousePos.x - m_lastMouseX;
-            int deltaY = mousePos.y - m_lastMouseY;
-
-            //  回転速度を更新
-            float mouseSensitivity = 0.002f;
-
-            m_cameraRot.y += deltaX * mouseSensitivity;
-            m_cameraRot.x += deltaY * mouseSensitivity;
-        }
-        else
-        {
-            m_firstMouse = false;
-        }
-
-        RECT rect;
-        GetClientRect(m_window, &rect);
-        m_lastMouseX = rect.right / 2;
-        m_lastMouseY = rect.bottom / 2;
-
-        POINT center = { m_lastMouseX, m_lastMouseY };
-        ClientToScreen(m_window, &center);
-        SetCursorPos(center.x, center.y);
-    }
-
-    else
-    {
-        m_lastMouseX = mousePos.x;
-        m_lastMouseY = mousePos.y;
-    }
-
+    //  プレイヤー更新(移動。マウス)
+    m_player->Update(m_window);
 
     // --- 1回押した時だけ反応するキー入力の管理 ---
     static std::map<int, bool> keyWasPressed;
@@ -1020,13 +893,13 @@ void Game::UpdatePlaying()
         // 注: ピストルを両方のスロットから売ってしまった場合は何も起こらない
     }
     if (IsFirstKeyPress('2') && !m_weaponSystem->IsReloading()) {
-        m_weaponSystem->BuyWeapon(WeaponType::SHOTGUN, m_points);
+        m_weaponSystem->BuyWeapon(WeaponType::SHOTGUN, m_player->GetPointsRef());
     }
     if (IsFirstKeyPress('3') && !m_weaponSystem->IsReloading()) {
-        m_weaponSystem->BuyWeapon(WeaponType::RIFLE, m_points);
+        m_weaponSystem->BuyWeapon(WeaponType::RIFLE, m_player->GetPointsRef());
     }
     if (IsFirstKeyPress('4') && !m_weaponSystem->IsReloading()) {
-        m_weaponSystem->BuyWeapon(WeaponType::SNIPER, m_points);
+        m_weaponSystem->BuyWeapon(WeaponType::SNIPER, m_player->GetPointsRef());
     }
 
     // Qキーで武器スワップ
@@ -1041,8 +914,8 @@ void Game::UpdatePlaying()
 
 
     //  カメラ回転の変化量から武器の揺れを計算
-    float rotationDeltaX = m_cameraRot.x - m_lastCameraRotX;
-    float rotationDeltaY = m_cameraRot.y - m_lastCameraRotY;
+    float rotationDeltaX = m_player->GetRotation().x - m_lastCameraRotX;
+    float rotationDeltaY = m_player->GetRotation().y - m_lastCameraRotY;
 
     //  スウェイ強度調整
     float swayStrength = 0.5f;
@@ -1054,8 +927,8 @@ void Game::UpdatePlaying()
     m_weaponSwayY *= 0.9f;
 
     //  前フレームの回転を保持
-    m_lastCameraRotX = m_cameraRot.x;
-    m_lastCameraRotY = m_cameraRot.y;
+    m_lastCameraRotX = m_player->GetRotation().x;
+    m_lastCameraRotY = m_player->GetRotation().y;
 
 
     //  連射タイマー更新
@@ -1064,7 +937,7 @@ void Game::UpdatePlaying()
     }
 
     //射撃処理
-    if (m_mouseCaptured)
+    if (m_player->IsMouseCaptured())
     {
         bool currentMouseState = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
 
@@ -1081,23 +954,27 @@ void Game::UpdatePlaying()
             m_weaponSystem->SaveAmmoStatus();   //  弾薬状態を保存
 
             // 銃口位置を計算
+            DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
             DirectX::XMFLOAT3 muzzlePosition;
-            muzzlePosition.x = m_cameraPos.x + 0.45f;
-            muzzlePosition.y = m_cameraPos.y - 0.15f;
-            muzzlePosition.z = m_cameraPos.z + 0.8f;
+            muzzlePosition.x = playerPos.x + 0.45f;
+            muzzlePosition.y = playerPos.y - 0.15f;
+            muzzlePosition.z = playerPos.z + 0.8f;
 
-            m_particleSystem->CreateMuzzleFlash(muzzlePosition, m_cameraRot);
+            m_particleSystem->CreateMuzzleFlash(muzzlePosition, m_player->GetRotation());
 
             // ショットガンは複数の弾を発射
             int pellets = (m_weaponSystem->GetCurrentWeapon() == WeaponType::SHOTGUN) ? 8 : 1;
             for (int p = 0; p < pellets; p++)
             {
                 // 射撃方向を計算
-                DirectX::XMFLOAT3 rayStart = m_cameraPos;
+                DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+                DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+
+                DirectX::XMFLOAT3 rayStart = playerPos;
                 DirectX::XMFLOAT3 rayDir(
-                    sinf(m_cameraRot.y) * cosf(m_cameraRot.x),
-                    -sinf(m_cameraRot.x),
-                    cosf(m_cameraRot.y) * cosf(m_cameraRot.x)
+                    sinf(playerRot.y)* cosf(playerRot.x),
+                    -sinf(playerRot.x),
+                    cosf(playerRot.y)* cosf(playerRot.x)
                 );
 
                 // 散弾の場合はランダムに広がる
@@ -1141,7 +1018,8 @@ void Game::UpdatePlaying()
                                 
                                 //  WaveManagerに通知してボーナス取得
                                 int waveBonus = m_waveManager->OnEnemyKilled();
-                                m_points += (isHeadshot ? 100 : 60) + waveBonus;    //  waveBonus = ウェーブクリアボーナス
+                                int totalPoints = (isHeadshot ? 100 : 60) + waveBonus;
+                                m_player->AddPoints(totalPoints);
 
                                 m_showDamageDisplay = true;
                                 m_damageDisplayTimer = 2.0f;
@@ -1223,13 +1101,13 @@ void Game::UpdatePlaying()
     //  【型】DirectX::XMFLOAT3
     //  【意味】プレイヤーの現在位置
     //  【用途】敵がプレイヤーに向かって動くため
-    m_enemySystem->Update(1.0f / 60.0f, m_cameraPos);
+    m_enemySystem->Update(1.0f / 60.0f, m_player->GetPosition());
 
     //  死んだ敵を削除 毎フレーム敵を削除しないと、配列か肥大化
     m_enemySystem->ClearDeadEnemies();  //  追加
 
     //  ウェーブ管理
-    m_waveManager->Update(1.0f / 60.0f, m_cameraPos, m_enemySystem.get());
+    m_waveManager->Update(1.0f / 60.0f, m_player->GetPosition(), m_enemySystem.get());
   
 
     // === 接触ダメージ処理（ここに追加）===
@@ -1238,31 +1116,16 @@ void Game::UpdatePlaying()
     for (const auto& enemy : m_enemySystem->GetEnemies())
     {
         // 生きていて、接触していて、無敵時間が終わっている
-        if (enemy.isAlive && enemy.touchingPlayer && m_damageTimer <= 0.0f)
+        if (enemy.isAlive && enemy.touchingPlayer)
         {
-            m_playerHealth -= 10;        // HP を10減らす
-            m_damageTimer = 1.0f;        // 1秒間の無敵時間
-            m_isDamaged = true;          // ダメージエフェクト表示フラグ
+            bool died = m_player->TakeDamage(10);
 
-            // HP が 0 以下になったらゲームオーバー
-            if (m_playerHealth <= 0)
+            if (died)
             {
                 m_gameState = GameState::GAMEOVER;
             }
 
-            break;  // 1フレームに1体だけダメージを与える
-        }
-    }
-
-
-    
-    // ダメージタイマー更新
-    if (m_damageTimer > 0.0f)
-    {
-        m_damageTimer -= 1.0f / 60.0f;
-        if (m_damageTimer <= 0.0f)
-        {
-            m_isDamaged = false;
+            break;
         }
     }
 
@@ -1280,7 +1143,7 @@ void Game::UpdateGameOver()
         {
             //m_cubesDestroyed[i] = false;
         }
-        m_cameraPos = DirectX::XMFLOAT3(0.0f, 2.0f, -5.0f);
+        
         m_gameState = GameState::TITLE;
     }
 
@@ -1336,7 +1199,7 @@ void Game::RenderDamageFlash()
     auto primitiveBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
     primitiveBatch->Begin();
 
-    float alpha = m_damageTimer;  // タイマーに応じてフェードアウト
+    float alpha = m_player->GetDamageTimer();  // タイマーに応じてフェードアウト
     DirectX::XMFLOAT4 bloodColor(0.8f, 0.0f, 0.0f, alpha * 0.3f);
     float halfWidth = m_outputWidth * 0.5f;
     float halfHeight = m_outputHeight * 0.5f;

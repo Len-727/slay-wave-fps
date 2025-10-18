@@ -32,6 +32,7 @@
 #include "EnemySystem.h"
 #include "ParticleSystem.h"
 #include "Wavemanager.h"
+#include "Player.h"
 
 class Game
 {
@@ -59,7 +60,10 @@ private:
     std::unique_ptr<ParticleSystem> m_particleSystem;   //  パーティクル管理システム    unique_ptr 自動でメモリ管理
 
     //  m_waveManager->Update() みたいに使う
-    std::unique_ptr<WaveManager> m_waveManager;
+    std::unique_ptr<WaveManager> m_waveManager;         //  ウェーブ管理システム
+
+    //  m_player->Update()  みたいに使う
+    std::unique_ptr<Player> m_player;
 
     // === ゲームループの内部処理 ===
     void Update();     // ゲームロジック更新
@@ -112,15 +116,6 @@ private:
     int     m_outputWidth;
     int     m_outputHeight;
 
-    // === ゲーム状態 ===
-    // TODO: プレイヤー位置、カメラ、敵キャラなどを追加
-    DirectX::XMFLOAT3 m_cameraPos;          //カメラの位置
-    DirectX::XMFLOAT3 m_cameraRot;          //カメラの回転
-    //float             m_mouseSensitivity;   //マスす感度
-    bool              m_firstMouse;         //初回マウスイ移動フラグ
-    int               m_lastMouseX;         //前フレームのマウスX座標
-    int               m_lastMouseY;         //前フレームのマスY座標
-
     //  3D描画用
     std::unique_ptr<DirectX::CommonStates>      m_states;
     std::unique_ptr<DirectX::BasicEffect>       m_effect;
@@ -146,7 +141,6 @@ private:
 
     bool m_mouseClicked;
     bool m_lastMouseState;
-    bool m_mouseCaptured;
 
     //  キューブ破壊
     //bool m_cubesDestroyed[3];
@@ -164,14 +158,7 @@ private:
     bool m_fadingIn;
     bool m_fadeActive;
 
-    //  プレイヤー
-    int m_playerHealth;
-    float m_damageTimer;
-    bool m_isDamaged;
-
-    //  ポイントシステム
-    int m_points;
-
+   
 
     //  UI用
     std::unique_ptr<DirectX::SpriteFont> m_font;

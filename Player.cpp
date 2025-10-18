@@ -1,0 +1,185 @@
+// Player.cpp - プレイヤー状態管理の実装
+#include "Player.h"
+#include <cmath>  // sinf, cosf
+
+// コンストラクタ
+// 【役割】初期位置、HP100、ポイント500で開始
+Player::Player() :
+    m_position(0.0f, 0.5f, -0.5f),   // 初期位置
+    m_rotation(0.0f, 0.0f, 0.0f),    // 正面を向く
+    m_health(100),
+    m_points(500),
+    m_isDamaged(false),
+    m_damageTimer(0.0f),
+    m_mouseCaptured(false),
+    m_firstMouse(true),
+    m_lastMouseX(0),
+    m_lastMouseY(0)
+{
+}
+
+// Update - メイン更新処理
+void Player::Update(HWND window)
+{
+    // 移動処理
+    UpdateMovement();
+
+    // マウス視点回転
+    UpdateMouseLook(window);
+
+    // マウス固定の切り替え
+    UpdateMouseCapture(window);
+
+    // ダメージタイマー更新
+    if (m_damageTimer > 0.0f)
+    {
+        m_damageTimer -= 1.0f / 60.0f;
+        if (m_damageTimer <= 0.0f)
+        {
+            m_isDamaged = false;
+        }
+    }
+}
+
+// UpdateMovement - 移動処理
+void Player::UpdateMovement()
+{
+    float moveSpeed = 0.1f;
+
+    // W - 前進
+    if (GetAsyncKeyState('W') & 0x8000)
+    {
+        float forwardX = sinf(m_rotation.y);
+        float forwardZ = cosf(m_rotation.y);
+        m_position.x += forwardX * moveSpeed;
+        m_position.z += forwardZ * moveSpeed;
+    }
+
+    // S - 後退
+    if (GetAsyncKeyState('S') & 0x8000)
+    {
+        float forwardX = sinf(m_rotation.y);
+        float forwardZ = cosf(m_rotation.y);
+        m_position.x -= forwardX * moveSpeed;
+        m_position.z -= forwardZ * moveSpeed;
+    }
+
+    // A - 左移動
+    if (GetAsyncKeyState('A') & 0x8000)
+    {
+        float leftX = sinf(m_rotation.y - 1.57f);  // 1.57 ? π/2
+        float leftZ = cosf(m_rotation.y - 1.57f);
+        m_position.x += leftX * moveSpeed;
+        m_position.z += leftZ * moveSpeed;
+    }
+
+    // D - 右移動
+    if (GetAsyncKeyState('D') & 0x8000)
+    {
+        float rightX = sinf(m_rotation.y + 1.57f);
+        float rightZ = cosf(m_rotation.y + 1.57f);
+        m_position.x += rightX * moveSpeed;
+        m_position.z += rightZ * moveSpeed;
+    }
+}
+
+// UpdateMouseLook - マウス視点回転
+void Player::UpdateMouseLook(HWND window)
+{
+    if (!m_mouseCaptured)
+        return;
+
+    // マウス位置取得
+    POINT mousePos;
+    GetCursorPos(&mousePos);
+    ScreenToClient(window, &mousePos);
+
+    if (!m_firstMouse)
+    {
+        // マウスの移動量を計算
+        int deltaX = mousePos.x - m_lastMouseX;
+        int deltaY = mousePos.y - m_lastMouseY;
+
+        // 回転速度を更新
+        float mouseSensitivity = 0.002f;
+        m_rotation.y += deltaX * mouseSensitivity;  // 左右回転
+        m_rotation.x += deltaY * mouseSensitivity;  // 上下回転
+    }
+    else
+    {
+        m_firstMouse = false;
+    }
+
+    // マウスを画面中央に戻す
+    RECT rect;
+    GetClientRect(window, &rect);
+    m_lastMouseX = rect.right / 2;
+    m_lastMouseY = rect.bottom / 2;
+
+    POINT center = { m_lastMouseX, m_lastMouseY };
+    ClientToScreen(window, &center);
+    SetCursorPos(center.x, center.y);
+}
+
+// UpdateMouseCapture - マウス固定の切り替え
+void Player::UpdateMouseCapture(HWND window)
+{
+    static bool tabPressed = false;
+
+    if (GetAsyncKeyState(VK_TAB) & 0x8000)
+    {
+        if (!tabPressed)
+        {
+            m_mouseCaptured = !m_mouseCaptured;
+
+            if (m_mouseCaptured)
+            {
+                ShowCursor(FALSE);  // カーソル非表示
+
+                // ウィンドウ中央にマウスを移動
+                RECT rect;
+                GetClientRect(window, &rect);
+                POINT center = { rect.right / 2, rect.bottom / 2 };
+                ClientToScreen(window, &center);
+                SetCursorPos(center.x, center.y);
+            }
+            else
+            {
+                ShowCursor(TRUE);  // カーソル表示
+            }
+
+            tabPressed = true;
+        }
+    }
+    else
+    {
+        tabPressed = false;
+    }
+}
+
+// TakeDamage - ダメージを受ける
+bool Player::TakeDamage(int damage)
+{
+    // 無敵時間中はダメージなし
+    if (m_damageTimer > 0.0f)
+        return false;
+
+    m_health -= damage;
+    m_damageTimer = 1.0f;  // 1秒間の無敵時間
+    m_isDamaged = true;
+
+    // 死亡判定
+    if (m_health <= 0)
+    {
+        m_health = 0;
+        return true;  // 死んだ
+    }
+
+    return false;  // まだ生きている
+}
+
+// AddPoints - ポイント追加
+void Player::AddPoints(int points)
+{
+    m_points += points;
+}

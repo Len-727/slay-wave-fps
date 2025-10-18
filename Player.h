@@ -1,0 +1,89 @@
+// Player.h - プレイヤー状態管理
+// 【目的】プレイヤーの位置、HP、ポイントを管理
+#pragma once
+
+#include <DirectXMath.h>   // XMFLOAT3
+#include <Windows.h>       // HWND
+
+// プレイヤークラス
+class Player {
+public:
+    // コンストラクタ
+    // 【役割】初期位置、HP、ポイントを設定
+    Player();
+
+    // === メイン処理 ===
+
+    // Update - プレイヤーの移動とカメラ制御
+    // 【役割】キー入力・マウス入力を処理
+    // 【引数】window: ウィンドウハンドル（マウス制御用）
+    void Update(HWND window);
+
+    // TakeDamage - ダメージを受ける
+    // 【役割】HPを減らし、ダメージエフェクトを開始
+    // 【引数】damage: ダメージ量
+    // 【戻り値】死んだらtrue
+    bool TakeDamage(int damage);
+
+    // AddPoints - ポイントを追加
+    // 【役割】敵を倒した時などに呼ぶ
+    void AddPoints(int points);
+
+    // === ゲッター ===
+
+    // GetPosition - プレイヤー位置
+    DirectX::XMFLOAT3 GetPosition() const { return m_position; }
+
+    // GetRotation - カメラ回転
+    DirectX::XMFLOAT3 GetRotation() const { return m_rotation; }
+
+    // GetHealth - 現在のHP
+    int GetHealth() const { return m_health; }
+
+    // GetPoints - 現在のポイント
+    int GetPoints() const { return m_points; }
+
+    // GetPointsRef - ポイントの参照（武器購入で減らすため）
+    int& GetPointsRef() { return m_points; }
+
+    // IsDamaged - ダメージエフェクト表示中か
+    bool IsDamaged() const { return m_isDamaged; }
+
+    // GetDamageTimer - ダメージタイマー（エフェクト用）
+    float GetDamageTimer() const { return m_damageTimer; }
+
+    // IsMouseCaptured - マウスが固定されているか
+    bool IsMouseCaptured() const { return m_mouseCaptured; }
+
+private:
+    // === プライベート関数 ===
+
+    // UpdateMovement - 移動処理
+    void UpdateMovement();
+
+    // UpdateMouseLook - マウスによる視点回転
+    void UpdateMouseLook(HWND window);
+
+    // UpdateMouseCapture - マウス固定の切り替え
+    void UpdateMouseCapture(HWND window);
+
+    // === メンバ変数 ===
+
+    // 位置・回転
+    DirectX::XMFLOAT3 m_position;     // プレイヤー位置
+    DirectX::XMFLOAT3 m_rotation;     // カメラ回転（X:上下, Y:左右）
+
+    // ステータス
+    int m_health;                      // 体力（0?100）
+    int m_points;                      // ポイント（お金）
+
+    // ダメージ関連
+    bool m_isDamaged;                  // ダメージエフェクト表示中
+    float m_damageTimer;               // ダメージ無敵時間
+
+    // マウス制御
+    bool m_mouseCaptured;              // マウスが固定されているか
+    bool m_firstMouse;                 // 初回マウス移動か
+    int m_lastMouseX;                  // 前フレームのマウスX
+    int m_lastMouseY;                  // 前フレームのマウスY
+};
