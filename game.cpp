@@ -43,28 +43,16 @@ Game::Game() noexcept :
     m_lastCameraRotY(0.0f),
     m_showMuzzleFlash(false),
     m_muzzleFlashTimer(0.0f),
-    m_currentWave(1),
-    m_enemiesPerWave(6),
-    m_enemiesKilledThisWave(0),
-    m_totalEnemiesThisWave(6),
-    m_betweenWaves(true),
-    m_waveStartTimer(5.0f),
-    m_enemySpawnTimer(0.0f),
     m_playerHealth(100),
     m_damageTimer(0.0f),
     m_isDamaged(false),
     m_points(500),
     m_weaponSystem(std::make_unique<WeaponSystem>()),
     m_enemySystem(std::make_unique<EnemySystem>()),
-    m_particleSystem(std::make_unique<ParticleSystem>())
+    m_particleSystem(std::make_unique<ParticleSystem>()),
+    m_waveManager(std::make_unique<WaveManager>())
 {
-    static bool firstFrame = true;
-    if (firstFrame && m_gameState == GameState::PLAYING)
-    {
-        firstFrame = false;
-        m_betweenWaves = true;
-        m_waveStartTimer = 3.0f;  // 3秒後に最初のウェーブ開始
-    }
+   
 }
 
 
@@ -350,46 +338,6 @@ void Game::DrawGrid()
     primitiveBatch->End();
 }
 
-//void Game::DrawCubes()
-//{
-//    // ビュー・プロジェクション行列はDrawGridと同じものを使用
-//    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&m_cameraPos);
-//    DirectX::XMVECTOR cameraTarget = DirectX::XMVectorSet(
-//        m_cameraPos.x + sinf(m_cameraRot.y) * cosf(m_cameraRot.x),
-//        m_cameraPos.y - sinf(m_cameraRot.x),
-//        m_cameraPos.z + cosf(m_cameraRot.y) * cosf(m_cameraRot.x),
-//        0.0f
-//    );
-//    DirectX::XMVECTOR upVector = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-//    DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(cameraPosition, cameraTarget, upVector);
-//
-//    float aspectRatio = (float)m_outputWidth / (float)m_outputHeight;
-//    DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
-//        DirectX::XMConvertToRadians(70.0f), aspectRatio, 0.1f, 1000.0f
-//    );
-//
-//
-//    // キューブ1：赤色(破壊されていなければ描画)
-//    if (!m_cubesDestroyed[0])
-//    {
-//        DirectX::XMMATRIX world1 = DirectX::XMMatrixTranslation(5.0f, 1.0f, 5.0f);
-//        m_cube->Draw(world1, viewMatrix, projectionMatrix, DirectX::Colors::Red);
-//    }
-//
-//    if (!m_cubesDestroyed[1])
-//    {
-//        // キューブ2：青色
-//        DirectX::XMMATRIX world2 = DirectX::XMMatrixTranslation(-3.0f, 1.0f, 8.0f);
-//        m_cube->Draw(world2, viewMatrix, projectionMatrix, DirectX::Colors::Blue);
-//    }
-//
-//    if (!m_cubesDestroyed[2])
-//    {
-//        // キューブ3：緑色
-//        DirectX::XMMATRIX world3 = DirectX::XMMatrixTranslation(0.0f, 1.0f, 15.0f);
-//        m_cube->Draw(world3, viewMatrix, projectionMatrix, DirectX::Colors::Green);
-//    }
-//}
 
 void Game::DrawEnemies()
 {
@@ -590,7 +538,7 @@ void Game::DrawParticles()
 
     for (const auto& particle : m_particleSystem->GetParticles())
     {
-        float size = 0.1f; // サイズを大きくして見やすく
+        float size = 0.1f; // サイズを大きくして見やすく 
 
         // より見やすい十字形で描画
         DirectX::XMFLOAT3 center = particle.position;
@@ -806,7 +754,7 @@ void Game::DrawUI()
     // (3) ウェーブ数の描画 (上中央)
     {
         DirectX::XMFLOAT4 color(1.0f, 1.0f, 0.0f, 1.0f); float digitWidth = 15.0f; float digitSpacing = 20.0f;
-        int wave = m_currentWave;
+        int wave = m_waveManager->GetCurrentWave();
         if (wave == 0) { DrawSimpleNumber(primitiveBatch.get(), 0, (m_outputWidth - digitWidth) / 2.0f, 50.0f, color); }
         else {
             std::vector<int> digits; while (wave > 0) { digits.push_back(wave % 10); wave /= 10; }
@@ -918,7 +866,7 @@ void Game::UpdatePlaying()
 {
     char debug[256];
     sprintf_s(debug, "Wave:%d | Points:%d | Health:%d | Reloading:%s",
-        m_currentWave, m_points, m_playerHealth,
+        m_waveManager->GetCurrentWave(), m_points, m_playerHealth,
         m_weaponSystem->IsReloading() ? "YES" : "NO");  // ← リロード状態を表示
     SetWindowTextA(m_window, debug);
 
@@ -1190,8 +1138,10 @@ void Game::UpdatePlaying()
                                 //  敵を倒した
                                 enemy.isAlive = false;
                                 m_particleSystem->CreateExplosion(enemy.position);
-                                m_points += isHeadshot ? 100 : 60;  //  ヘッドショットボーナス
-                                m_enemiesKilledThisWave++;
+                                
+                                //  WaveManagerに通知してボーナス取得
+                                int waveBonus = m_waveManager->OnEnemyKilled();
+                                m_points += (isHeadshot ? 100 : 60) + waveBonus;    //  waveBonus = ウェーブクリアボーナス
 
                                 m_showDamageDisplay = true;
                                 m_damageDisplayTimer = 2.0f;
@@ -1277,6 +1227,9 @@ void Game::UpdatePlaying()
 
     //  死んだ敵を削除 毎フレーム敵を削除しないと、配列か肥大化
     m_enemySystem->ClearDeadEnemies();  //  追加
+
+    //  ウェーブ管理
+    m_waveManager->Update(1.0f / 60.0f, m_cameraPos, m_enemySystem.get());
   
 
     // === 接触ダメージ処理（ここに追加）===
@@ -1302,70 +1255,7 @@ void Game::UpdatePlaying()
     }
 
 
-    //  ウェーブ管理
-    float deltaTime = 1.0f / 60.0f;
-
-    if (m_betweenWaves)
-    {
-        //  ウェーブ間の準備期間
-        m_waveStartTimer -= deltaTime;
-        if (m_waveStartTimer <= 0.0f)
-        {
-            //  新ウェーブ開始
-            m_betweenWaves = false;
-            m_enemiesKilledThisWave = 0;    //  このウェーブで倒した敵の数
-            m_totalEnemiesThisWave = m_enemiesPerWave;  //  このウェーブの敵総数 = ウェーブごとの敵の数
-
-            //  初期スポーン(2 - 4体)
-            int initialSpawn = min(2 + (m_currentWave - 1), 4);
-            initialSpawn = min(initialSpawn, m_totalEnemiesThisWave);
-            for (int i = 0; i < initialSpawn; i++)
-            {
-                m_enemySystem->SpawnEnemy(m_cameraPos);
-            }
-        }
-    }
-
-    else
-    {
-        //  ウェーブ中のスポーン管理
-
-        //  現在の敵の数をカウント
-        int currentEnemyCount = 0;
-        for (const auto& enemy : m_enemySystem->GetEnemies())
-        {
-            if (enemy.isAlive) currentEnemyCount++;
-        }
-
-        //  スポーン敵が必要かどうか
-        int totalSpawned = m_enemiesKilledThisWave + currentEnemyCount;
-        if (totalSpawned < m_totalEnemiesThisWave &&
-            currentEnemyCount < m_enemySystem->GetMaxEnemies())
-        {
-            m_enemySpawnTimer += deltaTime;
-
-            //  ウェーブが進むにつれてスポーン速度アップ
-            float spawnInterval = 2.0f - (m_currentWave * 0.1f);
-            spawnInterval = max(0.5f, spawnInterval);
-
-            if (m_enemySpawnTimer >= spawnInterval)
-            {
-                m_enemySystem->SpawnEnemy(m_cameraPos);
-                m_enemySpawnTimer = 0.0f;
-            }
-        }
-
-        //  ウェーブクリア判定
-        if (m_enemiesKilledThisWave >= m_totalEnemiesThisWave)
-        {
-            m_currentWave++;
-            m_enemiesPerWave = 6 + (m_currentWave - 1) * 3; //毎ウェーブ3体追加
-            m_betweenWaves = true;
-            m_waveStartTimer = 10.0f;
-            m_points += 100;    //  ウェーブクリアボーナス
-        }
-    }
-
+    
     // ダメージタイマー更新
     if (m_damageTimer > 0.0f)
     {

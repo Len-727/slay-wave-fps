@@ -31,6 +31,7 @@
 #include "WeaponSystem.h"
 #include "EnemySystem.h"
 #include "ParticleSystem.h"
+#include "Wavemanager.h"
 
 class Game
 {
@@ -49,13 +50,16 @@ public:
 
 private:
     //  m_weaponSystem->Update()    みたいに使う
-    std::unique_ptr<WeaponSystem> m_weaponSystem;   //  武器管理システム    unique_ptr 自動でメモリ管理
+    std::unique_ptr<WeaponSystem> m_weaponSystem;       //  武器管理システム    unique_ptr 自動でメモリ管理
 
     //  m_enemySystem->Update()     みたいに使う
-    std::unique_ptr<EnemySystem> m_enemySystem;     //  敵管理システム      unique_ptr 自動でメモリ管理
+    std::unique_ptr<EnemySystem> m_enemySystem;         //  敵管理システム      unique_ptr 自動でメモリ管理
 
     //  m_particleSystem->Update()  みたいに使う
-    std::unique_ptr<ParticleSystem> m_particleSystem;
+    std::unique_ptr<ParticleSystem> m_particleSystem;   //  パーティクル管理システム    unique_ptr 自動でメモリ管理
+
+    //  m_waveManager->Update() みたいに使う
+    std::unique_ptr<WaveManager> m_waveManager;
 
     // === ゲームループの内部処理 ===
     void Update();     // ゲームロジック更新
@@ -159,16 +163,6 @@ private:
     float m_fadeAlpha;
     bool m_fadingIn;
     bool m_fadeActive;
-
-
-    //  zombiesモード
-    int m_currentWave;
-    int m_enemiesPerWave;
-    int m_enemiesKilledThisWave;
-    int m_totalEnemiesThisWave;
-    bool m_betweenWaves;
-    float m_waveStartTimer;
-    float m_enemySpawnTimer;
 
     //  プレイヤー
     int m_playerHealth;
