@@ -33,6 +33,7 @@
 #include "ParticleSystem.h"
 #include "Wavemanager.h"
 #include "Player.h"
+#include "UISystem.h"
 
 class Game
 {
@@ -63,7 +64,10 @@ private:
     std::unique_ptr<WaveManager> m_waveManager;         //  ウェーブ管理システム
 
     //  m_player->Update()  みたいに使う
-    std::unique_ptr<Player> m_player;
+    std::unique_ptr<Player> m_player;       //  プレイヤー管理システム
+
+    //  m_uiSystem->Draw...みたいに使う
+    std::unique_ptr<UISystem> m_uiSystem;   //  UI管理システム
 
     // === ゲームループの内部処理 ===
     void Update();     // ゲームロジック更新
@@ -83,8 +87,7 @@ private:
     void DrawParticles();
     void DrawEnemies();
     void DrawUI();
-    void DrawSimpleNumber(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch, int digit, float x, float y, DirectX::XMFLOAT4 color);
-
+   
 
 
     void UpdateTitle();

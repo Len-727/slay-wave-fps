@@ -40,7 +40,8 @@ Game::Game() noexcept :
     m_enemySystem(std::make_unique<EnemySystem>()),
     m_particleSystem(std::make_unique<ParticleSystem>()),
     m_waveManager(std::make_unique<WaveManager>()),
-    m_player(std::make_unique<Player>())
+    m_player(std::make_unique<Player>()),
+    m_uiSystem(std::make_unique<UISystem>(1280, 720))
 {
    
 }
@@ -115,6 +116,7 @@ void Game::OnWindowSizeChanged(int width, int height)
     m_outputWidth = (width > 1) ? width : 1;
     m_outputHeight = (height > 1) ? height : 1;
     CreateResources();
+    m_uiSystem->OnScreenSizeChanged(m_outputWidth, m_outputHeight);
 }
 
 
@@ -691,7 +693,8 @@ void Game::DrawUI()
     // --- UI描画のための共通設定 ---
     auto context = m_d3dContext.Get();
     m_d3dContext->ClearDepthStencilView(m_depthStencilView.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
-    DirectX::XMMATRIX projection = DirectX::XMMatrixOrthographicOffCenterLH(0.0f, (float)m_outputWidth, (float)m_outputHeight, 0.0f, 0.1f, 1.0f);
+    DirectX::XMMATRIX projection = DirectX::XMMatrixOrthographicOffCenterLH(
+        0.0f, (float)m_outputWidth, (float)m_outputHeight, 0.0f, 0.1f, 1.0f);
 
     m_effect->SetProjection(projection);
     m_effect->SetView(DirectX::XMMatrixIdentity());
@@ -704,152 +707,15 @@ void Game::DrawUI()
     auto primitiveBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
     primitiveBatch->Begin();
 
-    // --- ここから各UI要素の描画処理 ---
-
-    // (1) 体力バーの描画 (左下)
-    {
-        float barWidth = 200.0f, barHeight = 20.0f, padding = 50.0f;
-        float startX = padding, startY = m_outputHeight - padding - barHeight;
-        DirectX::XMFLOAT4 bgColor(0.2f, 0.2f, 0.2f, 0.8f);
-        for (float i = 0; i < barHeight; ++i) {
-            primitiveBatch->DrawLine(DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX, startY + i, 1.0f), bgColor), DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX + barWidth, startY + i, 1.0f), bgColor));
-        }
-        float healthPercent = (float)m_player->GetHealth() / 100.0f;
-        float currentBarWidth = barWidth * healthPercent;
-        if (currentBarWidth > 0) {
-            DirectX::XMFLOAT4 healthColor;
-            if (healthPercent > 0.6f) healthColor = DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);
-            else if (healthPercent > 0.3f) healthColor = DirectX::XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f);
-            else healthColor = DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);
-            for (float i = 0; i < barHeight; ++i) {
-                primitiveBatch->DrawLine(DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX, startY + i, 1.0f), healthColor), DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX + currentBarWidth, startY + i, 1.0f), healthColor));
-            }
-        }
-        DirectX::XMFLOAT4 borderColor(1.0f, 1.0f, 1.0f, 1.0f);
-        primitiveBatch->DrawLine(DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX, startY, 1.0f), borderColor), DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX + barWidth, startY, 1.0f), borderColor));
-        primitiveBatch->DrawLine(DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX, startY + barHeight, 1.0f), borderColor), DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX + barWidth, startY + barHeight, 1.0f), borderColor));
-        primitiveBatch->DrawLine(DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX, startY, 1.0f), borderColor), DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX, startY + barHeight, 1.0f), borderColor));
-        primitiveBatch->DrawLine(DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX + barWidth, startY, 1.0f), borderColor), DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX + barWidth, startY + barHeight, 1.0f), borderColor));
-    }
-
-    // (2) クロスヘアの描画 (中央)
-    {
-        DirectX::XMFLOAT4 crosshairColor(1.0f, 1.0f, 1.0f, 1.0f);
-        float centerX = m_outputWidth / 2.0f, centerY = m_outputHeight / 2.0f, size = 20.0f;
-        primitiveBatch->DrawLine(DirectX::VertexPositionColor(DirectX::XMFLOAT3(centerX, centerY - size, 1.0f), crosshairColor), DirectX::VertexPositionColor(DirectX::XMFLOAT3(centerX, centerY + size, 1.0f), crosshairColor));
-        primitiveBatch->DrawLine(DirectX::VertexPositionColor(DirectX::XMFLOAT3(centerX - size, centerY, 1.0f), crosshairColor), DirectX::VertexPositionColor(DirectX::XMFLOAT3(centerX + size, centerY, 1.0f), crosshairColor));
-    }
-
-    // (3) ウェーブ数の描画 (上中央)
-    {
-        DirectX::XMFLOAT4 color(1.0f, 1.0f, 0.0f, 1.0f); float digitWidth = 15.0f; float digitSpacing = 20.0f;
-        int wave = m_waveManager->GetCurrentWave();
-        if (wave == 0) { DrawSimpleNumber(primitiveBatch.get(), 0, (m_outputWidth - digitWidth) / 2.0f, 50.0f, color); }
-        else {
-            std::vector<int> digits; while (wave > 0) { digits.push_back(wave % 10); wave /= 10; }
-            int numDigits = digits.size(); float totalWidth = numDigits * digitWidth + (numDigits - 1) * (digitSpacing - digitWidth);
-            float startX = (m_outputWidth - totalWidth) / 2.0f; float startY = 50.0f;
-            for (int i = 0; i < numDigits; ++i) { DrawSimpleNumber(primitiveBatch.get(), digits[numDigits - 1 - i], startX + i * digitSpacing, startY, color); }
-        }
-    }
-
-    // (4) ポイントの描画 (右上)
-    {
-        DirectX::XMFLOAT4 color(0.1f, 1.0f, 1.0f, 1.0f); float digitWidth = 15.0f; float digitSpacing = 20.0f; float padding = 50.0f;
-        int points = m_player->GetPoints();
-        if (points == 0) { DrawSimpleNumber(primitiveBatch.get(), 0, m_outputWidth - padding - digitWidth, padding, color); }
-        else {
-            std::vector<int> digits; while (points > 0) { digits.push_back(points % 10); points /= 10; }
-            int numDigits = digits.size(); float totalWidth = numDigits * digitWidth + (numDigits - 1) * (digitSpacing - digitWidth);
-            float startX = m_outputWidth - padding - totalWidth; float startY = padding;
-            for (int i = 0; i < numDigits; ++i) { DrawSimpleNumber(primitiveBatch.get(), digits[numDigits - 1 - i], startX + i * digitSpacing, startY, color); }
-        }
-    }
-
-    // (5) 弾薬の描画 (右下)
-    {
-        DirectX::XMFLOAT4 color(1.0f, 1.0f, 1.0f, 1.0f);
-        DirectX::XMFLOAT4 reloadingColor(1.0f, 0.2f, 0.2f, 1.0f);
-        float digitHeight = 25.0f;
-        float digitWidth = 15.0f;
-        float digitSpacing = 20.0f;
-        float separatorWidth = 20.0f;
-        float padding = 50.0f;
-
-        // リロード中なら赤色に変更
-        DirectX::XMFLOAT4 currentColor = m_weaponSystem->IsReloading() ? reloadingColor : color;
-
-        // 弾薬数を取得
-        std::string currentAmmoStr = std::to_string(m_weaponSystem->GetCurrentAmmo());
-        std::string reserveAmmoStr = std::to_string(m_weaponSystem->GetReserveAmmo());
-
-        float currentWidth = currentAmmoStr.length() * digitWidth + (currentAmmoStr.length() - 1) * (digitSpacing - digitWidth);
-        float reserveWidth = reserveAmmoStr.length() * digitWidth + (reserveAmmoStr.length() - 1) * (digitSpacing - digitWidth);
-        float totalWidth = currentWidth + separatorWidth + reserveWidth;
-        float startX = m_outputWidth - padding - totalWidth;
-        float startY = m_outputHeight - padding - digitHeight;
-
-        // デバッグ：リロード状態を確認
-        bool isReloading = m_weaponSystem->IsReloading();
-        char debugMsg[256];
-        sprintf_s(debugMsg, "DrawUI時点でリロード中: %s\n", isReloading ? "YES" : "NO");
-        OutputDebugStringA(debugMsg);
-
-        // 現在弾数を描画（リロード中なら赤）
-        float currentX = startX;
-        for (char c : currentAmmoStr) {
-            DrawSimpleNumber(primitiveBatch.get(), c - '0', currentX, startY, currentColor);  // ← currentColor使用
-            currentX += digitSpacing;
-        }
-
-        // スラッシュ（白）
-        currentX += (separatorWidth - digitSpacing) / 2;
-        primitiveBatch->DrawLine(
-            DirectX::VertexPositionColor(DirectX::XMFLOAT3(currentX, startY + digitHeight, 1.0f), color),
-            DirectX::VertexPositionColor(DirectX::XMFLOAT3(currentX + 10.0f, startY, 1.0f), color)
-        );
-
-        // 予備弾数を描画（常に白）
-        currentX += separatorWidth - (separatorWidth - digitSpacing) / 2;
-        for (char c : reserveAmmoStr) {
-            DrawSimpleNumber(primitiveBatch.get(), c - '0', currentX, startY, color);  // ← color使用
-            currentX += digitSpacing;
-        }
-    }
-
-    // (6) 現在の武器名表示（中央下）
-    {
-        DirectX::XMFLOAT4 weaponColor(1.0f, 1.0f, 1.0f, 1.0f);
-        float centerX = m_outputWidth / 2.0f;
-        float bottomY = m_outputHeight - 120.0f;
-
-        // 現在の武器番号を取得
-        int weaponNum = (int)m_weaponSystem->GetCurrentWeapon() + 1;
-        DrawSimpleNumber(primitiveBatch.get(), weaponNum, centerX - 30, bottomY, weaponColor);
-    }
+    // UISystemに全ての描画を委譲
+    m_uiSystem->DrawAll(primitiveBatch.get(),
+        m_player.get(),
+        m_weaponSystem.get(),
+        m_waveManager.get());
 
     primitiveBatch->End();
 }
 
-// =================================================================
-// 【部品】数字を描画するためのヘルパー関数
-// =================================================================
-void Game::DrawSimpleNumber(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch, int digit, float x, float y, DirectX::XMFLOAT4 color) {
-    float w = 15.0f; float h = 25.0f;
-    auto DrawThickLine = [&](float x1, float y1, float x2, float y2) { batch->DrawLine(DirectX::VertexPositionColor(DirectX::XMFLOAT3(x1, y1, 1.0f), color), DirectX::VertexPositionColor(DirectX::XMFLOAT3(x2, y2, 1.0f), color)); };
-    switch (digit) {
-    case 0: DrawThickLine(x, y, x + w, y); DrawThickLine(x, y, x, y + h); DrawThickLine(x + w, y, x + w, y + h); DrawThickLine(x, y + h, x + w, y + h); break;
-    case 1: DrawThickLine(x + w, y, x + w, y + h); break;
-    case 2: DrawThickLine(x, y, x + w, y); DrawThickLine(x + w, y, x + w, y + h / 2); DrawThickLine(x, y + h / 2, x + w, y + h / 2); DrawThickLine(x, y + h / 2, x, y + h); DrawThickLine(x, y + h, x + w, y + h); break;
-    case 3: DrawThickLine(x, y, x + w, y); DrawThickLine(x + w, y, x + w, y + h); DrawThickLine(x, y + h / 2, x + w, y + h / 2); DrawThickLine(x, y + h, x + w, y + h); break;
-    case 4: DrawThickLine(x, y, x, y + h / 2); DrawThickLine(x, y + h / 2, x + w, y + h / 2); DrawThickLine(x + w, y, x + w, y + h); break;
-    case 5: DrawThickLine(x, y, x + w, y); DrawThickLine(x, y, x, y + h / 2); DrawThickLine(x, y + h / 2, x + w, y + h / 2); DrawThickLine(x + w, y + h / 2, x + w, y + h); DrawThickLine(x, y + h, x + w, y + h); break;
-    case 6: DrawThickLine(x, y, x + w, y); DrawThickLine(x, y, x, y + h); DrawThickLine(x, y + h / 2, x + w, y + h / 2); DrawThickLine(x + w, y + h / 2, x + w, y + h); DrawThickLine(x, y + h, x + w, y + h); break;
-    case 7: DrawThickLine(x, y, x + w, y); DrawThickLine(x + w, y, x + w, y + h); break;
-    case 8: DrawThickLine(x, y, x + w, y); DrawThickLine(x, y, x, y + h); DrawThickLine(x + w, y, x + w, y + h); DrawThickLine(x, y + h / 2, x + w, y + h / 2); DrawThickLine(x, y + h, x + w, y + h); break;
-    case 9: DrawThickLine(x, y, x + w, y); DrawThickLine(x, y, x, y + h / 2); DrawThickLine(x + w, y, x + w, y + h); DrawThickLine(x, y + h / 2, x + w, y + h / 2); DrawThickLine(x, y + h, x + w, y + h); break;
-    }
-}
 
 void Game::UpdatePlaying()
 {
