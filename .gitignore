@@ -33,6 +33,17 @@ bld/
 # ===== DLL（必要なものは除外） =====
 # 必要なDLLは後で追加
 
+# DLLは基本的に除外
+*.dll
+
+# でも必要なDLLは含める（否定パターン）
+!x64/Release/assimp-vc143-mt.dll
+!x64/Release/poly2tri.dll
+!x64/Release/minizip.dll
+!x64/Release/zlib1.dll
+!x64/Release/kubazip.dll
+!x64/Release/pugixml.dll
+
 # ===== アセット（大きいファイル） =====
 # 必要に応じて調整
 *.fbx
