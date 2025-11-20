@@ -103,7 +103,7 @@ void WeaponSystem::BuyWeapon(WeaponType weaponType, int& playerPoints)
 	if (m_currentWeaponSlot == 0)
 		m_primaryWeapon = weaponType;
 	else
-		m_secondaryWeapon == weaponType;
+		m_secondaryWeapon = weaponType;
 
 	//	‰‚ß‚Ä‚Q‚Â–Ú‚Ì•Ší‚ğ”ƒ‚¤‚Æ‚«‚Ìˆ—
 	if (!m_hasSecondaryWeapon)

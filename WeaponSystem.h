@@ -1,5 +1,6 @@
+//  // WeaponSystem.h - 武器管理システム
+
 #pragma once
-// WeaponSystem.h - 武器管理システム
 #pragma once
 #include "Entities.h"
 #include <map>

@@ -1,21 +1,45 @@
-# Visual Studio
+# ===== Visual Studio =====
 .vs/
 *.user
 *.suo
+*.userosscache
 *.sln.docstates
-*.vcxproj.user
-# ビルド成果物
-Debug/
-Release/
+
+# ===== ビルド出力 =====
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
 x64/
 x86/
-*.exe
-*.dll
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+
+# ===== DirectX中間ファイル =====
 *.pdb
+*.idb
 *.ilk
 *.obj
-*.lib
+*.pch
 *.exp
-# Windows
+*.lib
+*.dll
+*.exe
+
+# ===== DLL（必要なものは除外） =====
+# 必要なDLLは後で追加
+
+# ===== アセット（大きいファイル） =====
+# 必要に応じて調整
+*.fbx
+*.png
+*.jpg
+
+# ===== Windows =====
 Thumbs.db
+ehthumbs.db
 Desktop.ini

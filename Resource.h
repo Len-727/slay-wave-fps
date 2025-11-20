@@ -1,6 +1,7 @@
 ﻿//{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ で生成されたインクルード ファイルです。
 // 次で使用: Rivalsgame1.rc
+//	Resource.h
 
 #define IDS_APP_TITLE			103
 

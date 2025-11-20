@@ -7,10 +7,13 @@
 #include <VertexTypes.h>
 #include <memory>
 
+#include "WeaponSpawn.h"
+
 // 前方宣言
 class Player;
 class WeaponSystem;
 class WaveManager;
+struct WeaponSpawn;
 
 // UIシステムクラス
 class UISystem {
@@ -35,6 +38,12 @@ public:
     // OnScreenSizeChanged - 画面サイズ変更時に呼ぶ
     void OnScreenSizeChanged(int width, int height);
 
+    void DrawWeaponPrompt(
+    DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
+        WeaponSpawn* weaponSpawn,
+        int playerPoints,
+        bool alreadyOwned);
+
 private:
     // === プライベート描画関数 ===
 
@@ -46,6 +55,10 @@ private:
     void DrawAmmo(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
         int currentAmmo, int reserveAmmo, bool isReloading);
     void DrawWeaponNumber(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch, int weaponNum);
+    void DrawBox(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
+        float x, float y, float width, float height, DirectX::XMFLOAT4 color);
+    void DrawBoxOutline(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
+        float x, float y, float width, float height, DirectX::XMFLOAT4 color);
 
     // 数字描画ヘルパー
     // 【役割】0-9の数字を線で描画

@@ -34,6 +34,9 @@
 #include "Wavemanager.h"
 #include "Player.h"
 #include "UISystem.h"
+#include "Model.h"
+#include "MapSystem.h"
+#include "WeaponSpawn.h"
 
 class Game
 {
@@ -69,6 +72,20 @@ private:
     //  m_uiSystem->Draw...みたいに使う
     std::unique_ptr<UISystem> m_uiSystem;   //  UI管理システム
 
+    std::unique_ptr<Model> m_weaponModel;   //  武器モデル
+    std::unique_ptr<Model> m_testModel;     //  テストモデル
+    std::unique_ptr<Model> m_enemyModel;    //  敵テストモデル
+
+    std::unique_ptr<MapSystem> m_mapSystem;
+
+    std::unique_ptr<WeaponSpawnSystem> m_weaponSpawnSystem; //  壁武器管理システム
+    WeaponSpawn* m_nearbyWeaponSpawn;                       //  プレイヤー近くの壁武器
+    //  --- 壁武器用モデル ---
+    std::unique_ptr<Model> m_pistolModel;   //  初期武器ピストル
+    std::unique_ptr<Model> m_shotgunModel;  //  ショットガンモデル
+    std::unique_ptr<Model> m_rifleModel;    //  ライフルモデル
+    std::unique_ptr<Model> m_sniperModel;   //  スナイパーモデル
+
     // === ゲームループの内部処理 ===
     void Update();     // ゲームロジック更新
     void Render();     // 描画処理
@@ -79,11 +96,12 @@ private:
     void CreateResources();
     void CreateRenderResources();
 
-    void DrawGrid();
+    //void DrawGrid();
     //void DrawCubes();
     //void DrawHealthBar(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch);
     void DrawBillboard();
     void DrawWeapon();
+    void DrawWeaponSpawns();
     void DrawParticles();
     void DrawEnemies();
     void DrawUI();
@@ -126,7 +144,7 @@ private:
     std::unique_ptr<DirectX::GeometricPrimitive> m_cube;
 
 
-    std::unique_ptr<DirectX::GeometricPrimitive> m_weaponModel;
+    
     //std::unique_ptr<DirectX::GeometricPrimitive> m_muzzleFlashModel;
     float m_weaponSwayX;
     float m_weaponSwayY;

@@ -340,3 +340,91 @@ void UISystem::DrawSimpleNumber(DirectX::PrimitiveBatch<DirectX::VertexPositionC
         break;
     }
 }
+
+void UISystem::DrawWeaponPrompt(
+    DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
+    WeaponSpawn* weaponSpawn,
+    int playerPoints,
+    bool alreadyOwned)
+{
+    if (!weaponSpawn)
+        return;
+
+    // === 画面中央下部に表示 ===
+    float centerX = m_screenWidth * 0.5f;
+    float promptY = m_screenHeight * 0.7f;
+
+    // === 背景（半透明の黒）===
+    float bgWidth = 300.0f;
+    float bgHeight = 60.0f;
+    DirectX::XMFLOAT4 bgColor(0.0f, 0.0f, 0.0f, 0.7f);
+
+    DrawBox(batch, centerX - bgWidth / 2, promptY - bgHeight / 2, bgWidth, bgHeight, bgColor);
+
+    // === 購入可能/不可の色 ===
+    DirectX::XMFLOAT4 textColor;
+    if (alreadyOwned)
+    {
+        // 弾薬補充
+        int ammoCost = weaponSpawn->cost / 2;
+        textColor = (playerPoints >= ammoCost) ?
+            DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f) :  // 緑（購入可）
+            DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);   // 赤（お金不足）
+    }
+    else
+    {
+        // 武器購入
+        textColor = (playerPoints >= weaponSpawn->cost) ?
+            DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f) :
+            DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);
+    }
+
+    // 枠線（色付き）
+    DrawBoxOutline(batch, centerX - bgWidth / 2, promptY - bgHeight / 2, bgWidth, bgHeight, textColor);
+}
+
+void UISystem::DrawBox(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
+    float x, float y, float width, float height, DirectX::XMFLOAT4 color)
+{
+    // 【役割】四角形を塗りつぶす（横線を何本も引く）
+    // 【引数】x, y: 左上座標, width, height: サイズ
+
+    for (float i = 0; i < height; ++i)
+    {
+        batch->DrawLine(
+            DirectX::VertexPositionColor(DirectX::XMFLOAT3(x, y + i, 1.0f), color),
+            DirectX::VertexPositionColor(DirectX::XMFLOAT3(x + width, y + i, 1.0f), color)
+        );
+    }
+}
+
+void UISystem::DrawBoxOutline(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
+    float x, float y, float width, float height, DirectX::XMFLOAT4 color)
+{
+    // 【役割】四角形の枠線だけを描画（4本の線）
+    // 【引数】x, y: 左上座標, width, height: サイズ
+
+    // 上の線
+    batch->DrawLine(
+        DirectX::VertexPositionColor(DirectX::XMFLOAT3(x, y, 1.0f), color),
+        DirectX::VertexPositionColor(DirectX::XMFLOAT3(x + width, y, 1.0f), color)
+    );
+
+    // 下の線
+    batch->DrawLine(
+        DirectX::VertexPositionColor(DirectX::XMFLOAT3(x, y + height, 1.0f), color),
+        DirectX::VertexPositionColor(DirectX::XMFLOAT3(x + width, y + height, 1.0f), color)
+    );
+
+    // 左の線
+    batch->DrawLine(
+        DirectX::VertexPositionColor(DirectX::XMFLOAT3(x, y, 1.0f), color),
+        DirectX::VertexPositionColor(DirectX::XMFLOAT3(x, y + height, 1.0f), color)
+    );
+
+    // 右の線
+    batch->DrawLine(
+        DirectX::VertexPositionColor(DirectX::XMFLOAT3(x + width, y, 1.0f), color),
+        DirectX::VertexPositionColor(DirectX::XMFLOAT3(x + width, y + height, 1.0f), color)
+    );
+}

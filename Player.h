@@ -55,9 +55,10 @@ public:
     // IsMouseCaptured - マウスが固定されているか
     bool IsMouseCaptured() const { return m_mouseCaptured; }
 
-private:
-    // === プライベート関数 ===
+    //  プレイヤー位置設定
+    void SetPosition(DirectX::XMFLOAT3 pos) { m_position = pos; }
 
+private:
     // UpdateMovement - 移動処理
     void UpdateMovement();
 
