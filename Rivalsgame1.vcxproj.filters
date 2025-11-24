@@ -13,6 +13,15 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Assets">
+      <UniqueIdentifier>{bfc61f64-ea9b-40e3-bd5e-4d884fe19594}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Models">
+      <UniqueIdentifier>{0b11c65e-6df4-47c5-9f44-42a210334d3a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets\Models\Y_Bot">
+      <UniqueIdentifier>{d678867a-f02e-4939-a23a-af7907139299}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -104,5 +113,20 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="Assets\Models\Y_Bot\Y_Bot.fbx">
+      <Filter>Assets\Models\Y_Bot</Filter>
+    </None>
+    <None Include="Assets\Models\Y_Bot\Zombie_Walk.fbx">
+      <Filter>Assets\Models\Y_Bot</Filter>
+    </None>
+    <None Include="Assets\Models\Y_Bot\Zombie_Attack.fbx">
+      <Filter>Assets\Models\Y_Bot</Filter>
+    </None>
+    <None Include="Assets\Models\Y_Bot\Zombie_Idle.fbx">
+      <Filter>Assets\Models\Y_Bot</Filter>
+    </None>
+    <None Include="Assets\Models\Y_Bot\Zombie_Run.fbx">
+      <Filter>Assets\Models\Y_Bot</Filter>
+    </None>
   </ItemGroup>
 </Project>

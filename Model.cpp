@@ -252,3 +252,350 @@ void Model::Draw(ID3D11DeviceContext* context,
 	}
 
 }
+
+
+//	===	アニメーションファイルを読み込む	===
+bool Model::LoadAnimation(const std::string& filename, const std::string& animationName)
+{
+	//	---	Assimpでファイルを読み込む	---
+	Assimp::Importer importer;	//	ファイルを読み込むクラス
+
+	const aiScene* scene = importer.ReadFile(filename, aiProcess_Triangulate | aiProcess_FlipUVs);
+
+	//	---	エラーチェック	---
+	if (!scene || !scene->mRootNode)
+	{
+		//	読み込み失敗
+		OutputDebugStringA("Model::LoadAnimation - Failed to load file:");
+		OutputDebugStringA(filename.c_str());
+		OutputDebugStringA("\n");
+		return false;
+	}
+
+	if (scene->mNumAnimations == 0)
+	{
+		//	アニメーションが含まれていない
+		OutputDebugStringA("Model::LoadAnimation - No animations in file");
+		OutputDebugStringA(filename.c_str());
+		OutputDebugStringA("\n");
+		return false;
+	}
+
+	//	---	最初のアニメーションを取得	---
+	aiAnimation* anim = scene->mAnimations[0];
+
+	//	AnimationClip 構造体を作成
+	AnimationClip clip;
+	
+	//	名前を設定
+	clip.name = animationName;	//	引数で渡された名前
+
+	//	再生時間を設定
+	clip.duration = static_cast<float>(anim->mDuration / anim->mTicksPerSecond);
+
+	//	再生速度を設定
+	clip.ticksPerSecond = static_cast<float>(anim->mTicksPerSecond);
+
+
+	//	---	各ボーンのアニメーションデータ(チャンネル)を抽出
+	for (unsigned int i = 0; i < anim->mNumChannels; i++)
+	{
+		aiNodeAnim* channel = anim->mChannels[i];
+
+		//	AnimationChannel　構造体を作成
+		AnimationChannel animChannel;
+
+		//	ボーン名を設定
+		animChannel.boneName = channel->mNodeName.C_Str();
+
+
+		//	---	キーフレーム抽出	---
+
+		//	キーフレーム数の最大値を取得
+		unsigned int numKeys = channel->mNumPositionKeys;	//	とりあえず位置の数
+		if (channel->mNumRotationKeys > numKeys)
+			numKeys = channel->mNumRotationKeys;	//	回転のほうが多い
+		if (channel->mNumScalingKeys > numKeys)
+			numKeys = channel->mNumScalingKeys;		//	スケールのほうが多い
+
+		//	キーフレーム配列のサイズを確保
+		animChannel.keyframes.reserve(numKeys);
+
+		//	各フレームを処理
+		for (unsigned int k = 0; k < numKeys; k++)
+		{
+			KeyFrame keyframe;
+
+			//	---	時刻を設定	---
+			if (k < channel->mNumPositionKeys)
+			{
+				keyframe.time = static_cast<float>(
+					channel->mPositionKeys[k].mTime / anim->mTicksPerSecond);
+			
+				//	【計算】ティック　→　秒に変換
+			}
+			else
+			{
+				//	位置キーフレームより多い場合
+				keyframe.time = 0.0f;
+			}
+
+			//	---	位置を設定	---
+			if (k < channel->mNumPositionKeys)
+			{
+				aiVector3D pos = channel->mPositionKeys[k].mValue;
+				keyframe.position = DirectX::XMFLOAT3(pos.x, pos.y, pos.z);
+				//	【変換】AssimpのaiVector3D　→　DirectX の XMFLOAT3
+			}
+			else
+			{
+				//	位置キーフレームがない場合
+				keyframe.position = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
+			}
+
+			//	---	回転を設定(クォータニオン)	---
+			//	補間がスムーズ
+			//	メモリ効率がいい
+			if (k < channel->mNumRotationKeys)
+			{
+				aiQuaternion rot = channel->mRotationKeys[k].mValue;
+				keyframe.rotation = DirectX::XMFLOAT4(rot.x, rot.y, rot.z, rot.w);
+				//	【変換】Assimp の aiQuaternion → DirectX の XMFLOAT4
+			}
+			else
+			{
+				//	回転キーフレームがない場合
+				keyframe.rotation = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f);
+			}
+
+			//	---	スケール設定	---
+			if (k < channel->mNumScalingKeys)
+			{
+				aiVector3D scale = channel->mScalingKeys[k].mValue;
+				keyframe.scale = DirectX::XMFLOAT3(scale.x, scale.y, scale.z);
+
+			}
+			else
+			{
+				keyframe.scale = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
+			}
+
+			//	キーフレームっ配列に追加
+			animChannel.keyframes.push_back(keyframe);
+		}
+		//	チャンネルをアニメーションクリップに追加
+		clip.channels.push_back(animChannel);
+	}
+
+	//---	アニメーションクリップを保存	---
+	m_animations[animationName] = clip;
+
+
+	// デバッグ出力
+	char debugMsg[256];
+	sprintf_s(debugMsg, "Model::LoadAnimation - Loaded: %s (%d channels, %.2f sec)\n",
+		animationName.c_str(),
+		static_cast<int>(clip.channels.size()),
+		clip.duration);
+	OutputDebugStringA(debugMsg);
+
+	return true;  // 成功
+
+}
+
+//	===	アニメーションの長さを取得	===
+float Model::GetAnimationDuration(const std::string& animationName) const
+{
+	//	---	アニメーションを検索	---
+	auto it = m_animations.find(animationName);
+
+	//	見つかったか確認
+	if (it != m_animations.end())
+	{
+		return it->second.duration;
+	}
+	return 0.0f;
+}
+
+//	===	アニメーションが読み込まれているか確認	===
+bool Model::HasAnimation(const std::string& animationName) const
+{
+	return m_animations.find(animationName) != m_animations.end();
+}
+
+//	===	ボーン変換行列を計算	===
+void Model::CalculateBoneTransforms(
+const std::string& animationName,
+float animationTime,
+std::vector<DirectX::XMMATRIX>& outTransforms)
+{
+	//	アニメーションを検索
+	auto it = m_animations.find(animationName);
+	if (it == m_animations.end())
+	{
+		//	見つからなかったら
+		OutputDebugStringA("Model::CalculateBoneTransforms - Animation not found: ");
+		OutputDebugStringA(animationName.c_str());
+		OutputDebugStringA("\n");
+		return;
+	}
+
+	const AnimationClip& clip = it->second;
+
+	//	---	配列のサイズを確保	---
+	outTransforms.resize(m_bones.size());
+
+	//	---	全ての行列を単位行列で初期化	---
+	//	アニメーションデータがないボーンがある場合のデフォルト値
+	for (size_t i = 0; i < outTransforms.size(); i++)
+	{
+		outTransforms[i] = DirectX::XMMatrixIdentity();
+	}
+
+	//	---	チャンネル(ボーン)ごとにループ
+	for (const auto& channel : clip.channels)
+	{
+		//	---	このチャンネルのボーンを探す	---
+		int boneIndex = -1;	//	見つからない場合のデフォルト
+		for (size_t i = 0; i < m_bones.size(); i++)
+		{
+			if (m_bones[i].name == channel.boneName)
+			{
+				boneIndex = static_cast<int>(i);
+				break;	//	見つかったのでループ終了
+
+			}
+		}
+
+		//	ボーンが見つからない
+		if (boneIndex == -1)
+		{
+			continue;
+		}
+
+		//	---	キーフレームがない場合はスキップ	---
+		if (channel.keyframes.empty())
+		{
+			continue;
+		}
+
+		//	---	現在時刻の前後のキーフレームを探す	---
+		size_t frame0 = 0;	//	前のフレーム
+		size_t frame1 = 0;	//	次のフレーム
+
+		//	キーフレームが1つだけの場合
+		if (channel.keyframes.size() == 1)
+		{
+			frame0 = 0;
+			frame1 = 0;
+			//	同じキーフレーム　→　補間なし
+		}
+		else
+		{
+			//	複数のキーフレームがある場合
+			//	現在時刻より後のキーフレームを探す
+			for (size_t i = 0; i < channel.keyframes.size() - 1; i++)
+			{
+				if (animationTime < channel.keyframes[i + 1].time)
+				{
+					//	見つかった
+					frame0 = i;
+					frame1 = i + 1;
+					break;
+				}
+			}
+
+			//	見つからない場合(時刻がアニメーション終端を超えてる)
+			if (frame1 == 0)
+			{
+				//	最後のキーフレームを使う
+				frame0 = channel.keyframes.size() - 1;
+				frame1 = channel.keyframes.size() - 1;
+
+			}
+		}
+
+		//	---	補間係数を計算	---
+		
+		float t = 0.0f;	//	補間係数
+
+		if (frame0 != frame1)
+		{
+			float time0 = channel.keyframes[frame0].time;	//	前の時刻
+			float time1 = channel.keyframes[frame1].time;	//	次の時刻
+			float deltaTime = time1 - time0;	//	時間差
+
+			//	計算
+			if (deltaTime > 0.0f)
+			{
+				t = (animationTime - time0) / deltaTime;
+				//	【クランプ】0.0 - 1.0の範囲に制限
+				if (t < 0.0f) t = 0.0f;
+				if (t > 1.0) t = 1.0f;
+			}
+		}
+
+		//	===	位置の補間(線形補間)	===
+		DirectX::XMFLOAT3 pos0 = channel.keyframes[frame0].position;	//	前のキーフレームの位置
+		DirectX::XMFLOAT3 pos1 = channel.keyframes[frame1].position;	//	次のキーフレームの位置
+
+		//	DirectXのXMFLOAT3　→　XMVECTORに変換(計算用)
+		DirectX::XMVECTOR position0 = DirectX::XMLoadFloat3(&pos0);
+		DirectX::XMVECTOR position1 = DirectX::XMLoadFloat3(&pos1);
+
+		//	---	線形補間(Lerp)	---
+		DirectX::XMVECTOR position = DirectX::XMVectorLerp(position0, position1, t);
+
+
+		//	===	回転の補間(球面線形補間)	===
+		DirectX::XMFLOAT4 rot0 = channel.keyframes[frame0].rotation;	//	前のクォータニオン
+		DirectX::XMFLOAT4 rot1 = channel.keyframes[frame1].rotation;	//	次のクォータニオン
+
+		//	XMFLOAT4 →　XMVECTORに変換
+		DirectX::XMVECTOR rotation0 = DirectX::XMLoadFloat4(&rot0);
+		DirectX::XMVECTOR rotation1 = DirectX::XMLoadFloat4(&rot1);
+
+		//	---	球面線形補間(Slerp)	---
+		DirectX::XMVECTOR rotation = DirectX::XMQuaternionSlerp(rotation0, rotation1, t);
+
+
+		//	===	スケールの補間(線形補間)	===
+		DirectX::XMFLOAT3 scl0 = channel.keyframes[frame0].scale;
+		DirectX::XMFLOAT3 scl1 = channel.keyframes[frame1].scale;
+
+		DirectX::XMVECTOR scale0 = DirectX::XMLoadFloat3(&scl0);
+		DirectX::XMVECTOR scale1 = DirectX::XMLoadFloat3(&scl1);
+
+		DirectX::XMVECTOR scale = DirectX::XMVectorLerp(scale0, scale1, t);
+
+		
+		//	===	変換行列を作成	===
+		//	スケール　→　回転　→　位置
+		DirectX::XMMATRIX scaleMatrix = DirectX::XMMatrixScalingFromVector(scale);
+		DirectX::XMMATRIX rotationMatrix = DirectX::XMMatrixRotationQuaternion(rotation);
+		DirectX::XMMATRIX translationMatrix = DirectX::XMMatrixTranslationFromVector(position);
+
+		//	---	合成	---
+		DirectX::XMMATRIX localTransform = scaleMatrix * rotationMatrix * translationMatrix;
+
+
+		//	親子関係を考慮した最終変換
+		if (m_bones[boneIndex].parentIndex == -1)
+		{
+			//	親のインデックスが -1 なら(親がいない(ルートボーン))
+			//	ローカル変換がそのまま最終変換
+			outTransforms[boneIndex] = localTransform;
+		}
+		else
+		{
+			//	親がいる
+			//	親の返還を適用
+			int parentIndex = m_bones[boneIndex].parentIndex;
+			outTransforms[boneIndex] = localTransform * outTransforms[parentIndex];
+		}
+
+	}
+
+
+
+}
