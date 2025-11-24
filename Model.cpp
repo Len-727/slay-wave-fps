@@ -594,7 +594,7 @@ std::vector<DirectX::XMMATRIX>& outTransforms)
 			outTransforms[boneIndex] = localTransform * outTransforms[parentIndex];
 		}
 
-	}
+	}//	ŽŽ‚µ
 
 
 
