@@ -8,8 +8,11 @@
 #include <vector>			//	頂点データやメッシュを保存するため
 #include <string>			//	ファイルパスを扱う
 #include <memory>			//	BasicEffect　等のオブジェクトを自動管理するため
+#include <map>				//	アニメーション名→データのマップ
 #include <Effects.h>
 #include <CommonStates.h>
+
+#include "Entities.h"
 
 //	===	頂点データ構造体	===
 struct ModelVertex {
@@ -58,6 +61,25 @@ public:
 
 	size_t GetMeshCount() const { return m_meshes.size(); }
 
+	//	FBXファイルからアニメーションを読み込む
+	bool LoadAnimation(const std::string& filename, const std::string& animationName);
+
+	//	アニメーション付きで描画
+	void DrawAnimated(ID3D11DeviceContext* context,
+		DirectX::XMMATRIX world,
+		DirectX::XMMATRIX view,
+		DirectX::XMMATRIX projection,
+		DirectX::XMVECTOR color,
+		const std::string& animationName,
+		float animationTime);
+
+	//	アニメーションの長さを取得
+	//	アニメーションのループ判定に使う
+	float GetAnimationDuration(const std::string& animationName) const;
+
+	//	アニメーションが読み込まれているか確認
+	bool HasAnimation(const std::string& animationName) const;
+
 private:
 	//	メッシュデータ(複数のメッシュを捨てる)
 	std::vector<Mesh> m_meshes;
@@ -66,8 +88,23 @@ private:
 	std::unique_ptr<DirectX::BasicEffect> m_effect;				//	描画エッフェクト
 	Microsoft::WRL::ComPtr<ID3D11InputLayout> m_inputLayout;	//	頂点データの構造定義
 
+	//	ボーン構造
+	std::vector<Bone> m_bones;
+
+	//	アニメーションクリップのマップ
+	//	複数のアニメーションを名前で管理
+	std::map<std::string, AnimationClip> m_animations;
+
 	//	頂点バッファ・インデックスバッファを作成
 	//	【役割】GPUのデータを　GPU に送信
 	bool CreateBuffers(ID3D11Device* device, Mesh& mesh);
+
+	//	ボーン変換行列を計算
+	//	アニメーション時刻に対応するボーン行列を計算
+	void CalculateBoneTransforms(
+		const std::string& animationName,
+		float animationTime,
+		std::vector<DirectX::XMMATRIX>& outTransforms
+	);
 };
 
