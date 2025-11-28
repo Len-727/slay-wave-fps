@@ -34,11 +34,11 @@ void EnemySystem::Update(float deltaTime, DirectX::XMFLOAT3 playerPos)
 //	【仕組み】一定時間ごとに方向転換して、プレイヤーに近づく
 void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float deltaTime)
 {
-	//	【ステップ１】移動タイマーを増やす
+	//	移動タイマーを増やす
 	//	【役割】「何秒うごいたか」を記録
 	enemy.moveTimer += deltaTime;	//	deltaTime = 1/60秒 = 0.0166...秒
 
-	//	【ステップ2】方向転換のタイミングか確認
+	//	方向転換のタイミングか確認
 	//	【条件】moveTimer が nextDirectionChange を超えたら方向転換
 	//	【例】２秒ごとに方向を変える
 	if (enemy.moveTimer >= enemy.nextDirectionChange)
@@ -63,8 +63,8 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 			float normalizedX = dirX / distance;
 			float normalizedZ = dirZ / distance;
 
-			enemy.velocity.x = normalizedX * 3.0f;
-			enemy.velocity.z = normalizedZ * 3.0f;
+			enemy.velocity.x = normalizedX * 1.0f;
+			enemy.velocity.z = normalizedZ * 1.0f;
 		}
 
 		//	タイマーをリセット
@@ -77,17 +77,17 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 		enemy.nextDirectionChange = 1.0f + (float)rand() / RAND_MAX * 2.0f;
 	}
 
-	//	【ステップ３】位置を更新(速度に応じて移動)
+	//	位置を更新(速度に応じて移動)
 	//	【数式】新しい位置　＝　現在地　＋　速度　＊　時間
 	//	【例】position.x = 5, velocity.x = 2 deltaTime = 0.5 → 新position.x = 6
 	enemy.position.x += enemy.velocity.x * deltaTime;
 	enemy.position.z += enemy.velocity.z * deltaTime;
 
-	//	【ステップ４】地面の高さを維持
+	//	地面の高さを維持
 	//	【理由】敵が宙に浮いたり、地面に埋まったりしないように
-	enemy.position.y = 1.0f;	//	常に1.0の高さ
+	enemy.position.y = 0.0f;	//	常に1.0の高さ
 
-	//	【ステップ５】マップの境界チェック(簡易)
+	//	マップの境界チェック(簡易)
 	//	【範囲】X座標が -50 - 50　の範囲
 	//	【目的】敵が無限に遠くに行かないように
 	if (enemy.position.x < -50.0f || enemy.position.x > 50.0f ||
@@ -97,6 +97,20 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 		//	【効果】敵が壁で跳ね返るような動き
 		enemy.velocity.x *= -0.5f;	//逆方向に半分の速度
 		enemy.velocity.z *= -0.5f;
+	}
+
+	//	プレイヤーへの方向ベクトルを計算
+	float dirToPlayerX = playerPos.x - enemy.position.x;
+	float dirToPlayerZ = playerPos.z - enemy.position.z;
+
+	//	===	進行方向に向くように回転角度を更新	===
+	//	速度がほぼ0じゃない場合のみ計算(とまっているときは向きを変えない)
+	if (fabs(dirToPlayerX) > 0.001f || fabs(dirToPlayerZ) > 0.001f)
+	{
+		// atan2f(x, z) で、(0, 1)方向（Z軸プラス）からの角度(ラジアン)を求められる
+		enemy.rotationY = atan2f(dirToPlayerX, dirToPlayerZ);
+
+		enemy.rotationY += 3.14159f;
 	}
 
 	// プレイヤーとの距離を計算
@@ -118,6 +132,50 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 	{
 		enemy.touchingPlayer = false;
 	}
+
+	//	===	プレイヤーに接触しているなら攻撃	===
+	if (enemy.touchingPlayer)
+	{
+		if (enemy.currentAnimation != "Attack")
+		{
+			enemy.currentAnimation = "Attack";
+			enemy.animationTime = 0.0f;	//	最初から再生
+		}
+
+		//	---	攻撃中は足を止める	---
+		enemy.velocity.x = 0.0f;
+		enemy.velocity.z = 0.0f;
+	}
+	//	動いているなら移動
+	else
+	{
+		//	速度の長さ(スピード計算)
+		float speed = sqrtf(enemy.velocity.x * enemy.velocity.x + enemy.velocity.z * enemy.velocity.z);
+
+		//	スピードが速ければ「走り」、遅ければ「歩き」
+		std::string moveAnim = (speed > 4.0f) ? "Run" : "Walk";
+
+		//	とまっている(速度がほぼ０)なら待機
+		if (speed < 0.1f)
+		{
+			moveAnim = "Idle";
+		}
+
+		//	アニメーション変更
+		if (enemy.currentAnimation != moveAnim && enemy.currentAnimation != "Attack")
+		{
+			enemy.currentAnimation = moveAnim;
+		}
+
+		//	攻撃モーションが終わったら移動に戻す処理
+		if (enemy.currentAnimation == "Attack")
+		{
+			if (!enemy.touchingPlayer)
+			{
+				enemy.currentAnimation = moveAnim;
+			}
+		}
+	}
 }
 
 //	Spawn Enemy	新しい敵を一体生成
@@ -125,7 +183,7 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 //	【役割】ランダムな位置に敵を出現させる
 void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 {
-	//	【ステップ１】敵の数が上限に達していないか確認
+	//	敵の数が上限に達していないか確認
 	//	【理由】敵が増えすぎるとゲームが重くなる
 	if (m_enemies.size() >= m_maxEnemies)
 		return;	//	上限に達していたら何もせず終了
@@ -197,7 +255,7 @@ void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 		m_enemies.push_back(enemy);
 }
 
-//	ClearDeadEnemies	死んだ敵を配列から削除
+//	\死んだ敵を配列から削除
 //	【いつ呼ばれる】Update()の最後、またはウェーブ終了時
 //	【役割】isAlive == false の敵をメモリから削除
 void EnemySystem::ClearDeadEnemies()
