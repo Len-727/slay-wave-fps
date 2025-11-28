@@ -283,7 +283,7 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 						OutputDebugStringA("Warning: Vertex has more than 4 bone weights\n");
 					}
 				}
-			}
+			}//nn
 
 			//	---	ウェイト正規化	---
 			//	各頂点のウェイトを合計1.0にする
