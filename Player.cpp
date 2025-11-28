@@ -5,7 +5,7 @@
 // コンストラクタ
 // 【役割】初期位置、HP100、ポイント500で開始
 Player::Player() :
-    m_position(0.0f, 0.5f, -0.5f),   // 初期位置
+    m_position(0.0f, 1.8f, -0.5f),   // 初期位置
     m_rotation(0.0f, 0.0f, 0.0f),    // 正面を向く
     m_health(100),
     m_points(500),
@@ -81,6 +81,17 @@ void Player::UpdateMovement()
         m_position.x += rightX * moveSpeed;
         m_position.z += rightZ * moveSpeed;
     }
+
+    //  目線の高さ
+    float eyeHeight = 1.8f;
+
+    // もし高さが目線より下がっていたら、強制的に持ち上げる（床判定）
+    // (重力処理を入れたときに、これがないと無限に落ちていく)
+    if (m_position.y < eyeHeight)
+    {
+        m_position.y = eyeHeight;
+    }
+
 }
 
 // UpdateMouseLook - マウス視点回転
@@ -104,6 +115,17 @@ void Player::UpdateMouseLook(HWND window)
         float mouseSensitivity = 0.002f;
         m_rotation.y += deltaX * mouseSensitivity;  // 左右回転
         m_rotation.x += deltaY * mouseSensitivity;  // 上下回転
+
+        // ★上下方向の回転を制限する（真上・真下まで行き過ぎないようにする）
+        float maxPitch = 1.5f; // だいたい 85度 くらい（ラジアン）
+        if (m_rotation.x > maxPitch)
+        {
+            m_rotation.x = maxPitch;
+        }
+        if (m_rotation.x < -maxPitch)
+        {
+            m_rotation.x = -maxPitch;
+        }
     }
     else
     {
@@ -160,6 +182,9 @@ void Player::UpdateMouseCapture(HWND window)
 // TakeDamage - ダメージを受ける
 bool Player::TakeDamage(int damage)
 {
+    return false;
+
+
     // 無敵時間中はダメージなし
     if (m_damageTimer > 0.0f)
         return false;

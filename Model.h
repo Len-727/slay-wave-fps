@@ -14,11 +14,42 @@
 
 #include "Entities.h"
 
+struct aiScene;
+struct aiNode;
+
+
 //	===	頂点データ構造体	===
 struct ModelVertex {
 	DirectX::XMFLOAT3 position;	//	位置(x, y, z)
 	DirectX::XMFLOAT3 normal;	//	法線(光の計算用) - 面の向き
 	DirectX::XMFLOAT2 texCoord;	//	テクスチャ座標(u, v) - 画像の貼り付け位置
+
+	//	---	ボーンスキニング	---
+	uint32_t boneIndices[4];	//	ぼーんインデックス
+	float boneWeights[4];	//	ボーンウェイト
+
+
+	//	コンストラクタ
+	ModelVertex()
+		: position(0, 0, 0)
+		, normal(0, 1, 0)
+		, texCoord(0, 0)
+		, boneIndices{ 0, 0, 0, 0 }
+		, boneWeights{ 0.0f, 0.0f, 0.0f, 0.0f }
+	{
+
+	}
+};
+
+//	===	階層構造を保持するためのノード	===
+struct Node
+{
+	std::string name;
+	DirectX::XMMATRIX transformation;	//	初期変換行列
+	int parentIndex;	
+	std::vector<int> children;
+
+	int boneIndex = -1;
 };
 
 
@@ -81,11 +112,30 @@ public:
 	bool HasAnimation(const std::string& animationName) const;
 
 private:
+
+	std::vector<Node> m_nodes;	//	全ノードリスト
+	int m_rootNodeIndex = 0;	//	ルートノードのインデックス
+
+	//	グローバルを逆変換行列
+	DirectX::XMMATRIX m_globalInverseTransform;
+
+	//	再帰的にノードを更新するヘルパー
+	void ReadNodeHierarchy(const aiNode* srcNode, int parentIndex);
+
+	//	再帰的に行列を更新するヘルパー
+	void UpdateNodeTransforms(
+		int nodeIndex,
+		const AnimationClip& clip,
+		float animationTime,
+		DirectX::XMMATRIX parentTransform,
+		std::vector<DirectX::XMMATRIX>& outTransforms
+	);
+
 	//	メッシュデータ(複数のメッシュを捨てる)
 	std::vector<Mesh> m_meshes;
 
 	//	DirectXエッフェクト(シェーダー)
-	std::unique_ptr<DirectX::BasicEffect> m_effect;				//	描画エッフェクト
+	std::unique_ptr<DirectX::SkinnedEffect> m_effect;				//	描画エッフェクト
 	Microsoft::WRL::ComPtr<ID3D11InputLayout> m_inputLayout;	//	頂点データの構造定義
 
 	//	ボーン構造
@@ -106,5 +156,11 @@ private:
 		float animationTime,
 		std::vector<DirectX::XMMATRIX>& outTransforms
 	);
+
+	void BuildBoneHierarchy(const aiScene* scene);
+
+	void DebugDumpSkeleton();
+
+	//std::string GetShortName(const std::string& fullName);
 };
 

@@ -79,13 +79,13 @@ struct AnimationClip
 
 //	---	アニメーションの種類	---
 //	どのアニメーションを再生中か管理
-enum class AnimationType
-{
-	IDLE,	//	待機
-	WALK,	//	歩行
-	RUN,	//	走行
-	ATTACK	//	攻撃
-};
+//enum class AnimationType
+//{
+//	IDLE,	//	待機
+//	WALK,	//	歩行
+//	RUN,	//	走行
+//	ATTACK	//	攻撃
+//};
 
 
 //	敵
@@ -99,9 +99,29 @@ struct Enemy {
 	int health;
 	int maxHealth;
 	bool touchingPlayer;
-	AnimationType currentAnimation;	//	現在再生中のアニメーション	切り替え
-	float animationTime;			//	アニメーションの再生時刻
-	float rotationY;				//	敵の向き
+	//AnimationType currentAnimation;	//	現在再生中のアニメーション	切り替え
+	
+	//	---	アニメーション用	---
+	std::string currentAnimation;
+	float animationTime;	//	アニメーションの再生時刻
+	float rotationY;	//	敵の向き
+
+	Enemy()
+		: position(0, 0, 0)
+		, velocity(0, 0, 0)
+		, color(1, 0, 0, 1)
+		, isAlive(false)
+		, moveTimer(0.0f)
+		, nextDirectionChange(2.0f)
+		, health(100)
+		, maxHealth(100)
+		, touchingPlayer(false)
+		, currentAnimation("Walk")
+		, animationTime(0.0f)
+		, rotationY(0.0f)
+	{
+
+	}
 };
 
 //	パーティクル

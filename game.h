@@ -121,7 +121,9 @@ private:
 
 
 
-    bool CheckRayHitsKube(DirectX::XMFLOAT3 rayStart, DirectX::XMFLOAT3 rayDir, DirectX::XMFLOAT3 cubePos);
+    float CheckRayIntersection(DirectX::XMFLOAT3 rayStart,
+        DirectX::XMFLOAT3 rayDir,
+        DirectX::XMFLOAT3 enemyPos);
 
     // DirectXデバイス（GPU制御）
     Microsoft::WRL::ComPtr<ID3D11Device>            m_d3dDevice;

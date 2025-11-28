@@ -275,27 +275,54 @@ void Game::CreateRenderResources()
 
     m_spriteBatch = std::make_unique<DirectX::SpriteBatch>(m_d3dContext.Get());
 
-    m_testModel = std::make_unique<Model>();
+  /*  m_testModel = std::make_unique<Model>();*/
 
-    //  プレイヤーモデルファイルを読み込む
-    if (!m_testModel->LoadFromFile(m_d3dDevice.Get(), "Assets/X_Bot.fbx"))
-    {
-        OutputDebugStringA("Game::CreateRenderResources - Failed to load model!\n");
-    }
-    else
-    {
-        OutputDebugStringA("Game::CreateRenderResources - Model loaded successfully!\n");
-    }
+    ////  プレイヤーモデルファイルを読み込む
+    //if (!m_testModel->LoadFromFile(m_d3dDevice.Get(), "Assets/X_Bot.fbx"))
+    //{
+    //    OutputDebugStringA("Game::CreateRenderResources - Failed to load model!\n");
+    //}
+    //else
+    //{
+    //    OutputDebugStringA("Game::CreateRenderResources - Model loaded successfully!\n");
+    //}
 
     //  敵プレイヤーモデル
     m_enemyModel = std::make_unique<Model>();
     if (!m_enemyModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Y_Bot/Y_Bot.fbx"))
     {
         OutputDebugStringA("Failed to load enemy model!\n");
+        //throw std::runtime_error("Failed to load enemy model");
     }
     else
     {
         OutputDebugStringA("Enemy model loaded successfully!\n");
+    }
+
+    OutputDebugStringA("=== Loading animations  ===\n");
+
+    //  --- 歩行アニメーション   ---
+    if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Walk.fbx", "Walk"))
+    {
+        OutputDebugStringA("Failed to load Walk animation\n");
+    }
+
+    //  --- 待機アニメーション   ---
+    if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Idle.fbx", "Idle"))
+    {
+        OutputDebugStringA("Failed to load Idle animation\n");
+    }
+
+    //  --- 走りアニメーション   ---
+    if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Run.fbx", "Run"))
+    {
+        OutputDebugStringA("Failed to load Run animation\n");
+    }
+
+    //  --- 攻撃アニメーション   ---
+    if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Attack.fbx", "Attack"))
+    {
+        OutputDebugStringA("Failed to load Attack animation");
     }
 
 
@@ -399,8 +426,9 @@ void Game::CreateRenderResources()
 
 void Game::DrawEnemies()
 {
-    // ビュー・プロジェクション行列の計算
-   // 位置と回転を変数に保存
+    //	========================================================================
+    //	ビュー・プロジェクション行列の計算
+    //	========================================================================
     DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
     DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
 
@@ -420,136 +448,202 @@ void Game::DrawEnemies()
         DirectX::XMConvertToRadians(70.0f), aspectRatio, 0.1f, 1000.0f
     );
 
-    //  === 敵を描画(敵モデル)  ===
+    //	========================================================================
+    //	デバッグ出力（1秒ごと）
+    //	========================================================================
+    static int frameCount = 0;
+    frameCount++;
+
+    if (frameCount % 60 == 0)  // 1秒ごと
+    {
+        auto& enemies = m_enemySystem->GetEnemies();
+
+        char debugMsg[512];
+        sprintf_s(debugMsg, "=== Enemies: %zu ===\n", enemies.size());
+        OutputDebugStringA(debugMsg);
+
+        for (size_t i = 0; i < enemies.size(); i++)
+        {
+            const auto& enemy = enemies[i];
+            sprintf_s(debugMsg, "Enemy[%zu]: alive=%d, pos=(%.1f,%.1f,%.1f), rot=%.2f, anim=%s, time=%.2f\n",
+                i, enemy.isAlive,
+                enemy.position.x, enemy.position.y, enemy.position.z,
+                enemy.rotationY,
+                enemy.currentAnimation.c_str(),
+                enemy.animationTime);
+            OutputDebugStringA(debugMsg);
+        }
+    }
+
+    //	========================================================================
+    //	敵を描画（敵モデル）
+    //	========================================================================
     for (const auto& enemy : m_enemySystem->GetEnemies())
     {
         if (!enemy.isAlive)
             continue;
 
-        //  ワールド行列(スケール→回転→位置)
+        //	====================================================================
+        //	ワールド行列（スケール→回転→位置）
+        //	====================================================================
+
+        //	---	スケール	---
+        //	Y_Bot は 1/100 サイズに縮小
         DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(0.01f, 0.01f, 0.01f);
-        DirectX::XMMATRIX rotation = DirectX::XMMatrixRotationY(enemy.position.x);
+
+        //	---	回転	---
+        //	enemy.rotationY をそのまま使う（EnemySystem で計算済み）
+        DirectX::XMMATRIX rotation = DirectX::XMMatrixRotationY(enemy.rotationY);
+
+        //	---	位置	---
         DirectX::XMMATRIX translation = DirectX::XMMatrixTranslation(
             enemy.position.x,
             enemy.position.y,
-            enemy.position.z 
+            enemy.position.z
         );
-        DirectX::XMMATRIX world = scale * translation;
+
+        //	---	合成	---
+        //	【重要】余計な回転を追加しない
+        DirectX::XMMATRIX world = scale * rotation * translation;
 
         DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
 
+        //	====================================================================
+        //	モデル描画
+        //	====================================================================
         if (m_enemyModel)
         {
-            m_enemyModel->Draw(
-                m_d3dContext.Get(),
-                world,
-                viewMatrix,
-                projectionMatrix,
-                color
-            );
+            if (m_enemyModel->HasAnimation(enemy.currentAnimation))
+            {
+                //	アニメーション付き描画
+                m_enemyModel->DrawAnimated(
+                    m_d3dContext.Get(),
+                    world,
+                    viewMatrix,
+                    projectionMatrix,
+                    color,
+                    enemy.currentAnimation,
+                    enemy.animationTime
+                );
+            }
+            else
+            {
+                //	静的モデル描画
+                m_enemyModel->Draw(
+                    m_d3dContext.Get(),
+                    world,
+                    viewMatrix,
+                    projectionMatrix,
+                    color
+                );
+            }
         }
         else
         {
-            // モデルがない場合はキューブで代用
+            //	フォールバック：キューブで代用
             m_cube->Draw(world, viewMatrix, projectionMatrix, color);
         }
-
-        // HPバーを描画
-        auto context = m_d3dContext.Get();
-        m_effect->SetView(viewMatrix);
-        m_effect->SetProjection(projectionMatrix);
-        m_effect->SetWorld(DirectX::XMMatrixIdentity());
-        m_effect->SetVertexColorEnabled(true);
-        m_effect->SetDiffuseColor(DirectX::Colors::White);
-        m_effect->Apply(context);
-        context->IASetInputLayout(m_inputLayout.Get());
-
-        auto primitiveBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
-        primitiveBatch->Begin();
-
-        for (const auto& enemy : m_enemySystem->GetEnemies())
-        {
-            if (!enemy.isAlive || enemy.health >= enemy.maxHealth)
-                continue;
-
-            // HPバーの位置（敵の上）
-            float barWidth = 1.0f;
-            float barHeight = 0.1f;
-            float healthPercent = (float)enemy.health / enemy.maxHealth;
-
-            DirectX::XMFLOAT3 barCenter = enemy.position;
-            barCenter.y += 2.5f;
-
-            // 背景（赤）
-            DirectX::XMFLOAT4 bgColor(0.5f, 0.0f, 0.0f, 1.0f);
-            primitiveBatch->DrawLine(
-                DirectX::VertexPositionColor(
-                    DirectX::XMFLOAT3(barCenter.x - barWidth / 2, barCenter.y, barCenter.z),
-                    bgColor
-                ),
-                DirectX::VertexPositionColor(
-                    DirectX::XMFLOAT3(barCenter.x + barWidth / 2, barCenter.y, barCenter.z),
-                    bgColor
-                )
-            );
-
-            // HP部分（明るい赤）
-            DirectX::XMFLOAT4 hpColor(1.0f, 0.0f, 0.0f, 1.0f);
-            float currentBarWidth = barWidth * healthPercent;
-            primitiveBatch->DrawLine(
-                DirectX::VertexPositionColor(
-                    DirectX::XMFLOAT3(barCenter.x - barWidth / 2, barCenter.y + 0.05f, barCenter.z),
-                    hpColor
-                ),
-                DirectX::VertexPositionColor(
-                    DirectX::XMFLOAT3(barCenter.x - barWidth / 2 + currentBarWidth, barCenter.y + 0.05f, barCenter.z),
-                    hpColor
-                )
-            );
-        }
-
-        primitiveBatch->End();
     }
+
+    //	========================================================================
+    //	HPバーを描画
+    //	========================================================================
+    auto context = m_d3dContext.Get();
+    m_effect->SetView(viewMatrix);
+    m_effect->SetProjection(projectionMatrix);
+    m_effect->SetWorld(DirectX::XMMatrixIdentity());
+    m_effect->SetVertexColorEnabled(true);
+    m_effect->SetDiffuseColor(DirectX::Colors::White);
+    m_effect->Apply(context);
+    context->IASetInputLayout(m_inputLayout.Get());
+
+    auto primitiveBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
+    primitiveBatch->Begin();
+
+    for (const auto& enemy : m_enemySystem->GetEnemies())
+    {
+        if (!enemy.isAlive || enemy.health >= enemy.maxHealth)
+            continue;
+
+        //	HPバーの位置（敵の上）
+        float barWidth = 1.0f;
+        float barHeight = 0.1f;
+        float healthPercent = (float)enemy.health / enemy.maxHealth;
+
+        DirectX::XMFLOAT3 barCenter = enemy.position;
+        barCenter.y += 2.5f;  // 敵の頭上
+
+        //	背景（暗い赤）
+        DirectX::XMFLOAT4 bgColor(0.5f, 0.0f, 0.0f, 1.0f);
+        primitiveBatch->DrawLine(
+            DirectX::VertexPositionColor(
+                DirectX::XMFLOAT3(barCenter.x - barWidth / 2, barCenter.y, barCenter.z),
+                bgColor
+            ),
+            DirectX::VertexPositionColor(
+                DirectX::XMFLOAT3(barCenter.x + barWidth / 2, barCenter.y, barCenter.z),
+                bgColor
+            )
+        );
+
+        //	HP部分（明るい赤）
+        DirectX::XMFLOAT4 hpColor(1.0f, 0.0f, 0.0f, 1.0f);
+        float currentBarWidth = barWidth * healthPercent;
+        primitiveBatch->DrawLine(
+            DirectX::VertexPositionColor(
+                DirectX::XMFLOAT3(barCenter.x - barWidth / 2, barCenter.y + 0.05f, barCenter.z),
+                hpColor
+            ),
+            DirectX::VertexPositionColor(
+                DirectX::XMFLOAT3(barCenter.x - barWidth / 2 + currentBarWidth, barCenter.y + 0.05f, barCenter.z),
+                hpColor
+            )
+        );
+    }
+
+    primitiveBatch->End();
 }
 
-bool Game::CheckRayHitsKube(DirectX::XMFLOAT3 rayStart, DirectX::XMFLOAT3 rayDir, DirectX::XMFLOAT3 cubePos)
+float Game::CheckRayIntersection(DirectX::XMFLOAT3 rayStart,
+    DirectX::XMFLOAT3 rayDir,
+    DirectX::XMFLOAT3 enemyPos)
 {
-    // レイ（光線）とキューブの当たり判定
-    // キューブのサイズ（1x1x1と仮定）
-    float cubeSize = 2.0f;
+    float width = 0.6f;     // 幅(肩幅くらい)
+    float height = 1.0f;    // 高さ
 
-    // キューブの境界を計算
-    float minX = cubePos.x - cubeSize * 0.5f;
-    float maxX = cubePos.x + cubeSize * 0.5f;
-    float minY = cubePos.y - cubeSize * 0.5f;
-    float maxY = cubePos.y + cubeSize * 0.5f;
-    float minZ = cubePos.z - cubeSize * 0.5f;
-    float maxZ = cubePos.z + cubeSize * 0.5f;
+    float minX = enemyPos.x - width / 2.0f;
+    float minY = enemyPos.y;
+    float minZ = enemyPos.z - width / 2.0f;
 
-    // レイとボックスの交点計算
+    float maxX = enemyPos.x + width / 2.0f;
+    float maxY = enemyPos.y + height;
+    float maxZ = enemyPos.z + width / 2.0f;
+
+    // X軸
     float tMin = (minX - rayStart.x) / rayDir.x;
     float tMax = (maxX - rayStart.x) / rayDir.x;
-
     if (tMin > tMax) std::swap(tMin, tMax);
 
+    // Y軸
     float tyMin = (minY - rayStart.y) / rayDir.y;
     float tyMax = (maxY - rayStart.y) / rayDir.y;
-
     if (tyMin > tyMax) std::swap(tyMin, tyMax);
 
-    if (tMin > tyMax || tyMin > tMax) return false;
+    if (tMin > tyMax || tyMin > tMax) return -1.0f;
 
     if (tyMin > tMin) tMin = tyMin;
     if (tyMax < tMax) tMax = tyMax;
 
+    // Z軸
     float tzMin = (minZ - rayStart.z) / rayDir.z;
     float tzMax = (maxZ - rayStart.z) / rayDir.z;
-
     if (tzMin > tzMax) std::swap(tzMin, tzMax);
 
-    if (tMin > tzMax || tzMin > tMax) return false;
+    if (tMin > tzMax || tzMin > tMax) return -1.0f;
 
-    return tMin > 0; // レイが前方向に進んでいることを確認
+    if (tMin < 0) return -1.0f;
+
+    return tMin;  //    敵までの距離
 }
 
 
@@ -1127,16 +1221,20 @@ void Game::UpdatePlaying()
                         if (!enemy.isAlive)
                             continue;
 
-                        //float distance = // 距離計算
-                        //    if (distance > weapon.range) continue;  // 射程外
+                        float hitDistance = CheckRayIntersection(rayStart, shotDir, enemy.position);
 
-                        if (CheckRayHitsKube(rayStart, rayDir, enemy.position))
+
+                        if (hitDistance > 0.0f)
                         {
                             hit = true;
 
-                            //  ダメージを与える(ヘッドショット判定)
-                            bool isHeadshot = (rayDir.y < -0.3f);
-                            int damage = isHeadshot ? 100 : 30;
+                            //  ここも「shotDir」を使うのが正解
+                            float hitY = rayStart.y + shotDir.y * hitDistance;
+
+                            float heightFromBase = hitY - enemy.position.y;
+                            bool isHeadShot = (heightFromBase > 1.5f);
+
+                            int damage = isHeadShot ? 100 : 30;
 
                             enemy.health -= weapon.damage;
 
@@ -1148,27 +1246,24 @@ void Game::UpdatePlaying()
                                 
                                 //  WaveManagerに通知してボーナス取得
                                 int waveBonus = m_waveManager->OnEnemyKilled();
-                                int totalPoints = (isHeadshot ? 100 : 60) + waveBonus;
+                                int totalPoints = (isHeadShot ? 100 : 60) + waveBonus;
                                 m_player->AddPoints(totalPoints);
 
                                 m_showDamageDisplay = true;
                                 m_damageDisplayTimer = 2.0f;
                                 m_damageDisplayPos = enemy.position;
                                 m_damageDisplayPos.y += 2.0f;
-                                m_damageValue = isHeadshot ? 100 : 60;
+                                m_damageValue = isHeadShot ? 100 : 60;
 
                                 char debug[256];
-                                sprintf_s(debug, "敵撃破！スコア:%d", m_score);
+                                sprintf_s(debug, isHeadShot ? "HEADSHOT!! Points:%d" : "Hit! Points:%d",
+                                    m_player->GetPoints());
                                 SetWindowTextA(m_window, debug);
-                            }
-
-                            else
-                            {
-                                enemy.color.x = 1.0f;
                             }
 
 
                             break;
+
                         }
                     }
                 }
@@ -1232,6 +1327,34 @@ void Game::UpdatePlaying()
     //  【意味】プレイヤーの現在位置
     //  【用途】敵がプレイヤーに向かって動くため
     m_enemySystem->Update(1.0f / 60.0f, m_player->GetPosition());
+
+    //  === アニメーション更新   ===
+    auto& enemies = m_enemySystem->GetEnemies();
+    for (auto& enemy : enemies)
+    {
+        //  --- 生きている敵だけ処理  ---
+        if (!enemy.isAlive)
+            continue;
+
+        //  --- アニメーション時刻を進める   ---
+        enemy.animationTime += 1.0f / 60.0f;
+
+
+        //  --- ループ処理   ---
+        if (m_enemyModel && m_enemyModel->HasAnimation(enemy.currentAnimation))
+        {
+            //  アニメーションの長さを取得
+            float duration = m_enemyModel->GetAnimationDuration(enemy.currentAnimation);
+
+            //  終端を超えたかチェック
+            if (enemy.animationTime >= duration)
+            {
+                //  最初に戻す
+                enemy.animationTime = 0.0f;
+            }
+        }
+    }
+
 
     //  死んだ敵を削除 毎フレーム敵を削除しないと、配列か肥大化
     m_enemySystem->ClearDeadEnemies();  //  追加

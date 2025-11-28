@@ -143,13 +143,13 @@ bool MapSystem::CheckCollision(XMFLOAT3 position, float radius)
 		float halfDepth = obj.scale.z / 2.0f;
 
 		// === デバッグ出力	===
-		char debug[512];
+		/*char debug[512];
 		sprintf_s(debug, "CheckCollision: Player(%.1f, %.1f, %.1f) vs Object(%.1f, %.1f, %.1f) "
 			"dx=%.2f dz=%.2f halfW=%.2f halfD=%.2f radius=%.2f\n",
 			position.x, position.y, position.z,
 			obj.position.x, obj.position.y, obj.position.z,
 			dx, dz, halfWidth, halfDepth, radius);
-		OutputDebugStringA(debug);
+		OutputDebugStringA(debug);*/
 
 		if (dx < (halfWidth + radius) && dz < (halfDepth + radius))
 		{
