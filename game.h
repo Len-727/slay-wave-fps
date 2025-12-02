@@ -37,6 +37,7 @@
 #include "Model.h"
 #include "MapSystem.h"
 #include "WeaponSpawn.h"
+#include "Shadow.h"
 
 class Game
 {
@@ -85,6 +86,11 @@ private:
     std::unique_ptr<Model> m_shotgunModel;  //  ショットガンモデル
     std::unique_ptr<Model> m_rifleModel;    //  ライフルモデル
     std::unique_ptr<Model> m_sniperModel;   //  スナイパーモデル
+
+
+    //  === 影   ===
+    std::unique_ptr<Shadow> m_shadow;
+
 
     // === ゲームループの内部処理 ===
     void Update();     // ゲームロジック更新

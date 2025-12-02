@@ -172,7 +172,7 @@ void MapSystem::CreateDefaultMap()
 	AddFloor(
 		XMFLOAT3(0, -0.05f, 0),
 		XMFLOAT3(50, 0.1f, 50),
-		XMFLOAT4(0.2f, 0.2f, 0.2f, 1.0f)
+		XMFLOAT4(0.7f, 0.7f, 0.7f, 1.0f)
 	);
 
 

@@ -23,24 +23,25 @@ Model::Model()
 }
 
 
-std::string GetShortName(std::string name)
+std::string Model::GetShortName(const std::string& fullName)
 {
-	// "Mixamo:" や "mixamorig:" などの ":" を探す
+	std::string name = fullName;
+
+	// コロンより前の部分を削除
 	size_t colonPos = name.find(':');
 	if (colonPos != std::string::npos)
 	{
-		// ":" の後ろの部分だけ返す (例: "Mixamo:Head" -> "Head")
-		return name.substr(colonPos + 1);
+		name = name.substr(colonPos + 1);
 	}
 
-	//	Assimp FBXが付ける"_$AssimpFbx$_Rotation" などの suffix を削る
+
+	// Assimpが付ける余計なサフィックスを削除する処理を追加（最小限）
 	const std::string assimpSuffix = "_$AssimpFbx$_";
 	size_t assimpPos = name.find(assimpSuffix);
 	if (assimpPos != std::string::npos)
 	{
 		name = name.substr(0, assimpPos);
 	}
-
 
 	return name;
 }
@@ -61,7 +62,7 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 		aiProcess_ConvertToLeftHanded |	//	DirectX用に左手座標系に
 		aiProcess_GenNormals |			//	法線を自動生成
 		aiProcess_CalcTangentSpace |	    //	タンジェント計算
-		aiProcess_FlipUVs               // ★UV座標を反転 (テクスチャが上下逆になるのを修正。ディフューズカラーには無関係)
+		aiProcess_FlipUVs               // 座標を反転 (テクスチャが上下逆になるのを修正。ディフューズカラーには無関係)
 		//aiProcess_FlipNormals             // 
 	);
 
@@ -1146,9 +1147,8 @@ void Model::DrawAnimated(
 	const std::string& animationName,
 	float animationTime)
 {
-	//	========================================================================
+	
 	//	ステップ1: アニメーションがあるか確認
-	//	========================================================================
 	auto it = m_animations.find(animationName);
 	if (it == m_animations.end())
 	{
@@ -1162,9 +1162,8 @@ void Model::DrawAnimated(
 
 	const AnimationClip& clip = it->second;
 
-	//	========================================================================
-	//	ステップ2: ボーン変換行列を計算
-	//	========================================================================
+
+	//	全ての行列を単位行列で初期化
 	std::vector<DirectX::XMMATRIX> boneTransforms;
 	boneTransforms.resize(m_bones.size());
 
@@ -1177,6 +1176,7 @@ void Model::DrawAnimated(
 	//	ノード階層を使ってボーン変換を計算
 	if (!m_nodes.empty())
 	{
+		//	ここが肝心！UpdateNodeTransforms を呼ぶ
 		UpdateNodeTransforms(
 			m_rootNodeIndex,
 			clip,
@@ -1186,9 +1186,8 @@ void Model::DrawAnimated(
 		);
 	}
 
-	//	========================================================================
+
 	//	ステップ3: ボーン行列をエフェクトに設定
-	//	========================================================================
 	//	最大72個のボーン（DirectXTK の SkinnedEffect の制限）
 	DirectX::XMMATRIX finalBones[DirectX::SkinnedEffect::MaxBones];
 
@@ -1207,34 +1206,25 @@ void Model::DrawAnimated(
 	//	エフェクトにボーン行列を設定
 	m_effect->SetBoneTransforms(finalBones, DirectX::SkinnedEffect::MaxBones);
 
-	//	========================================================================
-	//	ステップ4: エフェクトに行列を設定
-	//	========================================================================
+
+	//	エフェクトに行列を設定
 	m_effect->SetWorld(world);
 	m_effect->SetView(view);
 	m_effect->SetProjection(projection);
 
-	//	========================================================================
-	//	ステップ5: ライトの設定
-	//	========================================================================
+	//	ライトの設定
 	m_effect->EnableDefaultLighting();
 	m_effect->SetAmbientLightColor(DirectX::XMVectorSet(0.3f, 0.3f, 0.3f, 1.0f));
 	m_effect->SetDiffuseColor(color);
 
-	//	========================================================================
-	//	ステップ6: エフェクト適用
-	//	========================================================================
+	//	エフェクト適用
 	m_effect->Apply(context);
 
-	//	========================================================================
-	//	ステップ7: 入力レイアウトを設定
-	//	========================================================================
+	//	入力レイアウトを設定
 	context->IASetInputLayout(m_inputLayout.Get());
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-	//	========================================================================
-	//	ステップ8: 各メッシュを描画
-	//	========================================================================
+	//	各メッシュを描画
 	for (const auto& mesh : m_meshes)
 	{
 		//	頂点バッファを設定

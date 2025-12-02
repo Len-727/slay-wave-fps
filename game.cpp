@@ -41,7 +41,8 @@ Game::Game() noexcept :
     m_particleSystem(std::make_unique<ParticleSystem>()),
     m_waveManager(std::make_unique<WaveManager>()),
     m_player(std::make_unique<Player>()),
-    m_uiSystem(std::make_unique<UISystem>(1280, 720))
+    m_uiSystem(std::make_unique<UISystem>(1280, 720)),
+    m_shadow(nullptr)
 {
    
 }
@@ -95,13 +96,16 @@ void Game::Update()
 
 void Game::Clear()
 {
-
-
+    // 画面を青でクリア
     m_d3dContext->ClearRenderTargetView(m_renderTargetView.Get(), Colors::Blue);
-    // Colors::Red, Colors::Green, Colors::Black なども試してみよう
 
-    m_d3dContext->ClearDepthStencilView(m_depthStencilView.Get(),
-        D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+    // ★重要: 深度バッファ(DEPTH) と ステンシルバッファ(STENCIL) の両方をクリアする
+    m_d3dContext->ClearDepthStencilView(
+        m_depthStencilView.Get(),
+        D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, // 両方のフラグを立てる
+        1.0f, // Depth初期値 (1.0 = 最奥)
+        0     // Stencil初期値 (0 = 履歴なし)
+    );
 
     m_d3dContext->OMSetRenderTargets(1, m_renderTargetView.GetAddressOf(),
         m_depthStencilView.Get());
@@ -355,6 +359,19 @@ void Game::CreateRenderResources()
     // フォントファイルを読み込む
     //m_font = std::make_unique<DirectX::SpriteFont>(m_d3dDevice.Get(), L"Arial.spritefont");
 
+    //  === Shadow を初期化  ===
+    m_shadow = std::make_unique<Shadow>();
+    if (!m_shadow->Initialize(m_d3dDevice.Get()))
+    {
+        OutputDebugStringA("Game::CreateRenderResources - Failed to initialize Shadow System!\n");
+        // エラー処理
+    }
+    else
+    {
+        // 影の色を黒の半透明に設定
+        m_shadow->SetShadowColor(DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.5f));
+    }
+
 }
 
 
@@ -458,6 +475,8 @@ void Game::DrawEnemies()
     {
         auto& enemies = m_enemySystem->GetEnemies();
 
+
+
         char debugMsg[512];
         sprintf_s(debugMsg, "=== Enemies: %zu ===\n", enemies.size());
         OutputDebugStringA(debugMsg);
@@ -474,6 +493,9 @@ void Game::DrawEnemies()
             OutputDebugStringA(debugMsg);
         }
     }
+
+
+    DirectX::XMFLOAT3 lightDir = { 1.0f, -1.0f, 1.0f };
 
     //	========================================================================
     //	敵を描画（敵モデル）
@@ -507,6 +529,45 @@ void Game::DrawEnemies()
         DirectX::XMMATRIX world = scale * rotation * translation;
 
         DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
+
+        //  === 影描画 ===
+        // 【光の方向】デフォルトのライトと同じ方向 (斜め上から)
+        if (m_shadow)
+        {
+            // 新しい RenderShadow は引数が 7個 あります
+            m_shadow->RenderShadow(
+                m_d3dContext.Get(),
+                enemy.position,     // 敵の足元の位置
+                1.5f,               // 影のサイズ
+                viewMatrix,         // ビュー行列
+                projectionMatrix,   // プロジェクション行列
+                lightDir,           // ★追加: 光の方向
+                1.1f                // ★追加: 地面の高さ (Y=0)
+            );
+        }
+        //if (m_shadow)
+        //{
+        //    // ★修正1：影用に「位置だけの行列」を作る
+        //    // 敵の回転(rotation)や縮小(scale)を無視し、敵の足元(translation)に影を置く
+        //    DirectX::XMMATRIX shadowPos = DirectX::XMMatrixTranslation(
+        //        enemy.position.x,
+        //        enemy.position.y,
+        //        enemy.position.z
+        //    );
+
+        //    // ※もしShadow.cpp側でスケール調整をしていないなら、ここで影の大きさを決める
+        //    // float shadowSize = 0.5f; // 影の大きさ（50cmくらい）
+        //    // shadowPos = XMMatrixScaling(shadowSize, 1.0f, shadowSize) * shadowPos;
+
+        //    m_shadow->RenderShadow(
+        //        m_d3dContext.Get(),
+        //        shadowPos,  // ← world ではなく、位置だけの行列を渡す
+        //        viewMatrix,
+        //        projectionMatrix,
+        //        lightDir,
+        //        0.01f       // ← ★修正2：プラスの値（地面より少し上）にする
+        //    );
+        //}
 
         //	====================================================================
         //	モデル描画
@@ -891,6 +952,7 @@ void Game::RenderPlaying()
         m_mapSystem->Draw(m_d3dContext.Get(), viewMatrix, projectionMatrix);
     }
 
+
     //  === 壁武器テクスチャ描画  ===
     if (m_weaponSpawnSystem)
     {
@@ -905,6 +967,17 @@ void Game::RenderPlaying()
     DrawWeapon();
     DrawWeaponSpawns();
 
+    /*const auto& enemies = m_enemySystem->GetEnemies();
+    for (const auto& enemy : enemies)
+    {
+        if (!enemy.isAlive) continue;
+
+        DirectX::XMMATRIX testWorld =
+            DirectX::XMMatrixScaling(3.0f, 0.1f, 3.0f) *
+            DirectX::XMMatrixTranslation(enemy.position.x, 0.05f, enemy.position.z);
+
+        m_cube->Draw(testWorld, viewMatrix, projectionMatrix, DirectX::Colors::Yellow);
+    }*/
     
     // 最後にUIをすべて手前に描画する
     DrawUI();

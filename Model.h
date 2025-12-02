@@ -161,6 +161,6 @@ private:
 
 	void DebugDumpSkeleton();
 
-	//std::string GetShortName(const std::string& fullName);
+	std::string GetShortName(const std::string& fullName);
 };
 

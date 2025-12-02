@@ -167,6 +167,7 @@
     <ClInclude Include="Player.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Rivalsgame1.h" />
+    <ClInclude Include="Shadow.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="TexturedQuad.h" />
     <ClInclude Include="UISystem.h" />
@@ -182,6 +183,7 @@
     <ClCompile Include="Model.cpp" />
     <ClCompile Include="ParticleSystem.cpp" />
     <ClCompile Include="Player.cpp" />
+    <ClCompile Include="Shadow.cpp" />
     <ClCompile Include="TexturedQuad.cpp" />
     <ClCompile Include="UISystem.cpp" />
     <ClCompile Include="WaveManager.cpp" />

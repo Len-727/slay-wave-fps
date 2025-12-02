@@ -2,8 +2,11 @@
 // 【目的】プレイヤーの位置、HP、ポイントを管理
 #pragma once
 
+#include <d3d11.h>
 #include <DirectXMath.h>   // XMFLOAT3
 #include <Windows.h>       // HWND
+
+
 
 // プレイヤークラス
 class Player {
@@ -18,6 +21,12 @@ public:
     // 【役割】キー入力・マウス入力を処理
     // 【引数】window: ウィンドウハンドル（マウス制御用）
     void Update(HWND window);
+
+    void Draw(
+        ID3D11DeviceContext* context,
+        DirectX::XMMATRIX view,
+        DirectX::XMMATRIX projection);
+
 
     // TakeDamage - ダメージを受ける
     // 【役割】HPを減らし、ダメージエフェクトを開始
@@ -58,6 +67,13 @@ public:
     //  プレイヤー位置設定
     void SetPosition(DirectX::XMFLOAT3 pos) { m_position = pos; }
 
+    DirectX::XMMATRIX GetWorldMatrix() const
+    {
+        return DirectX::XMMatrixScaling(1.0f, 1.0f, 1.0f) *
+            DirectX::XMMatrixRotationY(m_rotation.y) *
+            DirectX::XMMatrixTranslation(m_position.x, m_position.y, m_position.z);
+    }
+
 private:
     // UpdateMovement - 移動処理
     void UpdateMovement();
@@ -87,4 +103,6 @@ private:
     bool m_firstMouse;                 // 初回マウス移動か
     int m_lastMouseX;                  // 前フレームのマウスX
     int m_lastMouseY;                  // 前フレームのマウスY
+
+
 };

@@ -179,6 +179,14 @@ void Player::UpdateMouseCapture(HWND window)
     }
 }
 
+void Player::Draw(
+    ID3D11DeviceContext* context,
+    DirectX::XMMATRIX view,
+    DirectX::XMMATRIX projection)
+{
+   
+}
+
 // TakeDamage - ƒ_ƒ[ƒW‚ğó‚¯‚é
 bool Player::TakeDamage(int damage)
 {
