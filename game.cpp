@@ -670,7 +670,7 @@ float Game::CheckRayIntersection(DirectX::XMFLOAT3 rayStart,
     DirectX::XMFLOAT3 enemyPos)
 {
     float width = 0.6f;     // 幅(肩幅くらい)
-    float height = 1.0f;    // 高さ
+    float height = 1.8f;    // 高さ
 
     float minX = enemyPos.x - width / 2.0f;
     float minY = enemyPos.y;
@@ -1301,8 +1301,23 @@ void Game::UpdatePlaying()
                         {
                             hit = true;
 
-                            //  ここも「shotDir」を使うのが正解
+                            //  ヒット位置を計算
                             float hitY = rayStart.y + shotDir.y * hitDistance;
+                            //  実際に当たった3次元座標(血を出す場所)
+                            DirectX::XMFLOAT3 hitPos;
+                            hitPos.x = rayStart.x + shotDir.x * hitDistance;
+                            hitPos.y = hitY;
+                            hitPos.z = rayStart.z + shotDir.z * hitDistance;
+
+                            //  血しぶきのエッフェクト
+                            m_particleSystem->CreateBloodEffect(hitPos, shotDir, 15);
+
+                            //  ノックバック処理
+                            //  敵を射撃方向に押し出す
+                            float knockbackStrength = 0.2f; //  ノックバックの強さ
+                            enemy.position.x += shotDir.x * knockbackStrength;
+                            enemy.position.z += shotDir.z * knockbackStrength;
+
 
                             float heightFromBase = hitY - enemy.position.y;
                             bool isHeadShot = (heightFromBase > 1.5f);

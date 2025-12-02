@@ -47,6 +47,9 @@ public:
     // 【用途】描画前の最適化（パーティクルがなければ描画スキップ）
     bool IsEmpty() const { return m_particles.empty(); }
 
+    //  位置(pos)から方向(dir)に向かって血を噴出させる
+    void CreateBloodEffect(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 dir, int count = 10);
+
 private:
     // === プライベート関数 ===
 

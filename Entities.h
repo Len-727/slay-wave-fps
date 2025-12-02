@@ -131,6 +131,5 @@ struct Particle {
 	DirectX::XMFLOAT4 color;
 	float lifetime;
 	float maxLifetime;
+	float size;
 };
-
-

@@ -168,3 +168,36 @@ void ParticleSystem::CreateMuzzleParticles(DirectX::XMFLOAT3 muzzlePosition,
         m_particles.push_back(particle);
     }
 }
+
+//  ŒŒ‚µ‚Ô‚«
+void ParticleSystem::CreateBloodEffect(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 dir, int count)
+{
+    for (int i = 0; i < count; i++)
+    {
+        Particle p;
+        p.position = pos;
+        
+        //  ŒŒ‚ÍÔ‚©‚çˆÃ‚¢Ô
+        float shade = 0.5f + ((rand() % 100) / 200.0f); //  0.5 - 1.0
+        p.color = DirectX::XMFLOAT4(shade, 0.0f, 0.0f, 1.0f);
+
+        //  Œ‚‚½‚ê‚½•ûŒü(dir)‚É­‚µ¨‚¢‚ð‚Â‚¯‚Â‚ÂAƒ‰ƒ“ƒ_ƒ€‚ÉŠgŽU‚³‚¹‚é
+        float speed = 2.0f + ((rand() % 100) / 50.0f);
+
+        //  ƒ‰ƒ“ƒ_ƒ€‚ÈŠgŽUƒxƒNƒgƒ‹
+        float rx = ((rand() % 100) / 100.0f) - 0.5f;
+        float ry = ((rand() % 100) / 100.0f) - 0.5f;
+        float rz = ((rand() % 100) / 100.0f) - 0.5f;
+
+        p.velocity.x = dir.x * speed + rx;
+        p.velocity.y = dir.y * speed + ry + 1.0f;   //  ­‚µ‚ÍQ‚Ä‚©‚ç—Ž‚¿‚é
+        p.velocity.z = dir.z * speed + rz;
+
+        p.lifetime = 1.0f;  //  1•b‚ÅÁ‚¦‚é
+        p.maxLifetime = 1.0f;
+        p.size = 0.05f + ((rand() % 100) / 1000.0f);
+
+        m_particles.push_back(p);
+
+    }
+}
