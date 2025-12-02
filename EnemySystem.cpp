@@ -34,6 +34,9 @@ void EnemySystem::Update(float deltaTime, DirectX::XMFLOAT3 playerPos)
 //	【仕組み】一定時間ごとに方向転換して、プレイヤーに近づく
 void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float deltaTime)
 {
+	if (enemy.isDying)
+		return;
+
 	//	移動タイマーを増やす
 	//	【役割】「何秒うごいたか」を記録
 	enemy.moveTimer += deltaTime;	//	deltaTime = 1/60秒 = 0.0166...秒

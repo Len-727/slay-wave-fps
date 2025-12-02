@@ -329,6 +329,12 @@ void Game::CreateRenderResources()
         OutputDebugStringA("Failed to load Attack animation");
     }
 
+    //  --- 死亡アニメーション   ---
+    if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Death.fbx", "Death"))
+    {
+        OutputDebugStringA("Failed to load Death Animation");
+    }
+
 
     //  === MapSystem   初期化 ===
     m_mapSystem = std::make_unique<MapSystem>();
@@ -484,10 +490,9 @@ void Game::DrawEnemies()
         for (size_t i = 0; i < enemies.size(); i++)
         {
             const auto& enemy = enemies[i];
-            sprintf_s(debugMsg, "Enemy[%zu]: alive=%d, pos=(%.1f,%.1f,%.1f), rot=%.2f, anim=%s, time=%.2f\n",
-                i, enemy.isAlive,
+            sprintf_s(debugMsg, "Enemy[%zu]: alive=%d, dying=%d, pos=(%.1f,%.1f,%.1f), anim=%s, time=%.2f\n",
+                i, enemy.isAlive, enemy.isDying,
                 enemy.position.x, enemy.position.y, enemy.position.z,
-                enemy.rotationY,
                 enemy.currentAnimation.c_str(),
                 enemy.animationTime);
             OutputDebugStringA(debugMsg);
@@ -502,7 +507,7 @@ void Game::DrawEnemies()
     //	========================================================================
     for (const auto& enemy : m_enemySystem->GetEnemies())
     {
-        if (!enemy.isAlive)
+        if (!enemy.isAlive && !enemy.isDying)
             continue;
 
         //	====================================================================
@@ -530,45 +535,8 @@ void Game::DrawEnemies()
 
         DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
 
-        //  === 影描画 ===
-        // 【光の方向】デフォルトのライトと同じ方向 (斜め上から)
-        if (m_shadow)
-        {
-            // 新しい RenderShadow は引数が 7個 あります
-            m_shadow->RenderShadow(
-                m_d3dContext.Get(),
-                enemy.position,     // 敵の足元の位置
-                1.5f,               // 影のサイズ
-                viewMatrix,         // ビュー行列
-                projectionMatrix,   // プロジェクション行列
-                lightDir,           // ★追加: 光の方向
-                1.1f                // ★追加: 地面の高さ (Y=0)
-            );
-        }
-        //if (m_shadow)
-        //{
-        //    // ★修正1：影用に「位置だけの行列」を作る
-        //    // 敵の回転(rotation)や縮小(scale)を無視し、敵の足元(translation)に影を置く
-        //    DirectX::XMMATRIX shadowPos = DirectX::XMMatrixTranslation(
-        //        enemy.position.x,
-        //        enemy.position.y,
-        //        enemy.position.z
-        //    );
-
-        //    // ※もしShadow.cpp側でスケール調整をしていないなら、ここで影の大きさを決める
-        //    // float shadowSize = 0.5f; // 影の大きさ（50cmくらい）
-        //    // shadowPos = XMMatrixScaling(shadowSize, 1.0f, shadowSize) * shadowPos;
-
-        //    m_shadow->RenderShadow(
-        //        m_d3dContext.Get(),
-        //        shadowPos,  // ← world ではなく、位置だけの行列を渡す
-        //        viewMatrix,
-        //        projectionMatrix,
-        //        lightDir,
-        //        0.01f       // ← ★修正2：プラスの値（地面より少し上）にする
-        //    );
-        //}
-
+        
+       
         //	====================================================================
         //	モデル描画
         //	====================================================================
@@ -623,7 +591,7 @@ void Game::DrawEnemies()
 
     for (const auto& enemy : m_enemySystem->GetEnemies())
     {
-        if (!enemy.isAlive || enemy.health >= enemy.maxHealth)
+        if (!enemy.isAlive || enemy.isDying || enemy.health >= enemy.maxHealth)
             continue;
 
         //	HPバーの位置（敵の上）
@@ -669,8 +637,8 @@ float Game::CheckRayIntersection(DirectX::XMFLOAT3 rayStart,
     DirectX::XMFLOAT3 rayDir,
     DirectX::XMFLOAT3 enemyPos)
 {
-    float width = 0.6f;     // 幅(肩幅くらい)
-    float height = 1.8f;    // 高さ
+    float width = 0.5f;     // 幅(肩幅くらい)
+    float height = 1.7f;    // 高さ
 
     float minX = enemyPos.x - width / 2.0f;
     float minY = enemyPos.y;
@@ -967,18 +935,27 @@ void Game::RenderPlaying()
     DrawWeapon();
     DrawWeaponSpawns();
 
-    /*const auto& enemies = m_enemySystem->GetEnemies();
-    for (const auto& enemy : enemies)
+    if (m_shadow)
     {
-        if (!enemy.isAlive) continue;
+        DirectX::XMFLOAT3 lightDirection(0.5f, -1.0f, 0.5f);
+        float groundY = 0.0f;
 
-        DirectX::XMMATRIX testWorld =
-            DirectX::XMMatrixScaling(3.0f, 0.1f, 3.0f) *
-            DirectX::XMMatrixTranslation(enemy.position.x, 0.05f, enemy.position.z);
+        const auto& enemies = m_enemySystem->GetEnemies();
+        for (const auto& enemy : enemies)
+        {
+            if (!enemy.isAlive) continue;
 
-        m_cube->Draw(testWorld, viewMatrix, projectionMatrix, DirectX::Colors::Yellow);
-    }*/
-    
+            m_shadow->RenderShadow(
+                m_d3dContext.Get(),
+                enemy.position,          // 敵の位置
+                1.5f,                    // 影のサイズ
+                viewMatrix,
+                projectionMatrix,
+                lightDirection,
+                groundY
+            );
+        }
+    }
     // 最後にUIをすべて手前に描画する
     DrawUI();
 
@@ -1291,7 +1268,8 @@ void Game::UpdatePlaying()
                 {
                     for (auto& enemy : m_enemySystem->GetEnemies())
                     {
-                        if (!enemy.isAlive)
+
+                        if (!enemy.isAlive || enemy.isDying)
                             continue;
 
                         float hitDistance = CheckRayIntersection(rayStart, shotDir, enemy.position);
@@ -1329,7 +1307,14 @@ void Game::UpdatePlaying()
                             if (enemy.health <= 0)
                             {
                                 //  敵を倒した
-                                enemy.isAlive = false;
+                                //  死亡モード
+                                if (!enemy.isDying)
+                                {
+                                    enemy.isDying = true;   //  死亡フラグ
+                                    enemy.currentAnimation = "Death";   //  アニメーション切り替え
+                                    enemy.animationTime = 0.0f; //  最初から再生
+                                    enemy.corpseTimer = 5.0f; //    5秒間だけ死体を残す
+                                }
                                 m_particleSystem->CreateExplosion(enemy.position);
                                 
                                 //  WaveManagerに通知してボーナス取得
@@ -1416,16 +1401,29 @@ void Game::UpdatePlaying()
     //  【用途】敵がプレイヤーに向かって動くため
     m_enemySystem->Update(1.0f / 60.0f, m_player->GetPosition());
 
-    //  === アニメーション更新   ===
-    auto& enemies = m_enemySystem->GetEnemies();
-    for (auto& enemy : enemies)
+    //  === 敵の「移動・回転・アニメーション更新・死亡」をまとめて制御するループ   ===
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+    float dt = 1.0f / 60.0f;
+
+    for (auto& enemy : m_enemySystem->GetEnemies())
     {
         //  --- 生きている敵だけ処理  ---
-        if (!enemy.isAlive)
+        if (!enemy.isAlive && !enemy.isDying)
             continue;
 
+        //  死亡中処理
+        if (enemy.isDying)
+        {
+            enemy.corpseTimer -= dt;
+            if (enemy.corpseTimer <= 0.0f)
+            {
+                enemy.isAlive = false;  //  時間切れで消す
+                enemy.isDying = false;  //  フラグオフ
+                continue;
+            }
+        }
         //  --- アニメーション時刻を進める   ---
-        enemy.animationTime += 1.0f / 60.0f;
+        enemy.animationTime += dt;
 
 
         //  --- ループ処理   ---
@@ -1435,10 +1433,21 @@ void Game::UpdatePlaying()
             float duration = m_enemyModel->GetAnimationDuration(enemy.currentAnimation);
 
             //  終端を超えたかチェック
-            if (enemy.animationTime >= duration)
+            if (enemy.isDying)
             {
-                //  最初に戻す
-                enemy.animationTime = 0.0f;
+                if (enemy.animationTime >= duration)
+                {
+                    enemy.animationTime = duration - 0.001f;
+
+                }
+            }
+            else
+            {
+                //  通常アニメーション(歩き・攻撃)はループする
+                if (enemy.animationTime >= duration)
+                {
+                    enemy.animationTime = 0.0f;
+                }
             }
         }
     }
@@ -1456,8 +1465,8 @@ void Game::UpdatePlaying()
 // 【仕組み】全ての敵をチェックして、接触していたらHP減少
     for (const auto& enemy : m_enemySystem->GetEnemies())
     {
-        // 生きていて、接触していて、無敵時間が終わっている
-        if (enemy.isAlive && enemy.touchingPlayer)
+        // 生きていて、かつ「死んでいない（isDying == false）」敵だけ攻撃してくる
+        if (enemy.isAlive && !enemy.isDying && enemy.touchingPlayer)
         {
             bool died = m_player->TakeDamage(10);
 

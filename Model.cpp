@@ -70,11 +70,11 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 	if (!scene || !scene->mRootNode || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE)
 	{
 		//	エラーメッセージを出力
-		OutputDebugStringA("Model::LoadFromFIle - Failed to load: ");
+		/*OutputDebugStringA("Model::LoadFromFIle - Failed to load: ");
 		OutputDebugStringA(filename.c_str());
 		OutputDebugStringA("\n");
 		OutputDebugStringA(importer.GetErrorString());
-		OutputDebugStringA("\n");
+		OutputDebugStringA("\n");*/
 		return false;
 	}
 
@@ -127,13 +127,13 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 	if (FAILED(hr))
 	{
 		//	---	エラーの詳細を出力	---
-		char errorMsg[512];
+		/*char errorMsg[512];
 		sprintf_s(errorMsg, "Model::LoadFromFile - Failed to create input layout (HRESULT: 0x%08X)\n", hr);
-		OutputDebugStringA(errorMsg);
+		OutputDebugStringA(errorMsg);*/
 		return false;
 	}
 
-	OutputDebugStringA("Model::LoadFromFile - Input layout created successfully\n");
+	//OutputDebugStringA("Model::LoadFromFile - Input layout created successfully\n");
 
 	//	===	各メッシュを処理	===
 	for (unsigned int i = 0; i < scene->mNumMeshes; i++)
@@ -281,7 +281,7 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 					//	---	スロットが埋まってる場合	---
 					if (!added)
 					{
-						OutputDebugStringA("Warning: Vertex has more than 4 bone weights\n");
+						//OutputDebugStringA("Warning: Vertex has more than 4 bone weights\n");
 					}
 				}
 			}//nn
@@ -315,7 +315,7 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 		}
 		else
 		{
-			OutputDebugStringA("Mesh has no bones - using default bone 0\n");
+			//OutputDebugStringA("Mesh has no bones - using default bone 0\n");
 
 			for (auto& vertex : mesh.vertices)
 			{
@@ -343,7 +343,7 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 		//	GPUにバッファを作成
 		if (!CreateBuffers(device, mesh))
 		{
-			OutputDebugStringA("Model::LoadFromFile - Failed to create buffers\n");
+			//OutputDebugStringA("Model::LoadFromFile - Failed to create buffers\n");
 			return false;
 		}
 
@@ -376,39 +376,39 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 	m_nodes.clear();
 	ReadNodeHierarchy(scene->mRootNode, -1);
 
-	DebugDumpSkeleton();
+	//DebugDumpSkeleton();
 
 	//	デバッグ出力
-	char debug[256];
+	/*char debug[256];
 	sprintf_s(debug, "Model::LoadFromFIle = Success: %s (%zu meshes)\n",
 		filename.c_str(), m_meshes.size());
-	OutputDebugStringA(debug);
+	OutputDebugStringA(debug);*/
 
 	return true;
 
 }
 
-void Model::DebugDumpSkeleton()
-{
-	OutputDebugStringA("=== Skeleton Nodes ===\n");
-	for (size_t i = 0; i < m_nodes.size(); ++i)
-	{
-		const Node& n = m_nodes[i];
-		std::string shortName = GetShortName(n.name);
-
-		char buf[512];
-		sprintf_s(
-			buf,
-			"[%3zu] node='%s' short='%s' parent=%d boneIndex=%d\n",
-			i,
-			n.name.c_str(),
-			shortName.c_str(),
-			n.parentIndex,
-			n.boneIndex
-		);
-		OutputDebugStringA(buf);
-	}
-}
+//void Model::DebugDumpSkeleton()
+//{
+//	OutputDebugStringA("=== Skeleton Nodes ===\n");
+//	for (size_t i = 0; i < m_nodes.size(); ++i)
+//	{
+//		const Node& n = m_nodes[i];
+//		std::string shortName = GetShortName(n.name);
+//
+//		char buf[512];
+//		sprintf_s(
+//			buf,
+//			"[%3zu] node='%s' short='%s' parent=%d boneIndex=%d\n",
+//			i,
+//			n.name.c_str(),
+//			shortName.c_str(),
+//			n.parentIndex,
+//			n.boneIndex
+//		);
+//		OutputDebugStringA(buf);
+//	}
+//}
 
 
 
@@ -525,18 +525,18 @@ bool Model::LoadAnimation(const std::string& filename, const std::string& animat
 	if (!scene || !scene->mRootNode)
 	{
 		//	読み込み失敗
-		OutputDebugStringA("Model::LoadAnimation - Failed to load file:");
+		/*OutputDebugStringA("Model::LoadAnimation - Failed to load file:");
 		OutputDebugStringA(filename.c_str());
-		OutputDebugStringA("\n");
+		OutputDebugStringA("\n");*/
 		return false;
 	}
 
 	if (scene->mNumAnimations == 0)
 	{
 		//	アニメーションが含まれていない
-		OutputDebugStringA("Model::LoadAnimation - No animations in file");
+		/*OutputDebugStringA("Model::LoadAnimation - No animations in file");
 		OutputDebugStringA(filename.c_str());
-		OutputDebugStringA("\n");
+		OutputDebugStringA("\n");*/
 		return false;
 	}
 
@@ -650,30 +650,30 @@ bool Model::LoadAnimation(const std::string& filename, const std::string& animat
 	m_animations[animationName] = clip;
 
 	// デバッグ出力
-	char debugMsg[256];
+	/*char debugMsg[256];
 	sprintf_s(debugMsg, "Model::LoadAnimation - Loaded: %s (%d channels, %.2f sec)\n",
 		animationName.c_str(),
 		static_cast<int>(clip.channels.size()),
 		clip.duration);
-	OutputDebugStringA(debugMsg);
+	OutputDebugStringA(debugMsg);*/
 
-	for (const auto& channel : clip.channels)
-	{
-		// 元のログ
-		OutputDebugStringA(("AnimChannel: " + channel.boneName + "\n").c_str());
+	//for (const auto& channel : clip.channels)
+	//{
+	//	// 元のログ
+	//	OutputDebugStringA(("AnimChannel: " + channel.boneName + "\n").c_str());
 
-		// 追加の詳細ログ
-		std::string shortName = GetShortName(channel.boneName);
-		char buf[256];
-		sprintf_s(
-			buf,
-			"AnimChannel: full='%s' short='%s' keyframes=%u\n",
-			channel.boneName.c_str(),
-			shortName.c_str(),
-			static_cast<unsigned>(channel.keyframes.size())
-		);
-		OutputDebugStringA(buf);
-	}
+	//	// 追加の詳細ログ
+	//	std::string shortName = GetShortName(channel.boneName);
+	//	char buf[256];
+	//	sprintf_s(
+	//		buf,
+	//		"AnimChannel: full='%s' short='%s' keyframes=%u\n",
+	//		channel.boneName.c_str(),
+	//		shortName.c_str(),
+	//		static_cast<unsigned>(channel.keyframes.size())
+	//	);
+	//	OutputDebugStringA(buf);
+	//}
 
 
 
@@ -715,9 +715,9 @@ void Model::CalculateBoneTransforms(
 	auto it = m_animations.find(animationName);
 	if (it == m_animations.end())
 	{
-		OutputDebugStringA("Model::CalculateBoneTransforms - Animation not found: ");
+		/*OutputDebugStringA("Model::CalculateBoneTransforms - Animation not found: ");
 		OutputDebugStringA(animationName.c_str());
-		OutputDebugStringA("\n");
+		OutputDebugStringA("\n");*/
 		return;
 	}
 
@@ -882,7 +882,7 @@ void Model::CalculateBoneTransforms(
 	{
 		firstCall = false;
 
-		char debugMsg[512];
+		/*char debugMsg[512];
 		sprintf_s(debugMsg, "=== CalculateBoneTransforms Debug ===\n");
 		OutputDebugStringA(debugMsg);
 
@@ -890,15 +890,15 @@ void Model::CalculateBoneTransforms(
 		OutputDebugStringA(debugMsg);
 
 		sprintf_s(debugMsg, "Bones: %zu, Channels: %zu\n", m_bones.size(), clip.channels.size());
-		OutputDebugStringA(debugMsg);
+		OutputDebugStringA(debugMsg);*/
 
 		// 最初の5ボーンの親子関係を表示
-		for (size_t i = 0; i < std::min((size_t)5, m_bones.size()); i++)
+		/*for (size_t i = 0; i < std::min((size_t)5, m_bones.size()); i++)
 		{
 			sprintf_s(debugMsg, "Bone[%zu]: %s (parent: %d)\n",
 				i, m_bones[i].name.c_str(), m_bones[i].parentIndex);
 			OutputDebugStringA(debugMsg);
-		}
+		}*/
 	}
 }
 
@@ -909,7 +909,7 @@ void Model::BuildBoneHierarchy(const aiScene* scene)
 	if (!scene->mRootNode)
 		return;
 
-	OutputDebugStringA("===	Building Bone Hierarchy	===\n");
+	//OutputDebugStringA("===	Building Bone Hierarchy	===\n");
 
 	//	---	ボーン名→インデックスマップを作製
 	std::map<std::string, int> boneNameToIndex;
@@ -932,22 +932,22 @@ void Model::BuildBoneHierarchy(const aiScene* scene)
 				currentIndex = it->second;
 				m_bones[currentIndex].parentIndex = parentIndex;
 
-				//	デバッグ出力
-				if (parentIndex == -1)
-				{
-					char debugMsg[256];
-					sprintf_s(debugMsg, "  Root bone[%d]: %s\n",
-						currentIndex, nodeName.c_str());
-					OutputDebugStringA(debugMsg);
-				}
-				else
-				{
-					char debugMsg[256];
-					sprintf_s(debugMsg, "  Bone[%d]: %s -> parent[%d]: %s\n",
-						currentIndex, nodeName.c_str(),
-						parentIndex, m_bones[parentIndex].name.c_str());
-					OutputDebugStringA(debugMsg);
-				}
+				////	デバッグ出力
+				//if (parentIndex == -1)
+				//{
+				//	char debugMsg[256];
+				//	sprintf_s(debugMsg, "  Root bone[%d]: %s\n",
+				//		currentIndex, nodeName.c_str());
+				//	OutputDebugStringA(debugMsg);
+				//}
+				//else
+				//{
+				//	char debugMsg[256];
+				//	sprintf_s(debugMsg, "  Bone[%d]: %s -> parent[%d]: %s\n",
+				//		currentIndex, nodeName.c_str(),
+				//		parentIndex, m_bones[parentIndex].name.c_str());
+				//	OutputDebugStringA(debugMsg);
+				//}
 			}
 
 			//	子ノードを再帰的に処理
@@ -961,7 +961,7 @@ void Model::BuildBoneHierarchy(const aiScene* scene)
 	//	ルートノードから開始
 	processNode(scene->mRootNode, -1);
 
-	OutputDebugStringA("=== Bone Hierarchy Complete ===\n");
+	//OutputDebugStringA("=== Bone Hierarchy Complete ===\n");
 }
 
 void Model::ReadNodeHierarchy(const aiNode* srcNode, int parentIndex)
@@ -1035,24 +1035,24 @@ void Model::UpdateNodeTransforms(
 	}
 
 	// ★ デバッグ：対応関係を一度だけ出す
-	static bool sPrinted = false;
-	if (!sPrinted && node.boneIndex != -1) {
-		char buf[512];
-		sprintf_s(
-			buf,
-			"[Match] node='%s' short='%s' boneIndex=%d  ->  channel='%s' (short='%s')\n",
-			node.name.c_str(),
-			shortNodeName.c_str(),
-			node.boneIndex,
-			channel ? channel->boneName.c_str() : "(none)",
-			channel ? GetShortName(channel->boneName).c_str() : "(none)"
-		);
-		OutputDebugStringA(buf);
-	}
-	if (!sPrinted && nodeIndex == m_rootNodeIndex) {
-		// 1フレーム分出したら止めたいときは true にしてもOK
-		// sPrinted = true;
-	}
+	//static bool sPrinted = false;
+	//if (!sPrinted && node.boneIndex != -1) {
+	//	char buf[512];
+	//	sprintf_s(
+	//		buf,
+	//		"[Match] node='%s' short='%s' boneIndex=%d  ->  channel='%s' (short='%s')\n",
+	//		node.name.c_str(),
+	//		shortNodeName.c_str(),
+	//		node.boneIndex,
+	//		channel ? channel->boneName.c_str() : "(none)",
+	//		channel ? GetShortName(channel->boneName).c_str() : "(none)"
+	//	);
+	//	OutputDebugStringA(buf);
+	//}
+	//if (!sPrinted && nodeIndex == m_rootNodeIndex) {
+	//	// 1フレーム分出したら止めたいときは true にしてもOK
+	//	// sPrinted = true;
+	//}
 
 
 	//	アニメーションがあれば、行列を計算して上書き
@@ -1153,10 +1153,10 @@ void Model::DrawAnimated(
 	if (it == m_animations.end())
 	{
 		//	アニメーションが見つからない場合は通常描画
-		OutputDebugStringA("Model::DrawAnimated - Animation not found: ");
+		/*OutputDebugStringA("Model::DrawAnimated - Animation not found: ");
 		OutputDebugStringA(animationName.c_str());
 		OutputDebugStringA("\n");
-		Draw(context, world, view, projection, color);
+		Draw(context, world, view, projection, color);*/
 		return;
 	}
 

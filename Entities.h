@@ -99,6 +99,9 @@ struct Enemy {
 	int health;
 	int maxHealth;
 	bool touchingPlayer;
+	bool isDying = false;	//	死亡アニメーション再生中か?
+	float corpseTimer = 0.0f;	//	死体が消えるまでのタイマー
+
 	//AnimationType currentAnimation;	//	現在再生中のアニメーション	切り替え
 	
 	//	---	アニメーション用	---

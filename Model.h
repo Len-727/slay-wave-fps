@@ -159,7 +159,7 @@ private:
 
 	void BuildBoneHierarchy(const aiScene* scene);
 
-	void DebugDumpSkeleton();
+	//void DebugDumpSkeleton();
 
 	std::string GetShortName(const std::string& fullName);
 };
