@@ -10,6 +10,8 @@
 #include <functional>
 #include <algorithm>
 
+#include "InstanceData.h"
+
 #pragma comment(lib, "assimp-vc143-mt.lib")
 
 using namespace DirectX;
@@ -1238,4 +1240,112 @@ void Model::DrawAnimated(
 		//	描画命令
 		context->DrawIndexed(static_cast<UINT>(mesh.indices.size()), 0, 0);
 	}
+}
+
+void Model::DrawInstanced(
+ID3D11DeviceContext* context,
+const std::vector<InstanceData>& instances,
+DirectX::XMMATRIX view,
+DirectX::XMMATRIX projection,
+const std::string& animationName,
+float animationTime)
+{
+	//	===	アニメーションが存在しているか確認	===
+	auto it = m_animations.find(animationName);
+	if (it == m_animations.end())
+	{
+		OutputDebugStringA("Model::DrawInstanced - Animation not found: ");
+		OutputDebugStringA(animationName.c_str());
+		OutputDebugStringA("\n");
+		return;
+	}
+
+	const AnimationClip& clip = it->second;
+
+
+	//	===	ボーン変換行列絵を計算	===
+	std::vector<DirectX::XMMATRIX> boneTransforms;
+	boneTransforms.resize(m_bones.size());	//	ボーンの数だけ配列を確保
+
+	for (size_t i = 0; i < boneTransforms.size(); i++)
+	{
+		boneTransforms[i] = DirectX::XMMatrixIdentity();
+	}
+
+	if (!m_nodes.empty())
+	{
+		UpdateNodeTransforms(
+			m_rootNodeIndex,
+			clip,
+			animationTime,
+			DirectX::XMMatrixIdentity(),
+			boneTransforms
+		);
+	}
+
+
+	//	===	ボーン行列をエフェクトに設定	===
+	DirectX::XMMATRIX finalBones[DirectX::SkinnedEffect::MaxBones];
+
+	for (int i = 0; i < DirectX::SkinnedEffect::MaxBones; i++)
+	{
+		if (i < static_cast<int>(boneTransforms.size()))
+		{
+			finalBones[i] = boneTransforms[i];
+		}
+		else
+		{
+			finalBones[i] = DirectX::XMMatrixIdentity();
+		}
+	}
+
+	m_effect->SetBoneTransforms(finalBones, DirectX::SkinnedEffect::MaxBones);	//	ボーン行列を送る
+
+
+	//	===	ビュー・プロジェクション行列を設定	===
+	m_effect->SetView(view);	//	カメラの設定を送る
+	m_effect->SetProjection(projection);	//	投影を設定
+
+	//	===	ライトの設定	===
+	m_effect->EnableDefaultLighting();
+	m_effect->SetAmbientLightColor(DirectX::XMVectorSet(0.3f, 0.3f, 0.3f, 1.0f));
+
+
+	//	===	入力レイアウト設定	===
+	context->IASetInputLayout(m_inputLayout.Get());
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+
+	//	===	各インスタンスを描画	===
+	for (const auto& instance : instances)
+	{
+		//	---	ワールド行列を設定	---
+		DirectX::XMMATRIX world = DirectX::XMLoadFloat4x4(&instance.world);
+		m_effect->SetWorld(world);
+
+		//	---	色を設定	---
+		DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&instance.color);
+		m_effect->SetDiffuseColor(color);
+
+		//	---	エフェクト適用	---
+		m_effect->Apply(context);
+
+
+		//	---	各メッシュを描画	---
+		for (const auto& mesh : m_meshes)
+		{
+			UINT stride = sizeof(ModelVertex);
+			UINT offset = 0;
+			context->IASetVertexBuffers(0, 1, mesh.vertexBuffer.GetAddressOf(), &stride, &offset);
+			context->IASetIndexBuffer(mesh.indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+			context->DrawIndexed(static_cast<UINT>(mesh.indices.size()), 0, 0);
+		}
+	}
+
+	//	デバッグ出力
+	char debug[256];
+	sprintf_s(debug, "DrawInstanced: %zu instances, anim=%s, time=%.2f\n",
+		instances.size(), animationName.c_str(), animationTime);
+	OutputDebugStringA(debug);
+
 }

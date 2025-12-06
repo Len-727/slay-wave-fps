@@ -6,9 +6,9 @@
 //	y–ğŠ„zƒEƒF[ƒu1, “G‚U‘Ì,€”õŠÔ5•bƒXƒ^[ƒg
 WaveManager::WaveManager() :
 	m_currentWave(1),
-	m_enemiesPerWave(6),
+	m_enemiesPerWave(100),
 	m_enemiesKilledThisWave(0),
-	m_totalEnemiesThisWave(6),
+	m_totalEnemiesThisWave(100),
 	m_betweenWaves(true),
 	m_waveStartTimer(5.0f),
 	m_enemySpawnTimer(0.0f)
@@ -32,7 +32,7 @@ void WaveManager::Update(float deltaTime, DirectX::XMFLOAT3 playerPos, EnemySyst
 
 			//	‰ŠúƒXƒ|[ƒ“(2 - 4‘Ì)
 			//	yŒvZzWave1:2‘Ì, Wave2:3‘Ì, Wave3ˆÈ~:4‘Ì
-			int initialSpawn = std::min(2 + (m_currentWave - 1), 4);
+			int initialSpawn = 50 + (2 + (m_currentWave - 1) * 5);
 			//	y§ŒÀz‘”‚ğ’´‚¦‚È‚¢‚æ‚¤‚É
 			initialSpawn = std::min(initialSpawn, m_totalEnemiesThisWave);
 
@@ -63,8 +63,8 @@ void WaveManager::Update(float deltaTime, DirectX::XMFLOAT3 playerPos, EnemySyst
 
 			//	ƒEƒF[ƒu‚ªi‚Ş‚É‚Â‚ê‚ÄƒXƒ|[ƒ“‘¬“xƒAƒbƒv
 			//	yŒvZzWave1:2•bAWave10:1•bAWave16ˆÈ~:0.5•b
-			float spawnInterval = 2.0f - (m_currentWave * 0.1f);
-			spawnInterval = std::max(0.5f, spawnInterval);
+			float spawnInterval = 0.5f - (m_currentWave * 0.1f);
+			spawnInterval = std::max(0.3f, spawnInterval);
 
 			if (m_enemySpawnTimer >= spawnInterval)
 			{
@@ -88,7 +88,7 @@ int WaveManager::OnEnemyKilled()
 
 		//	“G‚Ì”‚ğ‘‚â‚·(–ˆƒEƒF[ƒu‚R‘Ì)
 		//	yŒvZzWave1:6‘ÌAWave2:9‘ÌAWave3:12‘Ì
-		m_enemiesPerWave = 6 + (m_currentWave - 1) * 3;
+		m_enemiesPerWave = 100 + (m_currentWave - 1) * 20;
 
 		//	€”õŠÔ‚É“ü‚é
 		m_betweenWaves = true;

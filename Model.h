@@ -13,6 +13,7 @@
 #include <CommonStates.h>
 
 #include "Entities.h"
+#include "InstanceData.h"
 
 struct aiScene;
 struct aiNode;
@@ -103,6 +104,16 @@ public:
 		DirectX::XMVECTOR color,
 		const std::string& animationName,
 		float animationTime);
+
+	//	インスタンシング描画
+	void DrawInstanced(
+		ID3D11DeviceContext* context,
+		const std::vector<InstanceData>& instances,
+		DirectX::XMMATRIX view,
+		DirectX::XMMATRIX projection,
+		const std::string& animationName,
+		float animationTime
+	);
 
 	//	アニメーションの長さを取得
 	//	アニメーションのループ判定に使う

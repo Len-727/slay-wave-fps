@@ -42,7 +42,10 @@ Game::Game() noexcept :
     m_waveManager(std::make_unique<WaveManager>()),
     m_player(std::make_unique<Player>()),
     m_uiSystem(std::make_unique<UISystem>(1280, 720)),
-    m_shadow(nullptr)
+    m_shadow(nullptr),
+    m_fpsTimer(0.0f),
+    m_frameCount(0),
+    m_currentFPS(60.0f)
 {
    
 }
@@ -363,8 +366,25 @@ void Game::CreateRenderResources()
 
     OutputDebugStringA("Game::CreateRenderResources - WeaponSpawnSystem initialized\n");
     // フォントファイルを読み込む
-    //m_font = std::make_unique<DirectX::SpriteFont>(m_d3dDevice.Get(), L"Arial.spritefont");
+    //m_font = std::make_unique<DirectX::SpriteFont>(m_d3dDevice.Get(), L"myfile.spritefont");
+    /*try
+    {
+        m_font = std::make_unique<DirectX::SpriteFont>(
+            m_d3dDevice.Get(),
+            L"myfile.spritefont"
+        );
 
+        m_fontLarge = std::make_unique<DirectX::SpriteFont>(
+            m_d3dDevice.Get(),
+            L"myfile.spritefont"
+        );
+
+        OutputDebugStringA("Fonts loaded successfully!\n");
+    }
+    catch (...)
+    {
+        OutputDebugStringA("Failed to load font!\n");
+    }*/
     //  === Shadow を初期化  ===
     m_shadow = std::make_unique<Shadow>();
     if (!m_shadow->Initialize(m_d3dDevice.Get()))
@@ -449,14 +469,23 @@ void Game::CreateRenderResources()
 
 void Game::DrawEnemies()
 {
-    //	========================================================================
-    //	ビュー・プロジェクション行列の計算
-    //	========================================================================
+    static int frameCount = 0;
+    frameCount++;
+
+    //	===	1秒ごとにデバッグ情報を出力	===
+    if (frameCount % 60 == 0)
+    {
+        auto& enemies = m_enemySystem->GetEnemies();
+
+        char debugMsg[512];
+        sprintf_s(debugMsg, "=== Enemies: %zu ===\n", enemies.size());
+        OutputDebugStringA(debugMsg);
+    }
+
     DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
     DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
 
     DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&playerPos);
-
     DirectX::XMVECTOR cameraTarget = DirectX::XMVectorSet(
         playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
         playerPos.y - sinf(playerRot.x),
@@ -471,106 +500,115 @@ void Game::DrawEnemies()
         DirectX::XMConvertToRadians(70.0f), aspectRatio, 0.1f, 1000.0f
     );
 
-    //	========================================================================
-    //	デバッグ出力（1秒ごと）
-    //	========================================================================
-    static int frameCount = 0;
-    frameCount++;
-
-    if (frameCount % 60 == 0)  // 1秒ごと
-    {
-        auto& enemies = m_enemySystem->GetEnemies();
-
-
-
-        char debugMsg[512];
-        sprintf_s(debugMsg, "=== Enemies: %zu ===\n", enemies.size());
-        OutputDebugStringA(debugMsg);
-
-        for (size_t i = 0; i < enemies.size(); i++)
-        {
-            const auto& enemy = enemies[i];
-            sprintf_s(debugMsg, "Enemy[%zu]: alive=%d, dying=%d, pos=(%.1f,%.1f,%.1f), anim=%s, time=%.2f\n",
-                i, enemy.isAlive, enemy.isDying,
-                enemy.position.x, enemy.position.y, enemy.position.z,
-                enemy.currentAnimation.c_str(),
-                enemy.animationTime);
-            OutputDebugStringA(debugMsg);
-        }
-    }
-
-
     DirectX::XMFLOAT3 lightDir = { 1.0f, -1.0f, 1.0f };
 
     //	========================================================================
-    //	敵を描画（敵モデル）
+    //	★ インスタンスデータを作成
     //	========================================================================
+    std::vector<InstanceData> walkingInstances;
+    std::vector<InstanceData> attackingInstances;
+    std::vector<InstanceData> dyingInstances;
+
     for (const auto& enemy : m_enemySystem->GetEnemies())
     {
         if (!enemy.isAlive && !enemy.isDying)
             continue;
 
-        //	====================================================================
-        //	ワールド行列（スケール→回転→位置）
-        //	====================================================================
-
-        //	---	スケール	---
-        //	Y_Bot は 1/100 サイズに縮小
+        //	ワールド行列を計算
         DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(0.01f, 0.01f, 0.01f);
-
-        //	---	回転	---
-        //	enemy.rotationY をそのまま使う（EnemySystem で計算済み）
         DirectX::XMMATRIX rotation = DirectX::XMMatrixRotationY(enemy.rotationY);
-
-        //	---	位置	---
         DirectX::XMMATRIX translation = DirectX::XMMatrixTranslation(
             enemy.position.x,
             enemy.position.y,
             enemy.position.z
         );
-
-        //	---	合成	---
-        //	【重要】余計な回転を追加しない
         DirectX::XMMATRIX world = scale * rotation * translation;
 
-        DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
+        //	インスタンスデータを作成
+        InstanceData instance;
+        DirectX::XMStoreFloat4x4(&instance.world, world);
+        instance.color = enemy.color;
 
-        
-       
-        //	====================================================================
-        //	モデル描画
-        //	====================================================================
-        if (m_enemyModel)
+        //	アニメーションごとに分類
+        if (enemy.isDying)
         {
-            if (m_enemyModel->HasAnimation(enemy.currentAnimation))
-            {
-                //	アニメーション付き描画
-                m_enemyModel->DrawAnimated(
-                    m_d3dContext.Get(),
-                    world,
-                    viewMatrix,
-                    projectionMatrix,
-                    color,
-                    enemy.currentAnimation,
-                    enemy.animationTime
-                );
-            }
-            else
-            {
-                //	静的モデル描画
-                m_enemyModel->Draw(
-                    m_d3dContext.Get(),
-                    world,
-                    viewMatrix,
-                    projectionMatrix,
-                    color
-                );
-            }
+            dyingInstances.push_back(instance);
+        }
+        else if (enemy.currentAnimation == "Attack")
+        {
+            attackingInstances.push_back(instance);
         }
         else
         {
-            //	フォールバック：キューブで代用
-            m_cube->Draw(world, viewMatrix, projectionMatrix, color);
+            walkingInstances.push_back(instance);
+        }
+
+        //	影を描画
+        if (m_shadow)
+        {
+            m_shadow->RenderShadow(
+                m_d3dContext.Get(),
+                enemy.position,
+                1.5f,
+                viewMatrix,
+                projectionMatrix,
+                lightDir,
+                1.1f
+            );
+        }
+    }
+
+    //	========================================================================
+    //	★ インスタンシング描画
+    //	========================================================================
+    if (m_enemyModel)
+    {
+        //	Walk アニメーション中の敵を描画
+        if (!walkingInstances.empty())
+        {
+            float walkTime = fmod((float)frameCount / 60.0f,
+                m_enemyModel->GetAnimationDuration("Walk"));
+
+            m_enemyModel->DrawInstanced(
+                m_d3dContext.Get(),
+                walkingInstances,
+                viewMatrix,
+                projectionMatrix,
+                "Walk",
+                walkTime
+            );
+        }
+
+        //	Attack アニメーション中の敵を描画
+        if (!attackingInstances.empty())
+        {
+            float attackTime = fmod((float)frameCount / 60.0f,
+                m_enemyModel->GetAnimationDuration("Attack"));
+
+            m_enemyModel->DrawInstanced(
+                m_d3dContext.Get(),
+                attackingInstances,
+                viewMatrix,
+                projectionMatrix,
+                "Attack",
+                attackTime
+            );
+        }
+
+        //	Death アニメーション中の敵を描画
+        if (!dyingInstances.empty())
+        {
+            float deathTime = fmod((float)frameCount / 60.0f,
+                m_enemyModel->GetAnimationDuration("Death"));
+
+            m_enemyModel->DrawInstanced(
+                m_d3dContext.Get(),
+                dyingInstances,
+                viewMatrix,
+                projectionMatrix,
+                "Death",
+                deathTime
+            );
         }
     }
 
@@ -594,15 +632,13 @@ void Game::DrawEnemies()
         if (!enemy.isAlive || enemy.isDying || enemy.health >= enemy.maxHealth)
             continue;
 
-        //	HPバーの位置（敵の上）
         float barWidth = 1.0f;
-        float barHeight = 0.1f;
         float healthPercent = (float)enemy.health / enemy.maxHealth;
 
         DirectX::XMFLOAT3 barCenter = enemy.position;
-        barCenter.y += 2.5f;  // 敵の頭上
+        barCenter.y += 2.5f;
 
-        //	背景（暗い赤）
+        //	背景
         DirectX::XMFLOAT4 bgColor(0.5f, 0.0f, 0.0f, 1.0f);
         primitiveBatch->DrawLine(
             DirectX::VertexPositionColor(
@@ -615,7 +651,7 @@ void Game::DrawEnemies()
             )
         );
 
-        //	HP部分（明るい赤）
+        //	HP部分
         DirectX::XMFLOAT4 hpColor(1.0f, 0.0f, 0.0f, 1.0f);
         float currentBarWidth = barWidth * healthPercent;
         primitiveBatch->DrawLine(
@@ -1014,11 +1050,54 @@ void Game::DrawUI()
 
 
     primitiveBatch->End();
+
+    /*m_spriteBatch->Begin();
+
+    char fpsText[64];
+    sprintf_s(fpsText, "FPS: %.1f", m_currentFPS);
+
+    DirectX::XMFLOAT2 fpsPosition(m_outputWidth - 150.0f, 10.0f);
+
+    DirectX::XMVECTOR fpsColor;
+    if (m_currentFPS >= 55.0f)
+        fpsColor = DirectX::Colors::Green;
+    else if (m_currentFPS >= 30.0f)
+        fpsColor = DirectX::Colors::Yellow;
+    else
+        fpsColor = DirectX::Colors::Red;
+
+    m_font->DrawString(
+        m_spriteBatch.get(),
+        fpsText,
+        fpsPosition,
+        fpsColor,
+        0.0f,
+        DirectX::XMFLOAT2(0, 0),
+        0.7f
+    );
+
+    m_spriteBatch->End();*/
 }
 
 
 void Game::UpdatePlaying()
 {
+    m_frameCount++;
+
+    float deltaTime = 1.0f / 60.0f;
+    m_fpsTimer += deltaTime;
+
+    if (m_fpsTimer >= 1.0f)
+    {
+        m_currentFPS = (float)m_frameCount / m_fpsTimer;
+        //  Output ウィンドウに表示
+        char fpsDebug[128];
+        sprintf_s(fpsDebug, "=== FPS: %.1f ===\n", m_currentFPS);
+        OutputDebugStringA(fpsDebug);
+        m_frameCount = 0;
+        m_fpsTimer = 0.0f;
+    }
+
     char debug[256];
     sprintf_s(debug, "Wave:%d | Points:%d | Health:%d | Reloading:%s",
         m_waveManager->GetCurrentWave(), m_player->GetPoints(), m_player->GetHealth(),

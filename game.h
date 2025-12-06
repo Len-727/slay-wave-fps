@@ -28,6 +28,7 @@
 #include <CommonStates.h>
 
 #include "Entities.h"
+#include "InstanceData.h"
 #include "WeaponSystem.h"
 #include "EnemySystem.h"
 #include "ParticleSystem.h"
@@ -192,5 +193,10 @@ private:
     //  UI—p
     std::unique_ptr<DirectX::SpriteFont> m_font;
     std::unique_ptr<DirectX::SpriteFont> m_fontLarge;
+
+    //  FPSŒvŽZ—p
+    float m_fpsTimer;
+    int m_frameCount;
+    float m_currentFPS;
 
 };

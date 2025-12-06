@@ -75,6 +75,9 @@
     <ClInclude Include="Shadow.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
+    <ClInclude Include="InstanceData.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -118,7 +121,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
     <None Include="Assets\Models\Y_Bot\Y_Bot.fbx">
       <Filter>Assets\Models\Y_Bot</Filter>
     </None>
@@ -134,5 +136,7 @@
     <None Include="Assets\Models\Y_Bot\Zombie_Run.fbx">
       <Filter>Assets\Models\Y_Bot</Filter>
     </None>
+    <None Include="packages.config" />
+    <None Include="myfile.spritefont" />
   </ItemGroup>
 </Project>

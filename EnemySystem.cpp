@@ -7,7 +7,7 @@
 //	【いつ呼ばれる】Game.cppで std::make_unique<EnemySystem>()したとき
 //	【役割】メンバ変数に初期値を設定
 EnemySystem::EnemySystem()
-	: m_maxEnemies(24)			//	最大的数：　２４体
+	: m_maxEnemies(100)			//	最大的数：　２４体
 	, m_enemySpawnTimer(0.0f)	//	スポーンタイマー:	０秒からスタート
 {
 	//	m_enemies　は空の配列として自動初期化される
