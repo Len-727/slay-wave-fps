@@ -645,10 +645,13 @@ void Game::DrawEnemies()
     }
 
     // ========================================================================
-    // ■ インスタンシング描画
+    // インスタンシング描画
     // ========================================================================
     if (m_enemyModel)
     {
+        //  --- 頭ありを描画する前にスケールを戻しておく    ---
+        m_enemyModel->SetBoneScale("Head", 1.0f);
+
         // ====================================================================
         // 生きている敵（頭あり）
         // ====================================================================
@@ -1523,10 +1526,15 @@ void Game::UpdatePlaying()
                             {
                                 enemy.headDestroyed = true;
                                 enemy.bloodDirection = shotDir;
-                                m_particleSystem->CreateBloodEffect(enemy.headPosition, shotDir, 50);
+                                m_particleSystem->CreateBloodEffect(enemy.headPosition, shotDir, 30);   //  後ろに飛び散る血
+                                DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f }; //  真上
+                                m_particleSystem->CreateBloodEffect(enemy.headPosition, upDir, 30);
                                 m_particleSystem->CreateExplosion(enemy.headPosition);
                                 enemy.health = 0;
                                 OutputDebugStringA("=== HEADSHOT! HEAD DESTROYED! ===\n");
+
+                                //  簡易　(一瞬止めて打撃感を出す)
+                                ::Sleep(20);
                             }
                             else
                             {

@@ -130,6 +130,10 @@ private:
 	std::vector<Node> m_nodes;	//	全ノードリスト
 	int m_rootNodeIndex = 0;	//	ルートノードのインデックス
 
+	//	ボーン名とスケールのマップ
+	std::map<std::string, float> m_boneScales;
+
+
 	//	グローバルを逆変換行列
 	DirectX::XMMATRIX m_globalInverseTransform;
 

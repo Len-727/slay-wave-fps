@@ -1115,6 +1115,19 @@ void Model::UpdateNodeTransforms(
 
 		//	--- 行列合成 ---
 		DirectX::XMMATRIX scaleM = DirectX::XMMatrixScalingFromVector(scale);
+
+		//	===============================
+		//	===	ボーンスケールの強制適用	===
+		//	===============================
+		std::string shortName = GetShortName(node.name);
+		if (m_boneScales.find(shortName) != m_boneScales.end())
+		{
+			float s = m_boneScales[shortName];
+			//	アニメーションのスケールを無視して、指定したスケールで上書きする
+			scaleM = DirectX::XMMatrixScaling(s, s, s);
+		}
+
+
 		DirectX::XMMATRIX rotM = DirectX::XMMatrixRotationQuaternion(rotation);
 		DirectX::XMMATRIX transM = DirectX::XMMatrixTranslationFromVector(position);
 
@@ -1349,32 +1362,9 @@ float animationTime)
 }
 
 
-//	===	現在のボーンのスケールを変更する	===
+//	===	マップに値を登録するだけの処理	===
 void Model::SetBoneScale(const std::string& boneName, float scale)
 {
-	//	===	指定された名前のボーンを探す	===
-	for (size_t i = 0; i < m_bones.size(); i++)
-	{
-		//	ボーンの名前が一致するか？
-		if (m_bones[i].name == boneName)
-		{
-			//	===	スケール行列を作成	===
-			DirectX::XMMATRIX scaleMatrix = DirectX::XMMatrixScaling(scale, scale, scale);
-
-			//	===	オフセット行列に適用	===
-			m_bones[i].offsetMatrix = scaleMatrix * m_originalOffsetMatrices[i];
-
-			//	デバッグ出力
-			char debug[256];
-			sprintf_s(debug, "SetBoneScale: %s -> %.2f\n", boneName.c_str(), scale);
-			OutputDebugStringA(debug);
-
-			return;	//	見つかったので終了
-		}
-	}
-
-	//	ボーンが見つからなかった
-	char debug[256];
-	sprintf_s(debug, "SetBoneScale: Bone '%s' not found!\n", boneName.c_str());
-	OutputDebugStringA(debug);
+	//	指定されたボーン名をキーにして、スケール値を保存
+	m_boneScales[boneName] = scale;
 }
