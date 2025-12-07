@@ -102,6 +102,11 @@ struct Enemy {
 	bool isDying = false;	//	死亡アニメーション再生中か?
 	float corpseTimer = 0.0f;	//	死体が消えるまでのタイマー
 
+	//	ヘッドショット用
+	bool headDestroyed = false;	//	頭が吹き飛んだか？
+	DirectX::XMFLOAT3 headPosition;	//	頭の位置(ヒット判定用)
+	DirectX::XMFLOAT3 bloodDirection;
+
 	//AnimationType currentAnimation;	//	現在再生中のアニメーション	切り替え
 	
 	//	---	アニメーション用	---
@@ -122,6 +127,9 @@ struct Enemy {
 		, currentAnimation("Walk")
 		, animationTime(0.0f)
 		, rotationY(0.0f)
+		, headDestroyed(false)
+		, headPosition(0, 0, 0)
+		, bloodDirection(0, 1, 0)
 	{
 
 	}

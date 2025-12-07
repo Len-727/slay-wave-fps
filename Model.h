@@ -122,6 +122,9 @@ public:
 	//	アニメーションが読み込まれているか確認
 	bool HasAnimation(const std::string& animationName) const;
 
+	//	特定のボーンのスケールを変更する
+	void SetBoneScale(const std::string& boneName, float scale);
+
 private:
 
 	std::vector<Node> m_nodes;	//	全ノードリスト
@@ -151,6 +154,9 @@ private:
 
 	//	ボーン構造
 	std::vector<Bone> m_bones;
+
+	//	元のオフセット行列を保存
+	std::vector<DirectX::XMMATRIX> m_originalOffsetMatrices;
 
 	//	アニメーションクリップのマップ
 	//	複数のアニメーションを名前で管理

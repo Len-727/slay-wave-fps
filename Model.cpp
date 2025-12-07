@@ -354,16 +354,6 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 	}
 
 
-	////	===	ボーンの親子関係を構築	===
-	//if (!m_bones.empty())
-	//{
-	//	BuildBoneHierarchy(scene);
-
-	//	char debugMsg[256];
-	//	sprintf_s(debugMsg, "Model has %zu bones with hierarchy\n", m_bones.size());
-	//	OutputDebugStringA(debugMsg);
-	//}
-
 	// ルートノードの変換行列の「逆」を持つことで、メッシュを原点に戻して計算できます
 	aiMatrix4x4 globalInv = scene->mRootNode->mTransformation;
 	globalInv.Inverse();
@@ -385,6 +375,14 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 	sprintf_s(debug, "Model::LoadFromFIle = Success: %s (%zu meshes)\n",
 		filename.c_str(), m_meshes.size());
 	OutputDebugStringA(debug);*/
+
+	//	===	元のオフセット行列を保存	===
+	m_originalOffsetMatrices.clear();
+	m_originalOffsetMatrices.reserve(m_bones.size());
+	for (const auto& bone : m_bones)
+	{
+		m_originalOffsetMatrices.push_back(bone.offsetMatrix);
+	}
 
 	return true;
 
@@ -1348,4 +1346,35 @@ float animationTime)
 		instances.size(), animationName.c_str(), animationTime);
 	OutputDebugStringA(debug);
 
+}
+
+
+//	===	現在のボーンのスケールを変更する	===
+void Model::SetBoneScale(const std::string& boneName, float scale)
+{
+	//	===	指定された名前のボーンを探す	===
+	for (size_t i = 0; i < m_bones.size(); i++)
+	{
+		//	ボーンの名前が一致するか？
+		if (m_bones[i].name == boneName)
+		{
+			//	===	スケール行列を作成	===
+			DirectX::XMMATRIX scaleMatrix = DirectX::XMMatrixScaling(scale, scale, scale);
+
+			//	===	オフセット行列に適用	===
+			m_bones[i].offsetMatrix = scaleMatrix * m_originalOffsetMatrices[i];
+
+			//	デバッグ出力
+			char debug[256];
+			sprintf_s(debug, "SetBoneScale: %s -> %.2f\n", boneName.c_str(), scale);
+			OutputDebugStringA(debug);
+
+			return;	//	見つかったので終了
+		}
+	}
+
+	//	ボーンが見つからなかった
+	char debug[256];
+	sprintf_s(debug, "SetBoneScale: Bone '%s' not found!\n", boneName.c_str());
+	OutputDebugStringA(debug);
 }

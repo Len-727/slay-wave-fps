@@ -503,18 +503,29 @@ void Game::DrawEnemies()
     DirectX::XMFLOAT3 lightDir = { 1.0f, -1.0f, 1.0f };
 
     //	========================================================================
-    //	★ インスタンスデータを作成
+    //  インスタンスデータを作成
     //	========================================================================
+
+    //  --- 生きている敵  ---
     std::vector<InstanceData> walkingInstances;
     std::vector<InstanceData> attackingInstances;
-    std::vector<InstanceData> dyingInstances;
+    std::vector<InstanceData> walkingHeadlessInstances;
+    std::vector<InstanceData> attackingHeadlessInstances;
+
+
+    //  --- 死んでいる敵  ---
+    std::vector<InstanceData> deadCorpses;  //  頭あり死体
+    std::vector<InstanceData> deadCorpsesHeadless;  //  頭なし死体
+
+    //  === 死亡アニメーション再生時間の取得    ===
+    float deathDuration = m_enemyModel->GetAnimationDuration("Death");
 
     for (const auto& enemy : m_enemySystem->GetEnemies())
     {
         if (!enemy.isAlive && !enemy.isDying)
             continue;
 
-        //	ワールド行列を計算
+        // ワールド行列を計算
         DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(0.01f, 0.01f, 0.01f);
         DirectX::XMMATRIX rotation = DirectX::XMMatrixRotationY(enemy.rotationY);
         DirectX::XMMATRIX translation = DirectX::XMMatrixTranslation(
@@ -524,46 +535,123 @@ void Game::DrawEnemies()
         );
         DirectX::XMMATRIX world = scale * rotation * translation;
 
-        //	インスタンスデータを作成
+        // ========================================================================
+        // ★★★ 死亡中の処理分岐 ★★★
+        // ========================================================================
+        if (enemy.isDying)
+        {
+            // アニメーション終了判定（終端から0.1秒以内なら終了とみなす）
+            bool animationFinished = (enemy.animationTime >= deathDuration - 0.1f);
+
+            if (animationFinished)
+            {
+                // ========================================================
+                // アニメーション終了後 → インスタンシングで固定ポーズ
+                // ========================================================
+                InstanceData instance;
+                DirectX::XMStoreFloat4x4(&instance.world, world);
+                instance.color = enemy.color;
+
+                if (enemy.headDestroyed)
+                {
+                    deadCorpsesHeadless.push_back(instance);
+                }
+                else
+                {
+                    deadCorpses.push_back(instance);
+                }
+            }
+            else
+            {
+                // ========================================================
+                // アニメーション再生中 → 個別描画
+                // ========================================================
+                float headScale = enemy.headDestroyed ? 0.0f : 1.0f;
+                m_enemyModel->SetBoneScale("Head", headScale);
+
+                m_enemyModel->DrawAnimated(
+                    m_d3dContext.Get(),
+                    world,
+                    viewMatrix,
+                    projectionMatrix,
+                    DirectX::XMLoadFloat4(&enemy.color),
+                    "Death",
+                    enemy.animationTime  // ← 個別の時間
+                );
+
+                m_enemyModel->SetBoneScale("Head", 1.0f);
+            }
+
+            // 影を描画
+            if (m_shadow)
+            {
+                m_shadow->RenderShadow(
+                    m_d3dContext.Get(), //  コンテキスト
+                    enemy.position,     //  位置  
+                    1.5f,               //  サイズ
+                    viewMatrix,         //  ビュー行列
+                    projectionMatrix,   //  projection行列　　
+                    lightDir,           //  光の方向
+                    0.0f                //  地面の高さ
+                );
+            }
+
+            continue;  // 生きている敵の処理はスキップ
+        }
+
+        // ========================================================================
+        // 生きている敵はインスタンスリストへ追加
+        // ========================================================================
         InstanceData instance;
         DirectX::XMStoreFloat4x4(&instance.world, world);
         instance.color = enemy.color;
 
-        //	アニメーションごとに分類
-        if (enemy.isDying)
+        if (enemy.headDestroyed)
         {
-            dyingInstances.push_back(instance);
-        }
-        else if (enemy.currentAnimation == "Attack")
-        {
-            attackingInstances.push_back(instance);
+            if (enemy.currentAnimation == "Attack")
+            {
+                attackingHeadlessInstances.push_back(instance);
+            }
+            else
+            {
+                walkingHeadlessInstances.push_back(instance);
+            }
         }
         else
         {
-            walkingInstances.push_back(instance);
+            if (enemy.currentAnimation == "Attack")
+            {
+                attackingInstances.push_back(instance);
+            }
+            else
+            {
+                walkingInstances.push_back(instance);
+            }
         }
 
-        //	影を描画
+        // 影を描画
         if (m_shadow)
         {
             m_shadow->RenderShadow(
-                m_d3dContext.Get(),
-                enemy.position,
-                1.5f,
-                viewMatrix,
-                projectionMatrix,
-                lightDir,
-                1.1f
+                m_d3dContext.Get(), //  コンテキスト
+                enemy.position,     //  位置
+                1.5f,               //  サイズ
+                viewMatrix,         //  ビュー行列
+                projectionMatrix,   //  プロジェクション行列
+                lightDir,           //  光の方向
+                0.0f                //  地面の高さ
             );
         }
     }
 
-    //	========================================================================
-    //	★ インスタンシング描画
-    //	========================================================================
+    // ========================================================================
+    // ■ インスタンシング描画
+    // ========================================================================
     if (m_enemyModel)
     {
-        //	Walk アニメーション中の敵を描画
+        // ====================================================================
+        // 生きている敵（頭あり）
+        // ====================================================================
         if (!walkingInstances.empty())
         {
             float walkTime = fmod((float)frameCount / 60.0f,
@@ -579,7 +667,6 @@ void Game::DrawEnemies()
             );
         }
 
-        //	Attack アニメーション中の敵を描画
         if (!attackingInstances.empty())
         {
             float attackTime = fmod((float)frameCount / 60.0f,
@@ -595,21 +682,77 @@ void Game::DrawEnemies()
             );
         }
 
-        //	Death アニメーション中の敵を描画
-        if (!dyingInstances.empty())
+        // ====================================================================
+        // 死体（固定ポーズ） - 頭あり
+        // ====================================================================
+        if (!deadCorpses.empty())
         {
-            float deathTime = fmod((float)frameCount / 60.0f,
-                m_enemyModel->GetAnimationDuration("Death"));
+            // アニメーションの最終フレームで固定
+            float finalTime = deathDuration - 0.001f;
 
             m_enemyModel->DrawInstanced(
                 m_d3dContext.Get(),
-                dyingInstances,
+                deadCorpses,
                 viewMatrix,
                 projectionMatrix,
                 "Death",
-                deathTime
+                finalTime  // ← 終端で固定
             );
         }
+
+        // ====================================================================
+        // 生きている敵（頭なし）
+        // ====================================================================
+        m_enemyModel->SetBoneScale("Head", 0.0f);
+
+        if (!walkingHeadlessInstances.empty())
+        {
+            float walkTime = fmod((float)frameCount / 60.0f,
+                m_enemyModel->GetAnimationDuration("Walk"));
+
+            m_enemyModel->DrawInstanced(
+                m_d3dContext.Get(),
+                walkingHeadlessInstances,
+                viewMatrix,
+                projectionMatrix,
+                "Walk",
+                walkTime
+            );
+        }
+
+        if (!attackingHeadlessInstances.empty())
+        {
+            float attackTime = fmod((float)frameCount / 60.0f,
+                m_enemyModel->GetAnimationDuration("Attack"));
+
+            m_enemyModel->DrawInstanced(
+                m_d3dContext.Get(),
+                attackingHeadlessInstances,
+                viewMatrix,
+                projectionMatrix,
+                "Attack",
+                attackTime
+            );
+        }
+
+        // ====================================================================
+        // 死体（固定ポーズ） - 頭なし
+        // ====================================================================
+        if (!deadCorpsesHeadless.empty())
+        {
+            float finalTime = deathDuration - 0.001f;
+
+            m_enemyModel->DrawInstanced(
+                m_d3dContext.Get(),
+                deadCorpsesHeadless,
+                viewMatrix,
+                projectionMatrix,
+                "Death",
+                finalTime  // ← 終端で固定
+            );
+        }
+
+        m_enemyModel->SetBoneScale("Head", 1.0f);
     }
 
     //	========================================================================
@@ -1347,72 +1490,81 @@ void Game::UpdatePlaying()
                 {
                     for (auto& enemy : m_enemySystem->GetEnemies())
                     {
-
                         if (!enemy.isAlive || enemy.isDying)
                             continue;
 
                         float hitDistance = CheckRayIntersection(rayStart, shotDir, enemy.position);
 
-
                         if (hitDistance > 0.0f)
                         {
                             hit = true;
 
-                            //  ヒット位置を計算
-                            float hitY = rayStart.y + shotDir.y * hitDistance;
-                            //  実際に当たった3次元座標(血を出す場所)
+                            //	敵の頭の位置を計算
+                            enemy.headPosition.x = enemy.position.x;
+                            enemy.headPosition.y = enemy.position.y + 1.7f;
+                            enemy.headPosition.z = enemy.position.z;
+
+                            //	ヒット位置を計算
                             DirectX::XMFLOAT3 hitPos;
                             hitPos.x = rayStart.x + shotDir.x * hitDistance;
-                            hitPos.y = hitY;
+                            hitPos.y = rayStart.y + shotDir.y * hitDistance;
                             hitPos.z = rayStart.z + shotDir.z * hitDistance;
 
-                            //  血しぶきのエッフェクト
-                            m_particleSystem->CreateBloodEffect(hitPos, shotDir, 15);
+                            //	頭に当たったか判定（球体の当たり判定）
+                            float dx = hitPos.x - enemy.headPosition.x;
+                            float dy = hitPos.y - enemy.headPosition.y;
+                            float dz = hitPos.z - enemy.headPosition.z;
+                            float distanceToHead = sqrtf(dx * dx + dy * dy + dz * dz);
 
-                            //  ノックバック処理
-                            //  敵を射撃方向に押し出す
-                            float knockbackStrength = 0.2f; //  ノックバックの強さ
+                            bool isHeadShot = (distanceToHead < 0.3f);
+
+                            //	ヘッドショット時の特別処理
+                            if (isHeadShot && !enemy.headDestroyed)
+                            {
+                                enemy.headDestroyed = true;
+                                enemy.bloodDirection = shotDir;
+                                m_particleSystem->CreateBloodEffect(enemy.headPosition, shotDir, 50);
+                                m_particleSystem->CreateExplosion(enemy.headPosition);
+                                enemy.health = 0;
+                                OutputDebugStringA("=== HEADSHOT! HEAD DESTROYED! ===\n");
+                            }
+                            else
+                            {
+                                m_particleSystem->CreateBloodEffect(hitPos, shotDir, 15);
+                                enemy.health -= weapon.damage;
+                            }
+
+                            //	ノックバック処理
+                            float knockbackStrength = isHeadShot ? 0.5f : 0.2f;
                             enemy.position.x += shotDir.x * knockbackStrength;
                             enemy.position.z += shotDir.z * knockbackStrength;
 
-
-                            float heightFromBase = hitY - enemy.position.y;
-                            bool isHeadShot = (heightFromBase > 1.5f);
-
-                            int damage = isHeadShot ? 100 : 30;
-
-                            enemy.health -= weapon.damage;
-
+                            //	死亡処理
                             if (enemy.health <= 0)
                             {
-                                //  敵を倒した
-                                //  死亡モード
                                 if (!enemy.isDying)
                                 {
-                                    enemy.isDying = true;   //  死亡フラグ
-                                    enemy.currentAnimation = "Death";   //  アニメーション切り替え
-                                    enemy.animationTime = 0.0f; //  最初から再生
-                                    enemy.corpseTimer = 5.0f; //    5秒間だけ死体を残す
+                                    enemy.isDying = true;
+                                    enemy.currentAnimation = "Death";
+                                    enemy.animationTime = 0.0f;
+                                    enemy.corpseTimer = 5.0f;
                                 }
-                                m_particleSystem->CreateExplosion(enemy.position);
-                                
-                                //  WaveManagerに通知してボーナス取得
+
                                 int waveBonus = m_waveManager->OnEnemyKilled();
-                                int totalPoints = (isHeadShot ? 100 : 60) + waveBonus;
+                                int totalPoints = (isHeadShot ? 150 : 60) + waveBonus;
                                 m_player->AddPoints(totalPoints);
 
                                 m_showDamageDisplay = true;
                                 m_damageDisplayTimer = 2.0f;
                                 m_damageDisplayPos = enemy.position;
                                 m_damageDisplayPos.y += 2.0f;
-                                m_damageValue = isHeadShot ? 100 : 60;
+                                m_damageValue = isHeadShot ? 150 : 60;
 
                                 char debug[256];
                                 sprintf_s(debug, isHeadShot ? "HEADSHOT!! Points:%d" : "Hit! Points:%d",
                                     m_player->GetPoints());
                                 SetWindowTextA(m_window, debug);
                             }
-
 
                             break;
 
@@ -1486,48 +1638,82 @@ void Game::UpdatePlaying()
 
     for (auto& enemy : m_enemySystem->GetEnemies())
     {
-        //  --- 生きている敵だけ処理  ---
         if (!enemy.isAlive && !enemy.isDying)
             continue;
 
-        //  死亡中処理
         if (enemy.isDying)
         {
             enemy.corpseTimer -= dt;
             if (enemy.corpseTimer <= 0.0f)
             {
-                enemy.isAlive = false;  //  時間切れで消す
-                enemy.isDying = false;  //  フラグオフ
+                enemy.isAlive = false;
+                enemy.isDying = false;
                 continue;
             }
         }
-        //  --- アニメーション時刻を進める   ---
-        enemy.animationTime += dt;
 
-
-        //  --- ループ処理   ---
+        //  ========================================================================
+        //  アニメーション更新
+        //  ========================================================================
         if (m_enemyModel && m_enemyModel->HasAnimation(enemy.currentAnimation))
         {
-            //  アニメーションの長さを取得
             float duration = m_enemyModel->GetAnimationDuration(enemy.currentAnimation);
 
-            //  終端を超えたかチェック
             if (enemy.isDying)
             {
+                //  死亡中: 終端で完全に止める
+                enemy.animationTime += dt;
                 if (enemy.animationTime >= duration)
                 {
-                    enemy.animationTime = duration - 0.001f;
-
+                    enemy.animationTime = duration - 0.001f;  // 終端で固定
                 }
             }
             else
             {
-                //  通常アニメーション(歩き・攻撃)はループする
+                //  通常: ループさせる
+                enemy.animationTime += dt;
                 if (enemy.animationTime >= duration)
                 {
                     enemy.animationTime = 0.0f;
                 }
             }
+        }
+
+        //  === 首から血を噴き出す   ===
+        if (enemy.headDestroyed && enemy.isAlive)
+        {
+            // 敵の向いている方向の前方ベクトル
+            float forwardX = -sinf(enemy.rotationY);
+            float forwardZ = -cosf(enemy.rotationY);
+
+            // 首は体の中心から前方に少しずらした位置
+            DirectX::XMFLOAT3 neckPosition;
+            neckPosition.x = enemy.position.x + forwardX * 1.8f;  
+            neckPosition.z = enemy.position.z + forwardZ * 1.8f;
+
+            // アニメーション進行度で高さを調整
+            if (enemy.isDying && m_enemyModel && m_enemyModel->HasAnimation("Death"))
+            {
+                float deathDuration = m_enemyModel->GetAnimationDuration("Death");
+                float progress = enemy.animationTime / deathDuration;
+                progress = min(progress, 1.0f);
+
+                // 立ってる時: 1.5m → 倒れた時: 0.3m
+                float neckHeight = 1.5f - (progress * 1.2f);
+                neckPosition.y = enemy.position.y + neckHeight;
+            }
+            else
+            {
+                // 通常時
+                neckPosition.y = enemy.position.y + 1.5f;
+            }
+
+            // 血を噴出（保存した弾の方向を使う）
+            m_particleSystem->CreateBloodEffect(
+                neckPosition,
+                enemy.bloodDirection,  //   弾が飛んできた方向
+                3
+            );
         }
     }
 

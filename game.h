@@ -26,6 +26,7 @@
 #include <WICTextureLoader.h>   // PNG/JPGなど
 #include <DDSTextureLoader.h>   // DDSテクスチャ
 #include <CommonStates.h>
+#include <set>
 
 #include "Entities.h"
 #include "InstanceData.h"
