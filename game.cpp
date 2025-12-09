@@ -45,7 +45,12 @@ Game::Game() noexcept :
     m_shadow(nullptr),
     m_fpsTimer(0.0f),
     m_frameCount(0),
-    m_currentFPS(60.0f)
+    m_currentFPS(60.0f),
+    m_timeScale(1.0f),
+    m_slowMoTimer(0.0f),
+    m_cameraShake(0.0f),
+    m_cameraShakeTimer(0.0f),
+    m_hitStopTimer(0.0f)
 {
    
 }
@@ -365,26 +370,7 @@ void Game::CreateRenderResources()
     m_nearbyWeaponSpawn = nullptr;
 
     OutputDebugStringA("Game::CreateRenderResources - WeaponSpawnSystem initialized\n");
-    // フォントファイルを読み込む
-    //m_font = std::make_unique<DirectX::SpriteFont>(m_d3dDevice.Get(), L"myfile.spritefont");
-    /*try
-    {
-        m_font = std::make_unique<DirectX::SpriteFont>(
-            m_d3dDevice.Get(),
-            L"myfile.spritefont"
-        );
-
-        m_fontLarge = std::make_unique<DirectX::SpriteFont>(
-            m_d3dDevice.Get(),
-            L"myfile.spritefont"
-        );
-
-        OutputDebugStringA("Fonts loaded successfully!\n");
-    }
-    catch (...)
-    {
-        OutputDebugStringA("Failed to load font!\n");
-    }*/
+    
     //  === Shadow を初期化  ===
     m_shadow = std::make_unique<Shadow>();
     if (!m_shadow->Initialize(m_d3dDevice.Get()))
@@ -398,6 +384,38 @@ void Game::CreateRenderResources()
         m_shadow->SetShadowColor(DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.5f));
     }
 
+    //  === Effekseerの初期化   ===
+    
+    //  描画管理クラス(レンダラー)の作成
+    //  第3引数は最大パーティクル数
+    //m_effekseerRenderer = EffekseerRendererDX11::Renderer::Create(
+    //    m_d3dDevice.Get(),
+    //    m_d3dContext.Get(),
+    //    8000
+    //);
+
+    ////  エッフェクト管理クラス
+    //m_effekseerManager = Effekseer::Manager::Create(8000);
+
+    ////  描画設定の紐づけ
+    //m_effekseerManager->SetSpriteRenderer(m_effekseerRenderer->CreateSpriteRenderer());
+    //m_effekseerManager->SetRibbonRenderer(m_effekseerRenderer->CreateRibbonRenderer());
+    //m_effekseerManager->SetRingRenderer(m_effekseerRenderer->CreateRingRenderer());
+    //m_effekseerManager->SetTrackRenderer(m_effekseerRenderer->CreateTrackRenderer());
+    //m_effekseerManager->SetModelRenderer(m_effekseerRenderer->CreateModelRenderer());
+
+    ////  エッフェクトファイルの読み込み
+    //// ※ パスは u"..." で囲んで UTF-16 文字列にする
+    //m_effectBlood = Effekseer::Effect::Create(m_effekseerManager, u"Assets//Effects/Laser01.efkefc");
+
+    //if (m_effectBlood == nullptr)
+    //{
+    //    OutputDebugStringA("Failed to load Effekseer effect!\n");
+    //}
+    //else
+    //{
+    //    OutputDebugStringA("Effekseer initialized successfully!\n");
+    //}
 }
 
 
@@ -485,7 +503,22 @@ void Game::DrawEnemies()
     DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
     DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
 
-    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&playerPos);
+    //  --- カメラシェイクを適用  ---
+    DirectX::XMFLOAT3 shakeOffset(0.0f, 0.0f, 0.0f);
+    if (m_cameraShakeTimer > 0.0f)
+    {
+        shakeOffset.x = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
+        shakeOffset.y = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
+        shakeOffset.z = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
+    }
+
+    DirectX::XMVECTOR cameraPosition = DirectX::XMVectorSet(
+        playerPos.x + shakeOffset.x,
+        playerPos.y + shakeOffset.y,
+        playerPos.z + shakeOffset.z,
+        0.0f
+    );
+
     DirectX::XMVECTOR cameraTarget = DirectX::XMVectorSet(
         playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
         playerPos.y - sinf(playerRot.x),
@@ -1081,7 +1114,23 @@ void Game::RenderPlaying()
     DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
     DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
 
-    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&playerPos);
+    //  カメラシェイク適用
+    DirectX::XMFLOAT3 shakeOffset(0.0f, 0.0f, 0.0f);
+    if (m_cameraShakeTimer > 0.0f)
+    {
+        shakeOffset.x = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
+        shakeOffset.y = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
+        shakeOffset.z = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
+    }
+
+    // カメラ位置にシェイクを加える
+    DirectX::XMVECTOR cameraPosition = DirectX::XMVectorSet(
+        playerPos.x + shakeOffset.x,
+        playerPos.y + shakeOffset.y,
+        playerPos.z + shakeOffset.z,
+        0.0f
+    );
+
     DirectX::XMVECTOR cameraTarget = DirectX::XMVectorSet(
         playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
         playerPos.y - sinf(playerRot.x),
@@ -1116,6 +1165,29 @@ void Game::RenderPlaying()
     DrawBillboard();
     DrawWeapon();
     DrawWeaponSpawns();
+
+
+
+    //  === Effekseerの描画　===
+    //if (m_effekseerManager != nullptr && m_effekseerRenderer != nullptr)
+    //{
+    //    //  変換用変数を用意
+    //    Effekseer::Matrix44 efkView;
+    //    Effekseer::Matrix44 efkProj;
+
+    //    //  DirectXの行列をEffekseer用の変数にコピーする
+    //    //  (reinterpret_castを使って「中身は同じ4x4の数字だよ」と伝えてコピーする)
+    //    DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&efkView), viewMatrix);
+    //    DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&efkProj), projectionMatrix);
+
+    //    //  変数にしたのを渡す
+    //    m_effekseerRenderer->SetCameraMatrix(efkView);
+    //    m_effekseerRenderer->SetProjectionMatrix(efkProj);
+
+    //    m_effekseerRenderer->BeginRendering();
+    //    m_effekseerManager->Draw();
+    //    m_effekseerRenderer->EndRendering();
+    //}
 
     if (m_shadow)
     {
@@ -1228,6 +1300,42 @@ void Game::DrawUI()
 
 void Game::UpdatePlaying()
 {
+    //  --- ヒットストップ処理   ---
+    if (m_hitStopTimer > 0.0f)
+    {
+        m_hitStopTimer -= 1.0f / 60.0f;
+
+        if (m_hitStopTimer <= 0.0f)
+        {
+            m_hitStopTimer = 0.0f;
+
+            if (m_slowMoTimer <= 0.0f)
+                m_timeScale = 1.0f;
+        }
+    }
+
+
+
+    //  --- スローモーション更新  ---
+    if (m_slowMoTimer > 0.0f)
+    {
+        m_slowMoTimer -= 1.0f / 60.0f;
+        if (m_slowMoTimer <= 0.0f)
+        {
+            m_timeScale = 1.0f;
+        }
+    }
+
+    //  --- カメラシェイク減衰   ---
+    if (m_cameraShakeTimer > 0.0f)
+    {
+        m_cameraShakeTimer -= 1.0f / 60.0f;
+        m_cameraShake *= 0.9f;
+    }
+
+    float dt = (1.0f / 60.0f) * m_timeScale;
+
+
     m_frameCount++;
 
     float deltaTime = 1.0f / 60.0f;
@@ -1435,7 +1543,7 @@ void Game::UpdatePlaying()
         m_weaponSystem->SetFireRateTimer(m_weaponSystem->GetFireRateTimer() - 1.0f / 60.0f);
     }
 
-    //射撃処理
+    //  === 射撃処理    ===
     if (m_player->IsMouseCaptured())
     {
         bool currentMouseState = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
@@ -1451,6 +1559,28 @@ void Game::UpdatePlaying()
             m_weaponSystem->SetCurrentAmmo(m_weaponSystem->GetCurrentAmmo() - 1);
             m_weaponSystem->SetFireRateTimer(weapon.fireRate);
             m_weaponSystem->SaveAmmoStatus();   //  弾薬状態を保存
+
+            //  --- カメラリコイル（武器ごとに変える） ---
+            WeaponType currentWeapon = m_weaponSystem->GetCurrentWeapon();
+            switch (currentWeapon)
+            {
+            case WeaponType::PISTOL:
+                m_player->AddCameraRecoil(0.02, 0.01);
+                break;
+
+            case WeaponType::SHOTGUN:
+                m_player->AddCameraRecoil(0.08f, 0.03f);
+                break;
+
+            case WeaponType::RIFLE:
+                m_player->AddCameraRecoil(0.03f, 0.015f);
+                break;
+
+            case WeaponType::SNIPER:
+                m_player->AddCameraRecoil(0.1f, 0.04f);
+                break;
+            }
+
 
             // 銃口位置を計算
             DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
@@ -1526,20 +1656,55 @@ void Game::UpdatePlaying()
                             {
                                 enemy.headDestroyed = true;
                                 enemy.bloodDirection = shotDir;
+
                                 m_particleSystem->CreateBloodEffect(enemy.headPosition, shotDir, 30);   //  後ろに飛び散る血
                                 DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f }; //  真上
                                 m_particleSystem->CreateBloodEffect(enemy.headPosition, upDir, 30);
                                 m_particleSystem->CreateExplosion(enemy.headPosition);
                                 enemy.health = 0;
-                                OutputDebugStringA("=== HEADSHOT! HEAD DESTROYED! ===\n");
 
-                                //  簡易　(一瞬止めて打撃感を出す)
-                                ::Sleep(20);
+                                //  === エフェクト再生 ===
+                                //if (m_effekseerManager != nullptr && m_effectBlood != nullptr)
+                                //{
+                                //    //  敵の頭の位置で再生
+                                //    auto handle = m_effekseerManager->Play(
+                                //        m_effectBlood,
+                                //        enemy.headPosition.x,
+                                //        enemy.headPosition.y,
+                                //        enemy.headPosition.z
+                                //    );
+                                //    //  サイズ２倍
+                                //    m_effekseerManager->SetScale(handle, 2.0f, 2.0f, 2.0f);
+                                //}
+
+                                //  === ヒットストップ発動   ===
+                                m_timeScale = 0.0f;     //  完全停止
+                                m_hitStopTimer = 0.08f; //  0.08秒
+
+                                //  === スローモーション適用  ===
+                                m_timeScale = 0.2f;
+                                m_slowMoTimer = 0.3f;
+
+                                //  === カメラシェイク適用   ===
+                                m_cameraShake = 0.1f;
+                                m_cameraShakeTimer = 0.2f;
+
+
+                                OutputDebugStringA("=== HEADSHOT! HEAD DESTROYED! ===\n");
                             }
                             else
                             {
                                 m_particleSystem->CreateBloodEffect(hitPos, shotDir, 15);
                                 enemy.health -= weapon.damage;
+
+                                //  ヒットストップ発動(通常ヒット)
+                                m_timeScale = 0.1f;     //  10%速度
+                                m_hitStopTimer = 0.03f; //  0.03秒
+
+                                //  軽いカメラシェイク
+                                m_cameraShake = 0.05f;
+                                m_cameraShakeTimer = 0.1f;
+
                             }
 
                             //	ノックバック処理
@@ -1631,6 +1796,11 @@ void Game::UpdatePlaying()
         }
     }
 
+    //  アニメーションを進める
+   /* if (m_effekseerManager != nullptr)
+    {
+        m_effekseerManager->Update(1.0f / 60.0f);
+    }*/
 
     m_particleSystem->Update(1.0f / 60.0f);
 
@@ -1642,7 +1812,6 @@ void Game::UpdatePlaying()
 
     //  === 敵の「移動・回転・アニメーション更新・死亡」をまとめて制御するループ   ===
     DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
-    float dt = 1.0f / 60.0f;
 
     for (auto& enemy : m_enemySystem->GetEnemies())
     {

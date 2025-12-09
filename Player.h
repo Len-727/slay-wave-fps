@@ -22,6 +22,8 @@ public:
     // 【引数】window: ウィンドウハンドル（マウス制御用）
     void Update(HWND window);
 
+    void AddCameraRecoil(float pitchRecoil, float yawRecoil);
+
     void Draw(
         ID3D11DeviceContext* context,
         DirectX::XMMATRIX view,
@@ -103,6 +105,4 @@ private:
     bool m_firstMouse;                 // 初回マウス移動か
     int m_lastMouseX;                  // 前フレームのマウスX
     int m_lastMouseY;                  // 前フレームのマウスY
-
-
 };

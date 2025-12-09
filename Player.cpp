@@ -41,6 +41,22 @@ void Player::Update(HWND window)
     }
 }
 
+//  AddCameraRecoil -   カメラリコイル(反動)
+void Player::AddCameraRecoil(float pitchRecoil, float yawRecoil)
+{
+    //  Pitch(上下)の反動
+    m_rotation.x -= pitchRecoil;    //  上向きに跳ね上がる
+    
+    //  上下の制限(真上・真下を向きすぎないように)
+    const float maxPitch = DirectX::XM_PIDIV2 - 0.1f;   //  90度 - 1
+    if (m_rotation.x < -maxPitch) m_rotation.x = -maxPitch;
+    if (m_rotation.x > maxPitch) m_rotation.x = maxPitch;
+
+    //  Yaw(左右)の反動(ランダムに左右に揺れる)
+    float randomYaw = ((float)rand() / RAND_MAX - 0.5f) * yawRecoil;
+    m_rotation.y += randomYaw;
+}
+
 // UpdateMovement - 移動処理
 void Player::UpdateMovement()
 {

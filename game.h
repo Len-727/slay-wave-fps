@@ -27,6 +27,8 @@
 #include <DDSTextureLoader.h>   // DDSテクスチャ
 #include <CommonStates.h>
 #include <set>
+//#include <Effekseer.h>
+//#include <EffekseerRendererDX11.h>
 
 #include "Entities.h"
 #include "InstanceData.h"
@@ -200,4 +202,21 @@ private:
     int m_frameCount;
     float m_currentFPS;
 
+    //  スローモーション
+    float m_timeScale;      //  時間の流れる速度
+    float m_slowMoTimer;    //  スローモーション残り時間
+
+    //  カメラシェイク
+    float m_cameraShake;        //  カメラの揺れ強度
+    float m_cameraShakeTimer;   //  揺れの残り時間
+
+    //  ヒットストップ
+    float m_hitStopTimer;   //  ヒットストップ残り時間
+
+    //  Effekseerの管理クラス
+    //Effekseer::ManagerRef m_effekseerManager;
+    //EffekseerRendererDX11::RendererRef m_effekseerRenderer;
+
+    ////  読み込んだエフェクトデータ
+    //Effekseer::EffectRef m_effectBlood; //  血のエフェクト用(テスト)
 };
