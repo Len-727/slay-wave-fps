@@ -22,6 +22,18 @@
     <Filter Include="Assets\Models\Y_Bot">
       <UniqueIdentifier>{d678867a-f02e-4939-a23a-af7907139299}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Effekseer">
+      <UniqueIdentifier>{0fdc5f55-6c10-4b26-a1c2-091f79be6da5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Effekseer\include">
+      <UniqueIdentifier>{205e451e-1cd1-4a1d-8f27-a792279cb15b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Effekseer\include\Effekseer">
+      <UniqueIdentifier>{99571870-124e-4cf1-b375-d5b6059f088b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Effekseer\include\EffekseerRendererDX11">
+      <UniqueIdentifier>{32dc0770-716f-41c5-82fd-7f2101dfd439}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -77,6 +89,18 @@
     </ClInclude>
     <ClInclude Include="InstanceData.h">
       <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Effekseer\include\Effekseer\Effekseer.h">
+      <Filter>Effekseer\include\Effekseer</Filter>
+    </ClInclude>
+    <ClInclude Include="Effekseer\include\Effekseer\Effekseer.Modules.h">
+      <Filter>Effekseer\include\Effekseer</Filter>
+    </ClInclude>
+    <ClInclude Include="Effekseer\include\Effekseer\Effekseer.SIMD.h">
+      <Filter>Effekseer\include\Effekseer</Filter>
+    </ClInclude>
+    <ClInclude Include="Effekseer\include\EffekseerRendererDX11\EffekseerRendererDX11.h">
+      <Filter>Effekseer\include\EffekseerRendererDX11</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -136,7 +160,6 @@
     <None Include="Assets\Models\Y_Bot\Zombie_Run.fbx">
       <Filter>Assets\Models\Y_Bot</Filter>
     </None>
-    <None Include="packages.config" />
     <None Include="myfile.spritefont" />
   </ItemGroup>
 </Project>

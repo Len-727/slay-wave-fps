@@ -6,6 +6,8 @@
 #include <vector>          // std::vector
 #include <DirectXMath.h>   // XMFLOAT3
 
+enum class WeaponType;
+
 // パーティクル管理クラス
 class ParticleSystem {
 public:
@@ -33,8 +35,10 @@ public:
     // 【引数】muzzlePosition: 銃口の位置
     //        cameraRotation: カメラの回転（射撃方向）
     // 【用途】射撃時
-    void CreateMuzzleFlash(DirectX::XMFLOAT3 muzzlePosition,
-        DirectX::XMFLOAT3 cameraRotation);
+    void CreateMuzzleFlash(
+        DirectX::XMFLOAT3 muzzlePosition,
+        DirectX::XMFLOAT3 cameraRotation,
+        WeaponType weaponType);
 
     // === ゲッター ===
 

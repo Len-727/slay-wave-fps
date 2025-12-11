@@ -12,7 +12,7 @@
 #include <memory>
 #include <stdexcept>          
 #include <algorithm>
-#include <CommonStates.h>
+#include "CommonStates.h"
 #include <Effects.h>
 #include <PrimitiveBatch.h>
 #include <VertexTypes.h>
@@ -27,8 +27,8 @@
 #include <DDSTextureLoader.h>   // DDSテクスチャ
 #include <CommonStates.h>
 #include <set>
-//#include <Effekseer.h>
-//#include <EffekseerRendererDX11.h>
+#include <Effekseer.h>
+#include <EffekseerRendererDX11.h>
 
 #include "Entities.h"
 #include "InstanceData.h"
@@ -214,9 +214,9 @@ private:
     float m_hitStopTimer;   //  ヒットストップ残り時間
 
     //  Effekseerの管理クラス
-    //Effekseer::ManagerRef m_effekseerManager;
-    //EffekseerRendererDX11::RendererRef m_effekseerRenderer;
+    Effekseer::ManagerRef m_effekseerManager;
+    EffekseerRendererDX11::RendererRef m_effekseerRenderer;
 
-    ////  読み込んだエフェクトデータ
-    //Effekseer::EffectRef m_effectBlood; //  血のエフェクト用(テスト)
+    //  読み込んだエフェクトデータ
+    Effekseer::EffectRef m_effectBlood; //  血のエフェクト用(テスト)
 };

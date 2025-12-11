@@ -24,6 +24,32 @@ void EnemySystem::Update(float deltaTime, DirectX::XMFLOAT3 playerPos)
 		if (!enemy.isAlive)
 			continue;
 
+		//	===	ラグドール(吹っ飛び)	===
+		if (enemy.isRagdoll)
+		{
+			//	位置を更新
+			enemy.position.x += enemy.velocity.x * deltaTime;
+			enemy.position.y += enemy.velocity.y * deltaTime;
+			enemy.position.z += enemy.velocity.z * deltaTime;
+
+			//	重力を適用(下向き加速)
+			//	9.8f = 重力加速度(メートル毎秒毎秒)
+			enemy.velocity.y -= 9.8f * deltaTime;
+
+			//	速度を原則(空気抵抗)
+			enemy.velocity.x *= 0.98f;
+			enemy.velocity.z *= 0.98f;
+
+			//	地面についたら消す
+			if (enemy.position.y <= 0.0f)
+			{
+				enemy.position.y = 0.0f;
+				enemy.isAlive = false;
+			}
+
+			continue;	//	通常の移動処理をスキップ
+		}
+
 		//	子の敵を動かす(内部関数を呼ぶ) 
 		UpdateEnemyMovement(enemy, playerPos, deltaTime);
 	}

@@ -96,12 +96,105 @@ void ParticleSystem::CreateExplosion(DirectX::XMFLOAT3 position)
 // CreateMuzzleFlash - 銃口フラッシュ生成
 // 【用途】射撃時に呼ぶ
 void ParticleSystem::CreateMuzzleFlash(DirectX::XMFLOAT3 muzzlePosition,
-    DirectX::XMFLOAT3 cameraRotation)
+    DirectX::XMFLOAT3 cameraRotation,
+    WeaponType weaponType)
 {
-    // 詳細生成処理を呼ぶ
-    CreateMuzzleParticles(muzzlePosition, cameraRotation);
-}
+    // === 武器ごとのマズルフラッシュ設定 ===
+    int sparkCount = 8;
+    int gasCount = 4;
+    float sparkSpeed = 10.0f;
+    float gasSpeed = 8.0f;
+    float sparkSize = 0.1f;
+    DirectX::XMFLOAT4 sparkColor(1.0f, 1.0f, 0.9f, 1.0f);
+    DirectX::XMFLOAT4 gasColor(1.0f, 0.4f, 0.1f, 1.0f);
 
+    switch (weaponType)
+    {
+    case WeaponType::PISTOL:
+        sparkCount = 6;
+        gasCount = 2;
+        sparkSpeed = 8.0f;
+        gasSpeed = 6.0f;
+        sparkSize = 0.08f;
+        sparkColor = DirectX::XMFLOAT4(1.0f, 1.0f, 0.8f, 1.0f);
+        gasColor = DirectX::XMFLOAT4(1.0f, 0.6f, 0.2f, 1.0f);
+        break;
+
+    case WeaponType::SHOTGUN:
+        sparkCount = 20;
+        gasCount = 10;
+        sparkSpeed = 15.0f;
+        gasSpeed = 12.0f;
+        sparkSize = 0.15f;
+        sparkColor = DirectX::XMFLOAT4(1.0f, 0.9f, 0.7f, 1.0f);
+        gasColor = DirectX::XMFLOAT4(1.0f, 0.3f, 0.1f, 1.0f);
+        break;
+
+    case WeaponType::RIFLE:
+        sparkCount = 10;
+        gasCount = 5;
+        sparkSpeed = 12.0f;
+        gasSpeed = 9.0f;
+        sparkSize = 0.1f;
+        sparkColor = DirectX::XMFLOAT4(1.0f, 1.0f, 0.85f, 1.0f);
+        gasColor = DirectX::XMFLOAT4(1.0f, 0.5f, 0.15f, 1.0f);
+        break;
+
+    case WeaponType::SNIPER:
+        sparkCount = 15;
+        gasCount = 8;
+        sparkSpeed = 18.0f;
+        gasSpeed = 14.0f;
+        sparkSize = 0.2f;
+        sparkColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+        gasColor = DirectX::XMFLOAT4(1.0f, 0.7f, 0.3f, 1.0f);
+        break;
+    }
+
+    // === 火花パーティクル（白い閃光）===
+    for (int i = 0; i < sparkCount; i++)
+    {
+        Particle particle;
+        particle.position = muzzlePosition;
+
+        float spreadAngle = ((float)rand() / RAND_MAX - 0.5f) * 0.3f;
+        float speed = sparkSpeed + (float)rand() / RAND_MAX * 5.0f;
+
+        particle.velocity.x = sinf(cameraRotation.y + spreadAngle) * speed;
+        particle.velocity.y = -sinf(cameraRotation.x) * speed;
+        particle.velocity.z = cosf(cameraRotation.y + spreadAngle) * speed;
+
+        particle.size = sparkSize;
+        particle.color = sparkColor;
+
+        particle.lifetime = 0.15f + (float)rand() / RAND_MAX * 0.1f;
+        particle.maxLifetime = particle.lifetime;
+
+        m_particles.push_back(particle);
+    }
+
+    // === 燃焼ガス（オレンジ色）===
+    for (int i = 0; i < gasCount; i++)
+    {
+        Particle particle;
+        particle.position = muzzlePosition;
+
+        float spreadAngle = ((float)rand() / RAND_MAX - 0.5f) * 0.5f;
+        float speed = gasSpeed + (float)rand() / RAND_MAX * 8.0f;
+
+        particle.velocity.x = sinf(cameraRotation.y + spreadAngle) * speed;
+        particle.velocity.y = -sinf(cameraRotation.x) * speed +
+            ((float)rand() / RAND_MAX) * 5.0f;
+        particle.velocity.z = cosf(cameraRotation.y + spreadAngle) * speed;
+
+        particle.color = gasColor;
+
+        particle.lifetime = 0.3f + (float)rand() / RAND_MAX * 0.2f;
+        particle.maxLifetime = particle.lifetime;
+
+        m_particles.push_back(particle);
+    }
+}
 // CreateMuzzleParticles - 銃口パーティクルの詳細生成
 void ParticleSystem::CreateMuzzleParticles(DirectX::XMFLOAT3 muzzlePosition,
     DirectX::XMFLOAT3 cameraRotation)
@@ -176,28 +269,36 @@ void ParticleSystem::CreateBloodEffect(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 
     {
         Particle p;
         p.position = pos;
-        
-        //  血は赤から暗い赤
-        float shade = 0.5f + ((rand() % 100) / 200.0f); //  0.5 - 1.0
-        p.color = DirectX::XMFLOAT4(shade, 0.0f, 0.0f, 1.0f);
 
-        //  撃たれた方向(dir)に少し勢いをつけつつ、ランダムに拡散させる
-        float speed = 2.0f + ((rand() % 100) / 50.0f);
+        // === 血の色にバリエーション ===
+        float brightness = 0.4f + ((rand() % 60) / 100.0f);  // 0.4 ~ 1.0
+        p.color = DirectX::XMFLOAT4(
+            brightness,           // R: 赤
+            0.0f,                 // G: 緑
+            brightness * 0.1f,    // B: 少し（深い赤）
+            1.0f                  // A: 不透明
+        );
 
-        //  ランダムな拡散ベクトル
-        float rx = ((rand() % 100) / 100.0f) - 0.5f;
-        float ry = ((rand() % 100) / 100.0f) - 0.5f;
-        float rz = ((rand() % 100) / 100.0f) - 0.5f;
+        // === 速度にバリエーション ===
+        float speedMultiplier = 0.5f + ((rand() % 150) / 100.0f);  // 0.5 ~ 2.0
+        float speed = 3.0f * speedMultiplier;
+
+        // === ランダムな拡散 ===
+        float rx = ((rand() % 200) - 100) / 100.0f;  // -1.0 ~ 1.0
+        float ry = ((rand() % 200) - 100) / 100.0f;
+        float rz = ((rand() % 200) - 100) / 100.0f;
 
         p.velocity.x = dir.x * speed + rx;
-        p.velocity.y = dir.y * speed + ry + 1.0f;   //  少しは寝てから落ちる
+        p.velocity.y = dir.y * speed + ry + 2.0f;  // 上向き強化
         p.velocity.z = dir.z * speed + rz;
 
-        p.lifetime = 1.0f;  //  1秒で消える
-        p.maxLifetime = 1.0f;
-        p.size = 0.05f + ((rand() % 100) / 1000.0f);
+        // === サイズにバリエーション ===
+        p.size = 0.03f + ((rand() % 200) / 1000.0f);  // 0.03 ~ 0.23
+
+        // === 寿命にバリエーション ===
+        p.lifetime = 0.8f + ((rand() % 40) / 100.0f);  // 0.8 ~ 1.2秒
+        p.maxLifetime = p.lifetime;
 
         m_particles.push_back(p);
-
     }
 }

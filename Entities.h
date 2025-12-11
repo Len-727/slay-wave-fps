@@ -99,20 +99,21 @@ struct Enemy {
 	int health;
 	int maxHealth;
 	bool touchingPlayer;
-	bool isDying = false;	//	死亡アニメーション再生中か?
+	bool isDying = false;		//	死亡アニメーション再生中か?
 	float corpseTimer = 0.0f;	//	死体が消えるまでのタイマー
+	bool isRagdoll = false;
 
 	//	ヘッドショット用
-	bool headDestroyed = false;	//	頭が吹き飛んだか？
-	DirectX::XMFLOAT3 headPosition;	//	頭の位置(ヒット判定用)
-	DirectX::XMFLOAT3 bloodDirection;
+	bool headDestroyed = false;			//	頭が吹き飛んだか？
+	DirectX::XMFLOAT3 headPosition;		//	頭の位置(ヒット判定用)
+	DirectX::XMFLOAT3 bloodDirection;	//	吹っ飛び中か	
 
 	//AnimationType currentAnimation;	//	現在再生中のアニメーション	切り替え
 	
 	//	---	アニメーション用	---
 	std::string currentAnimation;
 	float animationTime;	//	アニメーションの再生時刻
-	float rotationY;	//	敵の向き
+	float rotationY;		//	敵の向き
 
 	Enemy()
 		: position(0, 0, 0)
@@ -130,6 +131,7 @@ struct Enemy {
 		, headDestroyed(false)
 		, headPosition(0, 0, 0)
 		, bloodDirection(0, 1, 0)
+		, isRagdoll(false)
 	{
 
 	}
