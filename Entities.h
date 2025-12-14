@@ -21,6 +21,13 @@ enum class WeaponType {
 	SNIPER
 };
 
+//	===	敵の種類を追加	===
+enum class EnemyType{
+	NORMAL,	//	通常の敵
+	RUNNER,	//	足が速い敵
+	TANK,	//	タフな敵
+};
+
 //	武器データ
 struct WeaponData {
 	WeaponType type;
@@ -93,6 +100,7 @@ struct Enemy {
 	DirectX::XMFLOAT3 position;
 	DirectX::XMFLOAT3 velocity;
 	DirectX::XMFLOAT4 color;
+	EnemyType type;
 	bool isAlive;
 	float moveTimer;
 	float nextDirectionChange;
@@ -119,6 +127,7 @@ struct Enemy {
 		: position(0, 0, 0)
 		, velocity(0, 0, 0)
 		, color(1, 0, 0, 1)
+		, type(EnemyType::NORMAL)
 		, isAlive(false)
 		, moveTimer(0.0f)
 		, nextDirectionChange(2.0f)

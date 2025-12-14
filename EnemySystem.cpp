@@ -181,11 +181,32 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 		//	速度の長さ(スピード計算)
 		float speed = sqrtf(enemy.velocity.x * enemy.velocity.x + enemy.velocity.z * enemy.velocity.z);
 
-		//	スピードが速ければ「走り」、遅ければ「歩き」
-		std::string moveAnim = (speed > 4.0f) ? "Run" : "Walk";
+		//	===	タイプ別の速度倍率	===
+		float speedMultiplier = 1.0f;
 
-		//	とまっている(速度がほぼ０)なら待機
-		if (speed < 0.1f)
+		switch (enemy.type)
+		{
+		case EnemyType::NORMAL:
+			speedMultiplier = 1.0f;	//	通常速度
+			break;
+
+		case EnemyType::RUNNER:
+			speedMultiplier = 2.0f;	//	2倍速い
+			break;
+
+		case EnemyType::TANK:
+			speedMultiplier = 0.5f;	//	半分遅い
+			break;
+		}
+
+		//	最終的な速度を計算（倍率をかける）
+		float finalSpeed = speed * speedMultiplier;
+
+		//	スピードが速ければ「走り」、遅ければ「歩き」
+		std::string moveAnim = (finalSpeed > 4.0f) ? "Run" : "Walk";
+
+		//	とまっている(速度がほぼ0)なら待機
+		if (finalSpeed < 0.1f)
 		{
 			moveAnim = "Idle";
 		}
@@ -204,6 +225,10 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 				enemy.currentAnimation = moveAnim;
 			}
 		}
+
+		//	位置を更新（ここで倍率を使う）
+		enemy.position.x += enemy.velocity.x * finalSpeed * deltaTime;
+		enemy.position.z += enemy.velocity.z * finalSpeed * deltaTime;
 	}
 }
 
@@ -220,8 +245,37 @@ void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 	//	【ステップ２】新しい敵を作成
 	Enemy enemy;	//	空のオブジェクト
 
+	
+	//	===	ランダムに敵タイプを決定	===
+	int typeRoll = rand() % 100;	//	0 - 99 のランダム値
 
-	//	位置の設定(プレイヤーから離れた場所)
+	if (typeRoll < 60)
+	{
+		//	60%の確率でNORMAL
+		enemy.type = EnemyType::NORMAL;
+		enemy.health = 100;
+		enemy.maxHealth = 100;
+		enemy.color = DirectX::XMFLOAT4(0.8f, 0.2f, 0.2f, 1.0f);	//	赤
+	}
+	else if(typeRoll < 85)
+	{
+		//	25%の確立でRUNNNER
+		enemy.type = EnemyType::RUNNER;
+		enemy.health = 50;
+		enemy.maxHealth = 50;
+		enemy.color = DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);	//	明るい赤
+	}
+	else
+	{
+		//	15%の確率でTANK
+		enemy.type = EnemyType::TANK;
+		enemy.health = 300;
+		enemy.maxHealth = 300;
+		enemy.color = DirectX::XMFLOAT4(0.2f, 0.2f, 0.8f, 1.0f);	//	青
+	}
+
+
+	//	===	位置の設定(プレイヤーから離れた場所)	===
 	
 	//	ランダムな角度を生成（０　～　360度）
 	//	【計算】rand() / RAND_MAX = 0.0 ～ 1.0 のランダムな値

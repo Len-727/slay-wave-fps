@@ -77,9 +77,19 @@ private:
     //  m_uiSystem->Draw...みたいに使う
     std::unique_ptr<UISystem> m_uiSystem;   //  UI管理システム
 
+    //  ===========================
+    //  === キャラクターモデル   ===
+    //  ===========================
     std::unique_ptr<Model> m_weaponModel;   //  武器モデル
     std::unique_ptr<Model> m_testModel;     //  テストモデル
-    std::unique_ptr<Model> m_enemyModel;    //  敵テストモデル
+
+    //  ==================
+    //  === 敵モデル    ===
+    //  ==================
+    std::unique_ptr<Model> m_enemyModel;    //  NORMAL用モデル
+    std::unique_ptr<Model> m_runnerModel;   //  RUNNER用モデル
+    std::unique_ptr<Model> m_tankModel;     //  TANK用モデル
+
 
     std::unique_ptr<MapSystem> m_mapSystem;
 
@@ -131,9 +141,12 @@ private:
 
 
 
-    float CheckRayIntersection(DirectX::XMFLOAT3 rayStart,
+    float CheckRayIntersection(
+        DirectX::XMFLOAT3 rayStart,
         DirectX::XMFLOAT3 rayDir,
-        DirectX::XMFLOAT3 enemyPos);
+        DirectX::XMFLOAT3 enemyPos,
+        EnemyType enemyType
+    );
 
     // DirectXデバイス（GPU制御）
     Microsoft::WRL::ComPtr<ID3D11Device>            m_d3dDevice;

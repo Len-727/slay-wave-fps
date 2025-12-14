@@ -300,7 +300,7 @@ void Game::CreateRenderResources()
     //    OutputDebugStringA("Game::CreateRenderResources - Model loaded successfully!\n");
     //}
 
-    //  敵プレイヤーモデル
+    //  === 敵NORMALモデル   ===
     m_enemyModel = std::make_unique<Model>();
     if (!m_enemyModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Y_Bot/Y_Bot.fbx"))
     {
@@ -312,38 +312,126 @@ void Game::CreateRenderResources()
         OutputDebugStringA("Enemy model loaded successfully!\n");
     }
 
-    OutputDebugStringA("=== Loading animations  ===\n");
-
-    //  --- 歩行アニメーション   ---
-    if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Walk.fbx", "Walk"))
+    //  === 敵RUNNERモデル  ===
+    m_runnerModel = std::make_unique<Model>();
+    if (!m_runnerModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Runner/Runner.fbx"))
     {
-        OutputDebugStringA("Failed to load Walk animation\n");
+        OutputDebugStringA("Failed to load Runner model!\n");
+    }
+    else
+    {
+        OutputDebugStringA("Runner model loaded successfully!\n");
     }
 
-    //  --- 待機アニメーション   ---
-    if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Idle.fbx", "Idle"))
+    //  === 敵TANK   ===
+    m_tankModel = std::make_unique<Model>();
+    if (!m_tankModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Tank/Tank.fbx"))
     {
-        OutputDebugStringA("Failed to load Idle animation\n");
+        OutputDebugStringA("Failed to load Tank model");
+    }
+    else
+    {
+        OutputDebugStringA("Tank model loaded successfully!\n");
     }
 
-    //  --- 走りアニメーション   ---
-    if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Run.fbx", "Run"))
+    //  ====================================
+    //  === NORMALモデルのアニメーション   ===
+    //  ====================================
     {
-        OutputDebugStringA("Failed to load Run animation\n");
+        OutputDebugStringA("=== Loading Y_Bot animations  ===\n");
+
+        //  --- 歩行アニメーション   ---
+        if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Walk.fbx", "Walk"))
+        {
+            OutputDebugStringA("Failed to load Walk animation\n");
+        }
+
+        //  --- 待機アニメーション   ---
+        if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Idle.fbx", "Idle"))
+        {
+            OutputDebugStringA("Failed to load Idle animation\n");
+        }
+
+        //  --- 走りアニメーション   ---
+        if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Run.fbx", "Run"))
+        {
+            OutputDebugStringA("Failed to load Run animation\n");
+        }
+
+        //  --- 攻撃アニメーション   ---
+        if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Attack.fbx", "Attack"))
+        {
+            OutputDebugStringA("Failed to load Attack animation");
+        }
+
+        //  --- 死亡アニメーション   ---
+        if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Death.fbx", "Death"))
+        {
+            OutputDebugStringA("Failed to load Death Animation");
+        }
     }
 
-    //  --- 攻撃アニメーション   ---
-    if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Attack.fbx", "Attack"))
+    //  ===================================
+    //  === RUNNERモデルアニメーション    ===
+    //  ===================================
     {
-        OutputDebugStringA("Failed to load Attack animation");
+        //  === RUNNERアニメーション読み込み   ===
+        OutputDebugStringA("=== Loading Runner animations ===\n");
+
+        if (!m_runnerModel->LoadAnimation("Assets/Models/Runner/Runner_Walk.fbx", "Walk"))
+        {
+            OutputDebugStringA("Failed to load Runner Walk animation\n");
+        }
+
+        if (!m_runnerModel->LoadAnimation("Assets/Models/Runner/Runner_Run.fbx", "Run"))
+        {
+            OutputDebugStringA("Failed to load Runner Run animation\n");
+        }
+
+        if (!m_runnerModel->LoadAnimation("Assets/Models/Runner/Runner_Attack.fbx", "Attack"))
+        {
+            OutputDebugStringA("Failed to load Runner Attack animation\n");
+        }
+
+        if (!m_runnerModel->LoadAnimation("Assets/Models/Runner/Runner_Idle.fbx", "Idle"))
+        {
+            OutputDebugStringA("Failed to load Runner Idle animation\n");
+        }
+
+        if (!m_runnerModel->LoadAnimation("Assets/Models/Runner/Runner_Death.fbx", "Death"))
+        {
+            OutputDebugStringA("Failed to load Runner Death animation\n");
+        }
     }
 
-    //  --- 死亡アニメーション   ---
-    if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Death.fbx", "Death"))
+    //  =========================
+    //  === TANKアニメーション ===
+    //  =========================
     {
-        OutputDebugStringA("Failed to load Death Animation");
-    }
+        //  === Tank アニメーション読み込み ===
+        OutputDebugStringA("=== Loading Tank animations ===\n");
 
+        if (!m_tankModel->LoadAnimation("Assets/Models/Tank/Tank_Walk.fbx", "Walk"))
+        {
+            OutputDebugStringA("Failed to load Tank Walk animation\n");
+        }
+
+        if (!m_tankModel->LoadAnimation("Assets/Models/Tank/Tank_Attack.fbx", "Attack"))
+        {
+            OutputDebugStringA("Failed to load Tank Attack animation\n");
+        }
+
+        if (!m_tankModel->LoadAnimation("Assets/Models/Tank/Tank_Idle.fbx", "Idle"))
+        {
+            OutputDebugStringA("Failed to load Tank Idle animation\n");
+        }
+
+        if (!m_tankModel->LoadAnimation("Assets/Models/Tank/Tank_Death.fbx", "Death"))
+        {
+            OutputDebugStringA("Failed to load Tank Death animation\n");
+        }
+    
+    }
 
     //  === MapSystem   初期化 ===
     m_mapSystem = std::make_unique<MapSystem>();
@@ -474,16 +562,29 @@ void Game::DrawEnemies()
     //  インスタンスデータを作成
     //	========================================================================
 
-    //  --- 生きている敵  ---
-    std::vector<InstanceData> walkingInstances;
-    std::vector<InstanceData> attackingInstances;
-    std::vector<InstanceData> walkingHeadlessInstances;
-    std::vector<InstanceData> attackingHeadlessInstances;
+    // === Normal（Y_Bot）用 ===
+    std::vector<InstanceData> normalWalking;
+    std::vector<InstanceData> normalAttacking;
+    std::vector<InstanceData> normalWalkingHeadless;
+    std::vector<InstanceData> normalAttackingHeadless;
+    std::vector<InstanceData> normalDead;
+    std::vector<InstanceData> normalDeadHeadless;
 
+    // === Runner用 ===
+    std::vector<InstanceData> runnerWalking;
+    std::vector<InstanceData> runnerAttacking;
+    std::vector<InstanceData> runnerWalkingHeadless;
+    std::vector<InstanceData> runnerAttackingHeadless;
+    std::vector<InstanceData> runnerDead;
+    std::vector<InstanceData> runnerDeadHeadless;
 
-    //  --- 死んでいる敵  ---
-    std::vector<InstanceData> deadCorpses;  //  頭あり死体
-    std::vector<InstanceData> deadCorpsesHeadless;  //  頭なし死体
+    // === Tank用 ===
+    std::vector<InstanceData> tankWalking;
+    std::vector<InstanceData> tankAttacking;
+    std::vector<InstanceData> tankWalkingHeadless;
+    std::vector<InstanceData> tankAttackingHeadless;
+    std::vector<InstanceData> tankDead;
+    std::vector<InstanceData> tankDeadHeadless;
 
     //  === 死亡アニメーション再生時間の取得    ===
     float deathDuration = m_enemyModel->GetAnimationDuration("Death");
@@ -520,14 +621,32 @@ void Game::DrawEnemies()
                 DirectX::XMStoreFloat4x4(&instance.world, world);
                 instance.color = enemy.color;
 
-                if (enemy.headDestroyed)
+                //  === タイプ別に振り分け   ===
+                switch (enemy.type)
                 {
-                    deadCorpsesHeadless.push_back(instance);
+                case EnemyType::NORMAL:
+                    if (enemy.headDestroyed)
+                        normalDeadHeadless.push_back(instance);
+                    else
+                        normalDead.push_back(instance);
+                    break;
+
+                case EnemyType::RUNNER:
+                    if (enemy.headDestroyed)
+                        runnerDeadHeadless.push_back(instance);
+                    else
+                        runnerDead.push_back(instance);
+                    break;
+
+                case EnemyType::TANK:
+                    if (enemy.headDestroyed)
+                        tankDeadHeadless.push_back(instance);
+                    else
+                        tankDead.push_back(instance);
+                    break;
                 }
-                else
-                {
-                    deadCorpses.push_back(instance);
-                }
+
+
             }
             else
             {
@@ -574,27 +693,58 @@ void Game::DrawEnemies()
         DirectX::XMStoreFloat4x4(&instance.world, world);
         instance.color = enemy.color;
 
-        if (enemy.headDestroyed)
+        switch (enemy.type)
         {
-            if (enemy.currentAnimation == "Attack")
+        case EnemyType::NORMAL:
+            if (enemy.headDestroyed)
             {
-                attackingHeadlessInstances.push_back(instance);
+                if (enemy.currentAnimation == "Attack")
+                    normalAttackingHeadless.push_back(instance);
+                else
+                    normalWalkingHeadless.push_back(instance);
             }
             else
             {
-                walkingHeadlessInstances.push_back(instance);
+                if (enemy.currentAnimation == "Attack")
+                    normalAttacking.push_back(instance);
+                else
+                    normalWalking.push_back(instance);
             }
-        }
-        else
-        {
-            if (enemy.currentAnimation == "Attack")
+            break;
+
+        case EnemyType::RUNNER:
+            if (enemy.headDestroyed)
             {
-                attackingInstances.push_back(instance);
+                if (enemy.currentAnimation == "Attack")
+                    runnerAttackingHeadless.push_back(instance);
+                else
+                    runnerWalkingHeadless.push_back(instance);
             }
             else
             {
-                walkingInstances.push_back(instance);
+                if (enemy.currentAnimation == "Attack")
+                    runnerAttacking.push_back(instance);
+                else
+                    runnerWalking.push_back(instance);
             }
+            break;
+
+        case EnemyType::TANK:
+            if (enemy.headDestroyed)
+            {
+                if (enemy.currentAnimation == "Attack")
+                    tankAttackingHeadless.push_back(instance);
+                else
+                    tankWalkingHeadless.push_back(instance);
+            }
+            else
+            {
+                if (enemy.currentAnimation == "Attack")
+                    tankAttacking.push_back(instance);
+                else
+                    tankWalking.push_back(instance);
+            }
+            break;
         }
 
         // 影を描画
@@ -612,118 +762,203 @@ void Game::DrawEnemies()
         }
     }
 
-    // ========================================================================
-    // インスタンシング描画
-    // ========================================================================
+// ========================================================================
+// インスタンシング描画（タイプ別）
+// ========================================================================
+
+// ====================================================================
+// NORMAL（Y_Bot）の描画
+// ====================================================================
     if (m_enemyModel)
     {
-        //  --- 頭ありを描画する前にスケールを戻しておく    ---
         m_enemyModel->SetBoneScale("Head", 1.0f);
 
-        // ====================================================================
-        // 生きている敵（頭あり）
-        // ====================================================================
-        if (!walkingInstances.empty())
+        // Walking - 頭あり
+        if (!normalWalking.empty())
         {
             float walkTime = fmod((float)frameCount / 60.0f,
                 m_enemyModel->GetAnimationDuration("Walk"));
-
-            m_enemyModel->DrawInstanced(
-                m_d3dContext.Get(),
-                walkingInstances,
-                viewMatrix,
-                projectionMatrix,
-                "Walk",
-                walkTime
-            );
+            m_enemyModel->DrawInstanced(m_d3dContext.Get(), normalWalking,
+                viewMatrix, projectionMatrix, "Walk", walkTime);
         }
 
-        if (!attackingInstances.empty())
+        // Attacking - 頭あり
+        if (!normalAttacking.empty())
         {
             float attackTime = fmod((float)frameCount / 60.0f,
                 m_enemyModel->GetAnimationDuration("Attack"));
-
-            m_enemyModel->DrawInstanced(
-                m_d3dContext.Get(),
-                attackingInstances,
-                viewMatrix,
-                projectionMatrix,
-                "Attack",
-                attackTime
-            );
+            m_enemyModel->DrawInstanced(m_d3dContext.Get(), normalAttacking,
+                viewMatrix, projectionMatrix, "Attack", attackTime);
         }
 
-        // ====================================================================
-        // 死体（固定ポーズ） - 頭あり
-        // ====================================================================
-        if (!deadCorpses.empty())
+        // Dead - 頭あり
+        if (!normalDead.empty())
         {
-            // アニメーションの最終フレームで固定
             float finalTime = deathDuration - 0.001f;
-
-            m_enemyModel->DrawInstanced(
-                m_d3dContext.Get(),
-                deadCorpses,
-                viewMatrix,
-                projectionMatrix,
-                "Death",
-                finalTime  // ← 終端で固定
-            );
+            m_enemyModel->DrawInstanced(m_d3dContext.Get(), normalDead,
+                viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
-        // ====================================================================
-        // 生きている敵（頭なし）
-        // ====================================================================
+        // 頭なし描画
         m_enemyModel->SetBoneScale("Head", 0.0f);
 
-        if (!walkingHeadlessInstances.empty())
+        // Walking - 頭なし
+        if (!normalWalkingHeadless.empty())
         {
             float walkTime = fmod((float)frameCount / 60.0f,
                 m_enemyModel->GetAnimationDuration("Walk"));
-
-            m_enemyModel->DrawInstanced(
-                m_d3dContext.Get(),
-                walkingHeadlessInstances,
-                viewMatrix,
-                projectionMatrix,
-                "Walk",
-                walkTime
-            );
+            m_enemyModel->DrawInstanced(m_d3dContext.Get(), normalWalkingHeadless,
+                viewMatrix, projectionMatrix, "Walk", walkTime);
         }
 
-        if (!attackingHeadlessInstances.empty())
+        // Attacking - 頭なし
+        if (!normalAttackingHeadless.empty())
         {
             float attackTime = fmod((float)frameCount / 60.0f,
                 m_enemyModel->GetAnimationDuration("Attack"));
-
-            m_enemyModel->DrawInstanced(
-                m_d3dContext.Get(),
-                attackingHeadlessInstances,
-                viewMatrix,
-                projectionMatrix,
-                "Attack",
-                attackTime
-            );
+            m_enemyModel->DrawInstanced(m_d3dContext.Get(), normalAttackingHeadless,
+                viewMatrix, projectionMatrix, "Attack", attackTime);
         }
 
-        // ====================================================================
-        // 死体（固定ポーズ） - 頭なし
-        // ====================================================================
-        if (!deadCorpsesHeadless.empty())
+        // Dead - 頭なし
+        if (!normalDeadHeadless.empty())
         {
             float finalTime = deathDuration - 0.001f;
-
-            m_enemyModel->DrawInstanced(
-                m_d3dContext.Get(),
-                deadCorpsesHeadless,
-                viewMatrix,
-                projectionMatrix,
-                "Death",
-                finalTime  // ← 終端で固定
-            );
+            m_enemyModel->DrawInstanced(m_d3dContext.Get(), normalDeadHeadless,
+                viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
         m_enemyModel->SetBoneScale("Head", 1.0f);
+    }
+
+    // ====================================================================
+    // RUNNER の描画
+    // ====================================================================
+    if (m_runnerModel)
+    {
+        m_runnerModel->SetBoneScale("Head", 1.0f);
+
+        // Walking - 頭あり
+        if (!runnerWalking.empty())
+        {
+            float walkTime = fmod((float)frameCount / 60.0f,
+                m_runnerModel->GetAnimationDuration("Walk"));
+            m_runnerModel->DrawInstanced(m_d3dContext.Get(), runnerWalking,
+                viewMatrix, projectionMatrix, "Walk", walkTime);
+        }
+
+        // Attacking - 頭あり
+        if (!runnerAttacking.empty())
+        {
+            float attackTime = fmod((float)frameCount / 60.0f,
+                m_runnerModel->GetAnimationDuration("Attack"));
+            m_runnerModel->DrawInstanced(m_d3dContext.Get(), runnerAttacking,
+                viewMatrix, projectionMatrix, "Attack", attackTime);
+        }
+
+        // Dead - 頭あり
+        if (!runnerDead.empty())
+        {
+            float finalTime = m_runnerModel->GetAnimationDuration("Death") - 0.001f;
+            m_runnerModel->DrawInstanced(m_d3dContext.Get(), runnerDead,
+                viewMatrix, projectionMatrix, "Death", finalTime);
+        }
+
+        // 頭なし描画
+        m_runnerModel->SetBoneScale("Head", 0.0f);
+
+        // Walking - 頭なし
+        if (!runnerWalkingHeadless.empty())
+        {
+            float walkTime = fmod((float)frameCount / 60.0f,
+                m_runnerModel->GetAnimationDuration("Walk"));
+            m_runnerModel->DrawInstanced(m_d3dContext.Get(), runnerWalkingHeadless,
+                viewMatrix, projectionMatrix, "Walk", walkTime);
+        }
+
+        // Attacking - 頭なし
+        if (!runnerAttackingHeadless.empty())
+        {
+            float attackTime = fmod((float)frameCount / 60.0f,
+                m_runnerModel->GetAnimationDuration("Attack"));
+            m_runnerModel->DrawInstanced(m_d3dContext.Get(), runnerAttackingHeadless,
+                viewMatrix, projectionMatrix, "Attack", attackTime);
+        }
+
+        // Dead - 頭なし
+        if (!runnerDeadHeadless.empty())
+        {
+            float finalTime = m_runnerModel->GetAnimationDuration("Death") - 0.001f;
+            m_runnerModel->DrawInstanced(m_d3dContext.Get(), runnerDeadHeadless,
+                viewMatrix, projectionMatrix, "Death", finalTime);
+        }
+
+        m_runnerModel->SetBoneScale("Head", 1.0f);
+    }
+
+    // ====================================================================
+    // TANK の描画
+    // ====================================================================
+    if (m_tankModel)
+    {
+        m_tankModel->SetBoneScale("Head", 1.0f);
+
+        // Walking - 頭あり
+        if (!tankWalking.empty())
+        {
+            float walkTime = fmod((float)frameCount / 60.0f,
+                m_tankModel->GetAnimationDuration("Walk"));
+            m_tankModel->DrawInstanced(m_d3dContext.Get(), tankWalking,
+                viewMatrix, projectionMatrix, "Walk", walkTime);
+        }
+
+        // Attacking - 頭あり
+        if (!tankAttacking.empty())
+        {
+            float attackTime = fmod((float)frameCount / 60.0f,
+                m_tankModel->GetAnimationDuration("Attack"));
+            m_tankModel->DrawInstanced(m_d3dContext.Get(), tankAttacking,
+                viewMatrix, projectionMatrix, "Attack", attackTime);
+        }
+
+        // Dead - 頭あり
+        if (!tankDead.empty())
+        {
+            float finalTime = m_tankModel->GetAnimationDuration("Death") - 0.001f;
+            m_tankModel->DrawInstanced(m_d3dContext.Get(), tankDead,
+                viewMatrix, projectionMatrix, "Death", finalTime);
+        }
+
+        // 頭なし描画
+        m_tankModel->SetBoneScale("Head", 0.0f);
+
+        // Walking - 頭なし
+        if (!tankWalkingHeadless.empty())
+        {
+            float walkTime = fmod((float)frameCount / 60.0f,
+                m_tankModel->GetAnimationDuration("Walk"));
+            m_tankModel->DrawInstanced(m_d3dContext.Get(), tankWalkingHeadless,
+                viewMatrix, projectionMatrix, "Walk", walkTime);
+        }
+
+        // Attacking - 頭なし
+        if (!tankAttackingHeadless.empty())
+        {
+            float attackTime = fmod((float)frameCount / 60.0f,
+                m_tankModel->GetAnimationDuration("Attack"));
+            m_tankModel->DrawInstanced(m_d3dContext.Get(), tankAttackingHeadless,
+                viewMatrix, projectionMatrix, "Attack", attackTime);
+        }
+
+        // Dead - 頭なし
+        if (!tankDeadHeadless.empty())
+        {
+            float finalTime = m_tankModel->GetAnimationDuration("Death") - 0.001f;
+            m_tankModel->DrawInstanced(m_d3dContext.Get(), tankDeadHeadless,
+                viewMatrix, projectionMatrix, "Death", finalTime);
+        }
+
+        m_tankModel->SetBoneScale("Head", 1.0f);
     }
 
     //	========================================================================
@@ -783,12 +1018,31 @@ void Game::DrawEnemies()
     primitiveBatch->End();
 }
 
-float Game::CheckRayIntersection(DirectX::XMFLOAT3 rayStart,
+float Game::CheckRayIntersection(
+    DirectX::XMFLOAT3 rayStart,
     DirectX::XMFLOAT3 rayDir,
-    DirectX::XMFLOAT3 enemyPos)
+    DirectX::XMFLOAT3 enemyPos,
+    EnemyType enemyType)
 {
     float width = 0.5f;     // 幅(肩幅くらい)
     float height = 1.7f;    // 高さ
+
+    switch (enemyType)
+    {
+    case EnemyType::NORMAL:
+        width = 0.5f;
+        height = 1.7f;
+        break;
+
+    case EnemyType::RUNNER:
+        width = 0.4f;
+        height = 1.8;
+        break;
+
+    case EnemyType::TANK:
+        width = 0.8f;
+        height = 2.0f;
+    }
 
     float minX = enemyPos.x - width / 2.0f;
     float minY = enemyPos.y;
@@ -1516,7 +1770,11 @@ void Game::UpdatePlaying()
                 DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
                 DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
 
+                //  カメラ(視点)空の位置から玉を発射
                 DirectX::XMFLOAT3 rayStart = playerPos;
+                rayStart.y = playerPos.y + 0.5f;    //  目の高さ
+
+                //  射撃方向
                 DirectX::XMFLOAT3 rayDir(
                     sinf(playerRot.y)* cosf(playerRot.x),
                     -sinf(playerRot.x),
@@ -1543,15 +1801,38 @@ void Game::UpdatePlaying()
                         if (!enemy.isAlive || enemy.isDying)
                             continue;
 
-                        float hitDistance = CheckRayIntersection(rayStart, shotDir, enemy.position);
+                        float hitDistance = CheckRayIntersection(rayStart, shotDir, enemy.position, enemy.type);
 
                         if (hitDistance > 0.0f)
                         {
                             hit = true;
 
+                            //  敵の頭の位置を計算
+                            float headHeight = 0.0f;
+                            float headRadius = 0.0f;
+
+                            switch (enemy.type)
+                            {
+                            case EnemyType::NORMAL:
+                                headHeight = 1.9f;
+                                headRadius = 0.6f;
+                                break;
+
+                            case EnemyType::RUNNER:
+                                headHeight = 1.8f;
+                                headRadius = 0.4f;
+                                break;
+
+                            case EnemyType::TANK:
+                                headHeight = 2.3f;
+                                headRadius = 0.7f;
+                                break;
+                            }
+
+
                             //	敵の頭の位置を計算
                             enemy.headPosition.x = enemy.position.x;
-                            enemy.headPosition.y = enemy.position.y + 1.7f;
+                            enemy.headPosition.y = enemy.position.y + headHeight;
                             enemy.headPosition.z = enemy.position.z;
 
                             //	ヒット位置を計算
@@ -1606,6 +1887,10 @@ void Game::UpdatePlaying()
                                 enemy.health = 0;
 
                                 //  === 敵を吹っ飛ばす ===
+                                enemy.isRagdoll = true;
+                                enemy.velocity.x = shotDir.x * 15.0f;   //  撃った方向に早く
+                                enemy.velocity.y = 8.0f;                //  上にはねる
+                                enemy.velocity.z = shotDir.z * 15.0f;   //  撃った方向に早く
 
                                 //  === エフェクト再生 ===
                                 if (m_effekseerManager != nullptr && m_effectBlood != nullptr)
@@ -1649,8 +1934,36 @@ void Game::UpdatePlaying()
                                 m_cameraShake = 0.05f;
                                 m_cameraShakeTimer = 0.1f;
 
-                            }
+                                //  HPが0になったら吹っ飛ばす(武器ごとに強さを変える)
+                                if (enemy.health <= 0.0f)
+                                {
+                                    enemy.isRagdoll = true;
+                                    // 武器ごとの吹っ飛び強度
+                                    float knockbackPower = 10.0f;  // デフォルト
 
+                                    switch (currentWeapon)
+                                    {
+                                    case WeaponType::PISTOL:
+                                        knockbackPower = 8.0f;   // 軽く吹っ飛ぶ
+                                        break;
+                                    case WeaponType::SHOTGUN:
+                                        knockbackPower = 25.0f;  // 超強力に吹っ飛ぶ！
+                                        break;
+                                    case WeaponType::RIFLE:
+                                        knockbackPower = 12.0f;  // 中程度
+                                        break;
+                                    case WeaponType::SNIPER:
+                                        knockbackPower = 20.0f;  // 強力
+                                        break;
+                                    }
+
+                                    // 吹っ飛ばす！
+                                    enemy.velocity.x = shotDir.x * knockbackPower;
+                                    enemy.velocity.y = 5.0f;  // 少し跳ねる
+                                    enemy.velocity.z = shotDir.z * knockbackPower;
+
+                                }
+                            }
                             //	ノックバック処理
                             float knockbackStrength = isHeadShot ? 0.5f : 0.2f;
                             enemy.position.x += shotDir.x * knockbackStrength;
