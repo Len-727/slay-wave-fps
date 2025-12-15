@@ -26,6 +26,8 @@ enum class EnemyType{
 	NORMAL,	//	通常の敵
 	RUNNER,	//	足が速い敵
 	TANK,	//	タフな敵
+	MIDBOSS,
+	BOSS
 };
 
 //	武器データ

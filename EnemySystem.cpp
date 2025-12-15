@@ -265,13 +265,21 @@ void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 		enemy.maxHealth = 50;
 		enemy.color = DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);	//	明るい赤
 	}
-	else
+	else if(typeRoll < 99)
 	{
-		//	15%の確率でTANK
+		//	14%の確率でTANK
 		enemy.type = EnemyType::TANK;
 		enemy.health = 300;
 		enemy.maxHealth = 300;
 		enemy.color = DirectX::XMFLOAT4(0.2f, 0.2f, 0.8f, 1.0f);	//	青
+	}
+	else
+	{
+		//	1%の確率で中ボス
+		enemy.type = EnemyType::MIDBOSS;
+		enemy.health = 5000;
+		enemy.maxHealth = 5000;
+		enemy.color = DirectX::XMFLOAT4(1.0f, 0.8f, 0.8f, 1.0f);
 	}
 
 

@@ -29,6 +29,9 @@
 #include <set>
 #include <Effekseer.h>
 #include <EffekseerRendererDX11.h>
+#include <imgui.h>
+#include <imgui_impl_win32.h>
+#include <imgui_impl_dx11.h>
 
 #include "Entities.h"
 #include "InstanceData.h"
@@ -145,6 +148,7 @@ private:
         DirectX::XMFLOAT3 rayStart,
         DirectX::XMFLOAT3 rayDir,
         DirectX::XMFLOAT3 enemyPos,
+        float enemyRotationY,
         EnemyType enemyType
     );
 
@@ -232,4 +236,17 @@ private:
 
     //  読み込んだエフェクトデータ
     Effekseer::EffectRef m_effectBlood; //  血のエフェクト用(テスト)
+
+
+    //  デバッグ用
+    bool m_showDebugWindow;     //  デバッグウィンドウ表示
+    bool m_showHitboxes;        //  当たり判定表示
+    bool m_showHeadHitboxes;    //  頭の当たり判定を表示
+
+    //  === ImGui 用変数   ===
+    void InitImGui();
+    void ShutdownImGui();
+    void DrawDebugUI();
+    void DrawHitboxes();
+
 };

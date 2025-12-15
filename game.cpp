@@ -10,11 +10,13 @@
 
 // DirectXTK用
 #pragma comment(lib, "DirectXTK.lib")
-#pragma commet(lib, "Effekseer.lib")
+#pragma comment(lib, "Effekseer.lib")
 
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
+
+
 
 Game::Game() noexcept :
     m_window(nullptr),
@@ -51,7 +53,10 @@ Game::Game() noexcept :
     m_slowMoTimer(0.0f),
     m_cameraShake(0.0f),
     m_cameraShakeTimer(0.0f),
-    m_hitStopTimer(0.0f)
+    m_hitStopTimer(0.0f),
+    m_showDebugWindow(true),
+    m_showHitboxes(true),
+    m_showHeadHitboxes(true)
 {
    
 }
@@ -505,6 +510,159 @@ void Game::CreateRenderResources()
     {
         OutputDebugStringA("Effekseer initialized successfully!\n");
     }
+
+    //  === Imgui   ===
+    InitImGui();
+}
+
+void Game::DrawDebugUI()
+{
+    // ImGui新フレーム開始
+    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
+    // === デバッグウィンドウ ===
+    if (m_showDebugWindow)
+    {
+        ImGui::Begin("Gothic Swarm Debug", &m_showDebugWindow);
+
+        // FPS表示
+        ImGui::Text("FPS: %.1f", m_currentFPS);
+        ImGui::Separator();
+
+        // Wave情報
+        ImGui::Text("Wave: %d", m_waveManager->GetCurrentWave());
+        ImGui::Text("Enemies: %zu", m_enemySystem->GetEnemies().size());
+        ImGui::Separator();
+
+        // プレイヤー情報
+        ImGui::Text("Health: %d", m_player->GetHealth());
+        ImGui::Text("Points: %d", m_player->GetPoints());
+        ImGui::Separator();
+
+        // 当たり判定表示トグル
+        ImGui::Checkbox("Show Body Hitboxes", &m_showHitboxes);
+        ImGui::Checkbox("Show Head Hitboxes", &m_showHeadHitboxes);
+
+        ImGui::End();
+    }
+
+    // ImGui描画
+    ImGui::Render();
+    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+}
+
+void Game::DrawHitboxes()
+{
+    if (!m_showHitboxes && !m_showHeadHitboxes)
+        return;
+
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+    DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+
+    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&playerPos);
+    DirectX::XMVECTOR cameraTarget = DirectX::XMVectorSet(
+        playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
+        playerPos.y - sinf(playerRot.x),
+        playerPos.z + cosf(playerRot.y) * cosf(playerRot.x),
+        0.0f
+    );
+    DirectX::XMVECTOR upVector = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(cameraPosition, cameraTarget, upVector);
+
+    float aspectRatio = (float)m_outputWidth / (float)m_outputHeight;
+    DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
+        DirectX::XMConvertToRadians(70.0f), aspectRatio, 0.1f, 1000.0f
+    );
+
+    auto context = m_d3dContext.Get();
+    m_effect->SetView(viewMatrix);
+    m_effect->SetProjection(projectionMatrix);
+    m_effect->SetWorld(DirectX::XMMatrixIdentity());
+    m_effect->SetVertexColorEnabled(true);
+    m_effect->Apply(context);
+    context->IASetInputLayout(m_inputLayout.Get());
+
+    auto primitiveBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
+    primitiveBatch->Begin();
+
+    for (const auto& enemy : m_enemySystem->GetEnemies())
+    {
+        if (!enemy.isAlive)
+            continue;
+
+        // === 体の当たり判定（ボックス） ===
+        if (m_showHitboxes)
+        {
+            float width = 0.5f;
+            float height = 1.7f;
+
+            DirectX::XMFLOAT4 bodyColor(0.0f, 1.0f, 0.0f, 1.0f);  // 緑
+
+            // 下の四角
+            DirectX::XMFLOAT3 p1(enemy.position.x - width / 2, enemy.position.y, enemy.position.z - width / 2);
+            DirectX::XMFLOAT3 p2(enemy.position.x + width / 2, enemy.position.y, enemy.position.z - width / 2);
+            DirectX::XMFLOAT3 p3(enemy.position.x + width / 2, enemy.position.y, enemy.position.z + width / 2);
+            DirectX::XMFLOAT3 p4(enemy.position.x - width / 2, enemy.position.y, enemy.position.z + width / 2);
+
+            primitiveBatch->DrawLine(DirectX::VertexPositionColor(p1, bodyColor), DirectX::VertexPositionColor(p2, bodyColor));
+            primitiveBatch->DrawLine(DirectX::VertexPositionColor(p2, bodyColor), DirectX::VertexPositionColor(p3, bodyColor));
+            primitiveBatch->DrawLine(DirectX::VertexPositionColor(p3, bodyColor), DirectX::VertexPositionColor(p4, bodyColor));
+            primitiveBatch->DrawLine(DirectX::VertexPositionColor(p4, bodyColor), DirectX::VertexPositionColor(p1, bodyColor));
+
+            // 上の四角
+            DirectX::XMFLOAT3 p5(enemy.position.x - width / 2, enemy.position.y + height, enemy.position.z - width / 2);
+            DirectX::XMFLOAT3 p6(enemy.position.x + width / 2, enemy.position.y + height, enemy.position.z - width / 2);
+            DirectX::XMFLOAT3 p7(enemy.position.x + width / 2, enemy.position.y + height, enemy.position.z + width / 2);
+            DirectX::XMFLOAT3 p8(enemy.position.x - width / 2, enemy.position.y + height, enemy.position.z + width / 2);
+
+            primitiveBatch->DrawLine(DirectX::VertexPositionColor(p5, bodyColor), DirectX::VertexPositionColor(p6, bodyColor));
+            primitiveBatch->DrawLine(DirectX::VertexPositionColor(p6, bodyColor), DirectX::VertexPositionColor(p7, bodyColor));
+            primitiveBatch->DrawLine(DirectX::VertexPositionColor(p7, bodyColor), DirectX::VertexPositionColor(p8, bodyColor));
+            primitiveBatch->DrawLine(DirectX::VertexPositionColor(p8, bodyColor), DirectX::VertexPositionColor(p5, bodyColor));
+
+            // 縦線
+            primitiveBatch->DrawLine(DirectX::VertexPositionColor(p1, bodyColor), DirectX::VertexPositionColor(p5, bodyColor));
+            primitiveBatch->DrawLine(DirectX::VertexPositionColor(p2, bodyColor), DirectX::VertexPositionColor(p6, bodyColor));
+            primitiveBatch->DrawLine(DirectX::VertexPositionColor(p3, bodyColor), DirectX::VertexPositionColor(p7, bodyColor));
+            primitiveBatch->DrawLine(DirectX::VertexPositionColor(p4, bodyColor), DirectX::VertexPositionColor(p8, bodyColor));
+        }
+
+        // === 頭の当たり判定（球） ===
+        if (m_showHeadHitboxes && !enemy.headDestroyed)
+        {
+            DirectX::XMFLOAT3 headPos(enemy.position.x, enemy.position.y + 1.7f, enemy.position.z);
+            float headRadius = 0.3f;
+
+            DirectX::XMFLOAT4 headColor(1.0f, 0.0f, 0.0f, 1.0f);  // 赤
+
+            // 球を円で表現（簡易版）
+            int segments = 16;
+            for (int i = 0; i < segments; i++)
+            {
+                float angle1 = (i / (float)segments) * 6.28318f;
+                float angle2 = ((i + 1) / (float)segments) * 6.28318f;
+
+                // XZ平面の円
+                DirectX::XMFLOAT3 p1(headPos.x + cosf(angle1) * headRadius, headPos.y, headPos.z + sinf(angle1) * headRadius);
+                DirectX::XMFLOAT3 p2(headPos.x + cosf(angle2) * headRadius, headPos.y, headPos.z + sinf(angle2) * headRadius);
+                primitiveBatch->DrawLine(DirectX::VertexPositionColor(p1, headColor), DirectX::VertexPositionColor(p2, headColor));
+
+                // XY平面の円
+                DirectX::XMFLOAT3 p3(headPos.x + cosf(angle1) * headRadius, headPos.y + sinf(angle1) * headRadius, headPos.z);
+                DirectX::XMFLOAT3 p4(headPos.x + cosf(angle2) * headRadius, headPos.y + sinf(angle2) * headRadius, headPos.z);
+                primitiveBatch->DrawLine(DirectX::VertexPositionColor(p3, headColor), DirectX::VertexPositionColor(p4, headColor));
+
+                // YZ平面の円
+                DirectX::XMFLOAT3 p5(headPos.x, headPos.y + cosf(angle1) * headRadius, headPos.z + sinf(angle1) * headRadius);
+                DirectX::XMFLOAT3 p6(headPos.x, headPos.y + cosf(angle2) * headRadius, headPos.z + sinf(angle2) * headRadius);
+                primitiveBatch->DrawLine(DirectX::VertexPositionColor(p5, headColor), DirectX::VertexPositionColor(p6, headColor));
+            }
+        }
+    }
+
+    primitiveBatch->End();
 }
 
 
@@ -585,6 +743,9 @@ void Game::DrawEnemies()
     std::vector<InstanceData> tankAttackingHeadless;
     std::vector<InstanceData> tankDead;
     std::vector<InstanceData> tankDeadHeadless;
+
+    //  === MIDBASS用    ===
+    
 
     //  === 死亡アニメーション再生時間の取得    ===
     float deathDuration = m_enemyModel->GetAnimationDuration("Death");
@@ -1015,68 +1176,121 @@ void Game::DrawEnemies()
         );
     }
 
+
+
     primitiveBatch->End();
 }
 
+// ★ 回転対応版：レイとOBB（回転する箱）の交差判定
 float Game::CheckRayIntersection(
     DirectX::XMFLOAT3 rayStart,
     DirectX::XMFLOAT3 rayDir,
     DirectX::XMFLOAT3 enemyPos,
+    float enemyRotationY,   // 敵の向き
     EnemyType enemyType)
 {
-    float width = 0.5f;     // 幅(肩幅くらい)
-    float height = 1.7f;    // 高さ
+    // === 1. 敵のサイズ設定 ===
+    float width = 0.5f;
+    float height = 1.7f;
+    float depth = 0.5f; // 奥行きも定義
 
     switch (enemyType)
     {
     case EnemyType::NORMAL:
-        width = 0.5f;
-        height = 1.7f;
+        width = 0.6f; height = 1.8f; depth = 0.6f;
         break;
-
     case EnemyType::RUNNER:
-        width = 0.4f;
-        height = 1.8;
+        width = 0.5f; height = 1.6f; depth = 0.5f;
         break;
-
     case EnemyType::TANK:
-        width = 0.8f;
-        height = 2.0f;
+        width = 1.2f; height = 2.4f; depth = 1.2f;
+        break;
     }
 
-    float minX = enemyPos.x - width / 2.0f;
-    float minY = enemyPos.y;
-    float minZ = enemyPos.z - width / 2.0f;
+    // === 2. レイを「敵のローカル空間」に変換 ===
+    // 敵の位置を原点(0,0,0)とし、敵が正面(Z+)を向いている状態の世界に、レイを持ち込む
 
-    float maxX = enemyPos.x + width / 2.0f;
-    float maxY = enemyPos.y + height;
-    float maxZ = enemyPos.z + width / 2.0f;
+    using namespace DirectX;
 
-    // X軸
-    float tMin = (minX - rayStart.x) / rayDir.x;
-    float tMax = (maxX - rayStart.x) / rayDir.x;
-    if (tMin > tMax) std::swap(tMin, tMax);
+    XMVECTOR vRayOrigin = XMLoadFloat3(&rayStart);
+    XMVECTOR vRayDir = XMLoadFloat3(&rayDir);
+    XMVECTOR vEnemyPos = XMLoadFloat3(&enemyPos);
 
-    // Y軸
-    float tyMin = (minY - rayStart.y) / rayDir.y;
-    float tyMax = (maxY - rayStart.y) / rayDir.y;
-    if (tyMin > tyMax) std::swap(tyMin, tyMax);
+    // 平行移動（敵を原点へ）
+    XMVECTOR vLocalOrigin = vRayOrigin - vEnemyPos;
 
-    if (tMin > tyMax || tyMin > tMax) return -1.0f;
+    // 逆回転（敵の回転の逆をレイにかける）
+    XMMATRIX matInvRot = XMMatrixRotationY(-enemyRotationY);
+    vLocalOrigin = XMVector3TransformCoord(vLocalOrigin, matInvRot);
+    vRayDir = XMVector3TransformNormal(vRayDir, matInvRot);
 
-    if (tyMin > tMin) tMin = tyMin;
-    if (tyMax < tMax) tMax = tyMax;
+    // 計算しやすいようにFloat3に戻す
+    XMFLOAT3 localOrigin, localDir;
+    XMStoreFloat3(&localOrigin, vLocalOrigin);
+    XMStoreFloat3(&localDir, vRayDir);
 
-    // Z軸
-    float tzMin = (minZ - rayStart.z) / rayDir.z;
-    float tzMax = (maxZ - rayStart.z) / rayDir.z;
-    if (tzMin > tzMax) std::swap(tzMin, tzMax);
+    // === 3. AABB（軸平行ボックス）との判定 ===
+    // ローカル空間なので、箱は回転していないものとして計算できる
 
-    if (tMin > tzMax || tzMin > tMax) return -1.0f;
+    // 箱の最小点・最大点（足元がY=0になるように）
+    float minX = -width / 2.0f;
+    float minY = 0.0f;
+    float minZ = -depth / 2.0f;
 
-    if (tMin < 0) return -1.0f;
+    float maxX = width / 2.0f;
+    float maxY = height;
+    float maxZ = depth / 2.0f;
 
-    return tMin;  //    敵までの距離
+    // スラブ法（Slab Method）による判定
+    float tMin = 0.0f;
+    float tMax = 10000.0f; // 十分遠く
+
+    // X軸チェック
+    if (fabs(localDir.x) < 1e-6f) // レイが垂直に近い場合
+    {
+        if (localOrigin.x < minX || localOrigin.x > maxX) return -1.0f;
+    }
+    else
+    {
+        float t1 = (minX - localOrigin.x) / localDir.x;
+        float t2 = (maxX - localOrigin.x) / localDir.x;
+        if (t1 > t2) std::swap(t1, t2);
+        tMin = max(tMin, t1);
+        tMax = min(tMax, t2);
+        if (tMin > tMax) return -1.0f;
+    }
+
+    // Y軸チェック
+    if (fabs(localDir.y) < 1e-6f)
+    {
+        if (localOrigin.y < minY || localOrigin.y > maxY) return -1.0f;
+    }
+    else
+    {
+        float t1 = (minY - localOrigin.y) / localDir.y;
+        float t2 = (maxY - localOrigin.y) / localDir.y;
+        if (t1 > t2) std::swap(t1, t2);
+        tMin = max(tMin, t1);
+        tMax = min(tMax, t2);
+        if (tMin > tMax) return -1.0f;
+    }
+
+    // Z軸チェック
+    if (fabs(localDir.z) < 1e-6f)
+    {
+        if (localOrigin.z < minZ || localOrigin.z > maxZ) return -1.0f;
+    }
+    else
+    {
+        float t1 = (minZ - localOrigin.z) / localDir.z;
+        float t2 = (maxZ - localOrigin.z) / localDir.z;
+        if (t1 > t2) std::swap(t1, t2);
+        tMin = max(tMin, t1);
+        tMax = min(tMax, t2);
+        if (tMin > tMax) return -1.0f;
+    }
+
+    return tMin; // 衝突距離
 }
 
 
@@ -1407,6 +1621,10 @@ void Game::RenderPlaying()
     {
         RenderDamageFlash();
     }
+
+    // === デバッグ描画 ===
+    DrawHitboxes();      // 当たり判定可視化
+    DrawDebugUI();       // ImGUIウィンドウ
 }
 
 // 【UI】すべてのUIを描画する
@@ -1463,6 +1681,21 @@ void Game::DrawUI()
 
 void Game::UpdatePlaying()
 {
+    // F1キーでデバッグウィンドウ切り替え
+    static bool f1Pressed = false;
+    if (GetAsyncKeyState(VK_F1) & 0x8000)
+    {
+        if (!f1Pressed)
+        {
+            m_showDebugWindow = !m_showDebugWindow;
+            f1Pressed = true;
+        }
+    }
+    else
+    {
+        f1Pressed = false;
+    }
+
     //  --- ヒットストップ処理   ---
     if (m_hitStopTimer > 0.0f)
     {
@@ -1801,7 +2034,7 @@ void Game::UpdatePlaying()
                         if (!enemy.isAlive || enemy.isDying)
                             continue;
 
-                        float hitDistance = CheckRayIntersection(rayStart, shotDir, enemy.position, enemy.type);
+                        float hitDistance = CheckRayIntersection(rayStart, shotDir, enemy.position, enemy.rotationY, enemy.type);
 
                         if (hitDistance > 0.0f)
                         {
@@ -2385,4 +2618,28 @@ void Game::DrawWeaponSpawns()
         m_cube->Draw(world, viewMatrix, projectionMatrix, color);
     }
 
+}
+
+void Game::InitImGui()
+{
+    // ImGui初期化
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+
+    // スタイル設定
+    ImGui::StyleColorsDark();
+
+    // Win32 + DX11 バックエンド初期化
+    ImGui_ImplWin32_Init(m_window);
+    ImGui_ImplDX11_Init(m_d3dDevice.Get(), m_d3dContext.Get());
+
+    OutputDebugStringA("ImGui initialized successfully!\n");
+}
+
+void Game::ShutdownImGui()
+{
+    ImGui_ImplDX11_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+    ImGui::DestroyContext();
 }
