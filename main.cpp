@@ -7,6 +7,9 @@
 #include <memory>
 #include "Game.h"
 
+// === ImGui 用の前方宣言 ===
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
 using namespace DirectX;
 
 namespace
@@ -91,8 +94,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 // === ウィンドウメッセージ処理（理解＋改良対象） ===
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    auto game = reinterpret_cast<Game*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+    // === ImGui にメッセージを渡す  ===
+    if (ImGui_ImplWin32_WndProcHandler(hWnd, message, wParam, lParam))
+        return true;
 
+    auto game = reinterpret_cast<Game*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
     switch (message)
     {
     case WM_PAINT:
