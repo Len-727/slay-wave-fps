@@ -96,6 +96,68 @@ struct AnimationClip
 //	ATTACK	//	攻撃
 //};
 
+//	敵のタイプ別設定（一箇所で管理）
+struct EnemyTypeConfig
+{
+	// 体の当たり判定
+	float bodyWidth;
+	float bodyHeight;
+
+	// 頭の当たり判定
+	float headHeight;
+	float headRadius;
+
+	// ステータス
+	int health;
+	float speedMultiplier;
+
+	// 色
+	DirectX::XMFLOAT4 color;
+};
+
+
+// === 敵タイプの設定を取得する関数 ===
+inline EnemyTypeConfig GetEnemyConfig(EnemyType type)
+{
+	EnemyTypeConfig config;
+
+	switch (type)
+	{
+	case EnemyType::NORMAL:
+		config.bodyWidth = 0.50f;
+		config.bodyHeight = 1.13f;
+		config.headHeight = 1.41f;
+		config.headRadius = 0.28f;
+		config.health = 100;
+		config.speedMultiplier = 1.0f;
+		config.color = DirectX::XMFLOAT4(0.8f, 0.2f, 0.2f, 1.0f);  // 赤
+		break;
+
+	case EnemyType::RUNNER:
+		config.bodyWidth = 0.40f;
+		config.bodyHeight = 1.23f;
+		config.headHeight = 1.59f;
+		config.headRadius = 0.36f;
+		config.health = 50;
+		config.speedMultiplier = 2.0f;
+		config.color = DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);  // 明るい赤
+		break;
+
+	case EnemyType::TANK:
+		config.bodyWidth = 0.7f;
+		config.bodyHeight = 2.0f;
+		config.headHeight = 2.3f;
+		config.headRadius = 0.7f;
+		config.health = 300;
+		config.speedMultiplier = 0.5f;
+		config.color = DirectX::XMFLOAT4(0.2f, 0.2f, 0.8f, 1.0f);  // 青
+		break;
+	}
+
+	return config;
+}
+
+
 
 //	敵
 struct Enemy {

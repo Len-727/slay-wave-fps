@@ -238,10 +238,31 @@ private:
     Effekseer::EffectRef m_effectBlood; //  血のエフェクト用(テスト)
 
 
+    //  ==========================
+    //  === ImGui用  ===
+    //  ==========================
+    // 
     //  デバッグ用
     bool m_showDebugWindow;     //  デバッグウィンドウ表示
     bool m_showHitboxes;        //  当たり判定表示
     bool m_showHeadHitboxes;    //  頭の当たり判定を表示
+    bool m_showBulletTrajectory; //  弾の軌跡表示
+
+    //  === リアルタイム調整用変数 ===
+    float m_debugRunnerSpeed;   //  Runner速度調整用
+    float m_debugTankSpeed;      //  Tank速度調整用
+    float m_debugRunnerHP;       //  RunnerHP調整用
+    float m_debugTankHP;         //  TankHP調整用
+    float m_debugHeadRadius;     //  頭の判定サイズ調整用
+
+    //  === 弾の軌跡保存用 ===
+    struct BulletTrace
+    {
+        DirectX::XMFLOAT3 start;
+        DirectX::XMFLOAT3 end;
+        float lifetime;
+    };
+    std::vector<BulletTrace> m_bulletTraces;
 
     //  === ImGui 用変数   ===
     void InitImGui();
@@ -249,4 +270,9 @@ private:
     void DrawDebugUI();
     void DrawHitboxes();
 
+    //  === リアルタイム調整用のコンフィグ ===
+    EnemyTypeConfig m_normalConfigDebug;
+    EnemyTypeConfig m_runnerConfigDebug;
+    EnemyTypeConfig m_tankConfigDebug;
+    bool m_useDebugHitboxes;  // デバッグ値を使うかどうか
 };

@@ -56,7 +56,17 @@ Game::Game() noexcept :
     m_hitStopTimer(0.0f),
     m_showDebugWindow(true),
     m_showHitboxes(true),
-    m_showHeadHitboxes(true)
+    m_showHeadHitboxes(true),
+    m_showBulletTrajectory(true),
+    m_debugRunnerSpeed(2.0f),
+    m_debugTankSpeed(0.5f),
+    m_debugRunnerHP(50.0f),
+    m_debugTankHP(300.0f),
+    m_debugHeadRadius(0.3f),
+    m_useDebugHitboxes(false),
+    m_normalConfigDebug(GetEnemyConfig(EnemyType::NORMAL)),
+    m_runnerConfigDebug(GetEnemyConfig(EnemyType::RUNNER)),
+    m_tankConfigDebug(GetEnemyConfig(EnemyType::TANK))
 {
    
 }
@@ -525,7 +535,7 @@ void Game::DrawDebugUI()
     // === デバッグウィンドウ ===
     if (m_showDebugWindow)
     {
-        ImGui::Begin("Gothic Swarm Debug", &m_showDebugWindow);
+        ImGui::Begin("Gothic Swarm Debug", &m_showDebugWindow, ImGuiWindowFlags_AlwaysAutoResize);
 
         // FPS表示
         ImGui::Text("FPS: %.1f", m_currentFPS);
@@ -533,17 +543,197 @@ void Game::DrawDebugUI()
 
         // Wave情報
         ImGui::Text("Wave: %d", m_waveManager->GetCurrentWave());
-        ImGui::Text("Enemies: %zu", m_enemySystem->GetEnemies().size());
+
+        // === タイプ別カウント表示 ===
+        int totalEnemies = 0;
+        int normalCount = 0;
+        int runnerCount = 0;
+        int tankCount = 0;
+
+        for (const auto& enemy : m_enemySystem->GetEnemies())
+        {
+            if (!enemy.isAlive && !enemy.isDying)
+                continue;
+
+            totalEnemies++;
+
+            switch (enemy.type)
+            {
+            case EnemyType::NORMAL:
+                normalCount++;
+                break;
+            case EnemyType::RUNNER:
+                runnerCount++;
+                break;
+            case EnemyType::TANK:
+                tankCount++;
+                break;
+            }
+        }
+
+        ImGui::Text("Total Enemies: %d", totalEnemies);
+        ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "  Normal: %d", normalCount);
+        ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "  Runner: %d", runnerCount);
+        ImGui::TextColored(ImVec4(0.0f, 0.5f, 1.0f, 1.0f), "  Tank: %d", tankCount);
         ImGui::Separator();
 
         // プレイヤー情報
         ImGui::Text("Health: %d", m_player->GetHealth());
         ImGui::Text("Points: %d", m_player->GetPoints());
+
+        // === プレイヤー位置情報 ===
+        DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+        DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+        ImGui::Text("Player Pos: (%.2f, %.2f, %.2f)", playerPos.x, playerPos.y, playerPos.z);
+        ImGui::Text("Ray Start Y: %.2f", playerPos.y + 0.5f);
+        ImGui::Text("Camera Rot: (%.2f, %.2f)",
+            DirectX::XMConvertToDegrees(playerRot.x),
+            DirectX::XMConvertToDegrees(playerRot.y));
         ImGui::Separator();
 
-        // 当たり判定表示トグル
+        // 表示トグル
+        ImGui::Text("Visual Debug:");
         ImGui::Checkbox("Show Body Hitboxes", &m_showHitboxes);
         ImGui::Checkbox("Show Head Hitboxes", &m_showHeadHitboxes);
+        ImGui::Checkbox("Show Bullet Trajectory", &m_showBulletTrajectory);
+        ImGui::Separator();
+
+        // ===================================================
+        // === NEW: 当たり判定調整タブ ===
+        // ===================================================
+        if (ImGui::CollapsingHeader("Hitbox Tuning", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            // === デバッグ値を使うかトグル ===
+            ImGui::Checkbox("Use Debug Hitboxes (Real-time)", &m_useDebugHitboxes);
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f),
+                m_useDebugHitboxes ? "Using DEBUG values" : "Using Entities.h values");
+            ImGui::Separator();
+
+            // === NORMAL 調整 ===
+            if (ImGui::TreeNode("NORMAL Hitbox"))
+            {
+                ImGui::Text("Body:");
+                ImGui::SliderFloat("Body Width##Normal", &m_normalConfigDebug.bodyWidth, 0.1f, 2.0f);
+                ImGui::SliderFloat("Body Height##Normal", &m_normalConfigDebug.bodyHeight, 0.5f, 3.0f);
+
+                ImGui::Text("Head:");
+                ImGui::SliderFloat("Head Height##Normal", &m_normalConfigDebug.headHeight, 0.5f, 3.0f);
+                ImGui::SliderFloat("Head Radius##Normal", &m_normalConfigDebug.headRadius, 0.1f, 1.0f);
+
+                // 現在の値を表示
+                ImGui::Text("Current Values:");
+                ImGui::Text("  Body: %.2f x %.2f", m_normalConfigDebug.bodyWidth, m_normalConfigDebug.bodyHeight);
+                ImGui::Text("  Head: Y=%.2f, R=%.2f", m_normalConfigDebug.headHeight, m_normalConfigDebug.headRadius);
+
+                // Entities.hにコピーするコード生成
+                if (ImGui::Button("Copy to Clipboard##Normal"))
+                {
+                    char buffer[512];
+                    sprintf_s(buffer,
+                        "case EnemyType::NORMAL:\n"
+                        "    config.bodyWidth = %.2ff;\n"
+                        "    config.bodyHeight = %.2ff;\n"
+                        "    config.headHeight = %.2ff;\n"
+                        "    config.headRadius = %.2ff;\n"
+                        "    break;",
+                        m_normalConfigDebug.bodyWidth,
+                        m_normalConfigDebug.bodyHeight,
+                        m_normalConfigDebug.headHeight,
+                        m_normalConfigDebug.headRadius
+                    );
+                    ImGui::SetClipboardText(buffer);
+                    OutputDebugStringA("NORMAL config copied to clipboard!\n");
+                }
+
+                ImGui::TreePop();
+            }
+
+            // === RUNNER 調整（同様に変更）===
+            if (ImGui::TreeNode("RUNNER Hitbox"))
+            {
+                ImGui::Text("Body:");
+                ImGui::SliderFloat("Body Width##Runner", &m_runnerConfigDebug.bodyWidth, 0.1f, 2.0f);
+                ImGui::SliderFloat("Body Height##Runner", &m_runnerConfigDebug.bodyHeight, 0.5f, 3.0f);
+
+                ImGui::Text("Head:");
+                ImGui::SliderFloat("Head Height##Runner", &m_runnerConfigDebug.headHeight, 0.5f, 3.0f);
+                ImGui::SliderFloat("Head Radius##Runner", &m_runnerConfigDebug.headRadius, 0.1f, 1.0f);
+
+                ImGui::Text("Current Values:");
+                ImGui::Text("  Body: %.2f x %.2f", m_runnerConfigDebug.bodyWidth, m_runnerConfigDebug.bodyHeight);
+                ImGui::Text("  Head: Y=%.2f, R=%.2f", m_runnerConfigDebug.headHeight, m_runnerConfigDebug.headRadius);
+
+                if (ImGui::Button("Copy to Clipboard##Runner"))
+                {
+                    char buffer[512];
+                    sprintf_s(buffer,
+                        "case EnemyType::RUNNER:\n"
+                        "    config.bodyWidth = %.2ff;\n"
+                        "    config.bodyHeight = %.2ff;\n"
+                        "    config.headHeight = %.2ff;\n"
+                        "    config.headRadius = %.2ff;\n"
+                        "    break;",
+                        m_runnerConfigDebug.bodyWidth,
+                        m_runnerConfigDebug.bodyHeight,
+                        m_runnerConfigDebug.headHeight,
+                        m_runnerConfigDebug.headRadius
+                    );
+                    ImGui::SetClipboardText(buffer);
+                    OutputDebugStringA("RUNNER config copied to clipboard!\n");
+                }
+
+                ImGui::TreePop();
+            }
+
+            // === TANK 調整（同様に変更）===
+            if (ImGui::TreeNode("TANK Hitbox"))
+            {
+                ImGui::Text("Body:");
+                ImGui::SliderFloat("Body Width##Tank", &m_tankConfigDebug.bodyWidth, 0.1f, 2.0f);
+                ImGui::SliderFloat("Body Height##Tank", &m_tankConfigDebug.bodyHeight, 0.5f, 3.0f);
+
+                ImGui::Text("Head:");
+                ImGui::SliderFloat("Head Height##Tank", &m_tankConfigDebug.headHeight, 0.5f, 3.0f);
+                ImGui::SliderFloat("Head Radius##Tank", &m_tankConfigDebug.headRadius, 0.1f, 1.0f);
+
+                ImGui::Text("Current Values:");
+                ImGui::Text("  Body: %.2f x %.2f", m_tankConfigDebug.bodyWidth, m_tankConfigDebug.bodyHeight);
+                ImGui::Text("  Head: Y=%.2f, R=%.2f", m_tankConfigDebug.headHeight, m_tankConfigDebug.headRadius);
+
+                if (ImGui::Button("Copy to Clipboard##Tank"))
+                {
+                    char buffer[512];
+                    sprintf_s(buffer,
+                        "case EnemyType::TANK:\n"
+                        "    config.bodyWidth = %.2ff;\n"
+                        "    config.bodyHeight = %.2ff;\n"
+                        "    config.headHeight = %.2ff;\n"
+                        "    config.headRadius = %.2ff;\n"
+                        "    break;",
+                        m_tankConfigDebug.bodyWidth,
+                        m_tankConfigDebug.bodyHeight,
+                        m_tankConfigDebug.headHeight,
+                        m_tankConfigDebug.headRadius
+                    );
+                    ImGui::SetClipboardText(buffer);
+                    OutputDebugStringA("TANK config copied to clipboard!\n");
+                }
+
+                ImGui::TreePop();
+            }
+
+            // リセットボタン
+            if (ImGui::Button("Reset All to Default"))
+            {
+                m_normalConfigDebug = GetEnemyConfig(EnemyType::NORMAL);
+                m_runnerConfigDebug = GetEnemyConfig(EnemyType::RUNNER);
+                m_tankConfigDebug = GetEnemyConfig(EnemyType::TANK);
+                OutputDebugStringA("Reset all hitbox configs to default\n");
+            }
+
+            ImGui::Separator();
+            ImGui::TextWrapped("Tip: Adjust values while looking at hitboxes, then click 'Copy to Clipboard' and paste into Entities.h");
+        }
 
         ImGui::End();
     }
@@ -592,13 +782,52 @@ void Game::DrawHitboxes()
         if (!enemy.isAlive)
             continue;
 
-        // === 体の当たり判定（ボックス） ===
+
+        // === 体の当たり判定（タイプ別色分け） ===
         if (m_showHitboxes)
         {
-            float width = 0.5f;
-            float height = 1.7f;
+            // === 設定を取得（デバッグモードなら m_XXXConfigDebug を使う）===
+            EnemyTypeConfig config;
 
-            DirectX::XMFLOAT4 bodyColor(0.0f, 1.0f, 0.0f, 1.0f);  // 緑
+            if (m_useDebugHitboxes)
+            {
+                // デバッグ値を使う
+                switch (enemy.type)
+                {
+                case EnemyType::NORMAL:
+                    config = m_normalConfigDebug;
+                    break;
+                case EnemyType::RUNNER:
+                    config = m_runnerConfigDebug;
+                    break;
+                case EnemyType::TANK:
+                    config = m_tankConfigDebug;
+                    break;
+                }
+            }
+            else
+            {
+                // Entities.h の値を使う
+                config = GetEnemyConfig(enemy.type);
+            }
+
+            float width = config.bodyWidth;
+            float height = config.bodyHeight;
+
+            // === タイプ別に色を変える ===
+            DirectX::XMFLOAT4 bodyColor;
+            switch (enemy.type)
+            {
+            case EnemyType::NORMAL:
+                bodyColor = DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);
+                break;
+            case EnemyType::RUNNER:
+                bodyColor = DirectX::XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f);
+                break;
+            case EnemyType::TANK:
+                bodyColor = DirectX::XMFLOAT4(0.0f, 0.5f, 1.0f, 1.0f);
+                break;
+            }
 
             // 下の四角
             DirectX::XMFLOAT3 p1(enemy.position.x - width / 2, enemy.position.y, enemy.position.z - width / 2);
@@ -632,8 +861,37 @@ void Game::DrawHitboxes()
         // === 頭の当たり判定（球） ===
         if (m_showHeadHitboxes && !enemy.headDestroyed)
         {
-            DirectX::XMFLOAT3 headPos(enemy.position.x, enemy.position.y + 1.7f, enemy.position.z);
-            float headRadius = 0.3f;
+            // === 設定を取得（デバッグモードなら m_XXXConfigDebug を使う）===
+            EnemyTypeConfig config;
+
+            if (m_useDebugHitboxes)
+            {
+                // デバッグ値を使う
+                switch (enemy.type)
+                {
+                case EnemyType::NORMAL:
+                    config = m_normalConfigDebug;
+                    break;
+                case EnemyType::RUNNER:
+                    config = m_runnerConfigDebug;
+                    break;
+                case EnemyType::TANK:
+                    config = m_tankConfigDebug;
+                    break;
+                }
+            }
+            else
+            {
+                // Entities.h の値を使う
+                config = GetEnemyConfig(enemy.type);
+            }
+
+            DirectX::XMFLOAT3 headPos(
+                enemy.position.x,
+                enemy.position.y + config.headHeight,
+                enemy.position.z
+            );
+            float headRadius = config.headRadius;
 
             DirectX::XMFLOAT4 headColor(1.0f, 0.0f, 0.0f, 1.0f);  // 赤
 
@@ -661,6 +919,64 @@ void Game::DrawHitboxes()
             }
         }
     }
+
+    // === 弾の軌跡を描画 ===
+    if (m_showBulletTrajectory)
+    {
+        for (const auto& trace : m_bulletTraces)
+        {
+            // 時間経過で色を変える
+            float alpha = trace.lifetime / 0.5f;  // 0.5秒で消える
+            DirectX::XMFLOAT4 traceColor(1.0f, 0.5f, 0.0f, alpha);  // オレンジ
+
+            primitiveBatch->DrawLine(
+                DirectX::VertexPositionColor(trace.start, traceColor),
+                DirectX::VertexPositionColor(trace.end, traceColor)
+            );
+        }
+    }
+
+    // === レイの開始位置を可視化（緑の十字マーク）===
+    DirectX::XMFLOAT3 rayStart(playerPos.x, playerPos.y + 0.5f, playerPos.z);
+
+    DirectX::XMFLOAT4 crossColor(0.0f, 1.0f, 0.0f, 1.0f);  // 緑
+    float crossSize = 0.1f;
+
+    // X軸の線
+    primitiveBatch->DrawLine(
+        DirectX::VertexPositionColor(
+            DirectX::XMFLOAT3(rayStart.x - crossSize, rayStart.y, rayStart.z),
+            crossColor
+        ),
+        DirectX::VertexPositionColor(
+            DirectX::XMFLOAT3(rayStart.x + crossSize, rayStart.y, rayStart.z),
+            crossColor
+        )
+    );
+
+    // Y軸の線
+    primitiveBatch->DrawLine(
+        DirectX::VertexPositionColor(
+            DirectX::XMFLOAT3(rayStart.x, rayStart.y - crossSize, rayStart.z),
+            crossColor
+        ),
+        DirectX::VertexPositionColor(
+            DirectX::XMFLOAT3(rayStart.x, rayStart.y + crossSize, rayStart.z),
+            crossColor
+        )
+    );
+
+    // Z軸の線
+    primitiveBatch->DrawLine(
+        DirectX::VertexPositionColor(
+            DirectX::XMFLOAT3(rayStart.x, rayStart.y, rayStart.z - crossSize),
+            crossColor
+        ),
+        DirectX::VertexPositionColor(
+            DirectX::XMFLOAT3(rayStart.x, rayStart.y, rayStart.z + crossSize),
+            crossColor
+        )
+    );
 
     primitiveBatch->End();
 }
@@ -1181,42 +1497,48 @@ void Game::DrawEnemies()
     primitiveBatch->End();
 }
 
-// ★ 回転対応版：レイとOBB（回転する箱）の交差判定
+//  回転対応版：レイとOBB（回転する箱）の交差判定
 float Game::CheckRayIntersection(
     DirectX::XMFLOAT3 rayStart,
     DirectX::XMFLOAT3 rayDir,
     DirectX::XMFLOAT3 enemyPos,
-    float enemyRotationY,   // 敵の向き
+    float enemyRotationY,
     EnemyType enemyType)
 {
-    // === 1. 敵のサイズ設定 ===
-    float width = 0.5f;
-    float height = 1.7f;
-    float depth = 0.5f; // 奥行きも定義
-
-    switch (enemyType)
-    {
-    case EnemyType::NORMAL:
-        width = 0.6f; height = 1.8f; depth = 0.6f;
-        break;
-    case EnemyType::RUNNER:
-        width = 0.5f; height = 1.6f; depth = 0.5f;
-        break;
-    case EnemyType::TANK:
-        width = 1.2f; height = 2.4f; depth = 1.2f;
-        break;
-    }
-
-    // === 2. レイを「敵のローカル空間」に変換 ===
-    // 敵の位置を原点(0,0,0)とし、敵が正面(Z+)を向いている状態の世界に、レイを持ち込む
-
     using namespace DirectX;
 
+    // === 設定を取得（デバッグモード対応）===
+    EnemyTypeConfig config;
+
+    if (m_useDebugHitboxes)
+    {
+        switch (enemyType)
+        {
+        case EnemyType::NORMAL:
+            config = m_normalConfigDebug;
+            break;
+        case EnemyType::RUNNER:
+            config = m_runnerConfigDebug;
+            break;
+        case EnemyType::TANK:
+            config = m_tankConfigDebug;
+            break;
+        }
+    }
+    else
+    {
+        config = GetEnemyConfig(enemyType);
+    }
+
+    float width = config.bodyWidth;
+    float height = config.bodyHeight;
+
+    // === レイをローカル座標系に変換 ===
     XMVECTOR vRayOrigin = XMLoadFloat3(&rayStart);
     XMVECTOR vRayDir = XMLoadFloat3(&rayDir);
     XMVECTOR vEnemyPos = XMLoadFloat3(&enemyPos);
 
-    // 平行移動（敵を原点へ）
+    // 平行移動（敵を原点に）
     XMVECTOR vLocalOrigin = vRayOrigin - vEnemyPos;
 
     // 逆回転（敵の回転の逆をレイにかける）
@@ -1224,31 +1546,30 @@ float Game::CheckRayIntersection(
     vLocalOrigin = XMVector3TransformCoord(vLocalOrigin, matInvRot);
     vRayDir = XMVector3TransformNormal(vRayDir, matInvRot);
 
-    // 計算しやすいようにFloat3に戻す
+    // Float3に戻す
     XMFLOAT3 localOrigin, localDir;
     XMStoreFloat3(&localOrigin, vLocalOrigin);
     XMStoreFloat3(&localDir, vRayDir);
 
-    // === 3. AABB（軸平行ボックス）との判定 ===
-    // ローカル空間なので、箱は回転していないものとして計算できる
-
+    // === AABB（軸平行ボックス）との判定 ===
     // 箱の最小点・最大点（足元がY=0になるように）
     float minX = -width / 2.0f;
     float minY = 0.0f;
-    float minZ = -depth / 2.0f;
+    float minZ = -width / 2.0f;  // ← Z軸も追加
 
     float maxX = width / 2.0f;
     float maxY = height;
-    float maxZ = depth / 2.0f;
+    float maxZ = width / 2.0f;  // ← Z軸も追加
 
     // スラブ法（Slab Method）による判定
     float tMin = 0.0f;
-    float tMax = 10000.0f; // 十分遠く
+    float tMax = 10000.0f;
 
-    // X軸チェック
-    if (fabs(localDir.x) < 1e-6f) // レイが垂直に近い場合
+    // === X軸チェック ===
+    if (fabs(localDir.x) < 1e-6f)
     {
-        if (localOrigin.x < minX || localOrigin.x > maxX) return -1.0f;
+        if (localOrigin.x < minX || localOrigin.x > maxX)
+            return -1.0f;
     }
     else
     {
@@ -1260,10 +1581,11 @@ float Game::CheckRayIntersection(
         if (tMin > tMax) return -1.0f;
     }
 
-    // Y軸チェック
+    // === Y軸チェック ===
     if (fabs(localDir.y) < 1e-6f)
     {
-        if (localOrigin.y < minY || localOrigin.y > maxY) return -1.0f;
+        if (localOrigin.y < minY || localOrigin.y > maxY)
+            return -1.0f;
     }
     else
     {
@@ -1275,10 +1597,11 @@ float Game::CheckRayIntersection(
         if (tMin > tMax) return -1.0f;
     }
 
-    // Z軸チェック
+    // === Z軸チェック（これが抜けてた！）===
     if (fabs(localDir.z) < 1e-6f)
     {
-        if (localOrigin.z < minZ || localOrigin.z > maxZ) return -1.0f;
+        if (localOrigin.z < minZ || localOrigin.z > maxZ)
+            return -1.0f;
     }
     else
     {
@@ -1290,7 +1613,10 @@ float Game::CheckRayIntersection(
         if (tMin > tMax) return -1.0f;
     }
 
-    return tMin; // 衝突距離
+    // 後ろの敵には当たらない
+    if (tMin < 0.0f) return -1.0f;
+
+    return tMin;  // 衝突距離
 }
 
 
@@ -1696,6 +2022,22 @@ void Game::UpdatePlaying()
         f1Pressed = false;
     }
 
+    float deltaTime = 1.0f / 60.0f;
+
+    // === 弾の軌跡を更新 ===
+    for (auto it = m_bulletTraces.begin(); it != m_bulletTraces.end();)
+    {
+        it->lifetime -= deltaTime;
+        if (it->lifetime <= 0.0f)
+        {
+            it = m_bulletTraces.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
     //  --- ヒットストップ処理   ---
     if (m_hitStopTimer > 0.0f)
     {
@@ -1734,7 +2076,6 @@ void Game::UpdatePlaying()
 
     m_frameCount++;
 
-    float deltaTime = 1.0f / 60.0f;
     m_fpsTimer += deltaTime;
 
     if (m_fpsTimer >= 1.0f)
@@ -2040,27 +2381,42 @@ void Game::UpdatePlaying()
                         {
                             hit = true;
 
-                            //  敵の頭の位置を計算
-                            float headHeight = 0.0f;
-                            float headRadius = 0.0f;
+                            // === 弾の軌跡を記録 ===
+                            BulletTrace trace;
+                            trace.start = rayStart;
+                            trace.end.x = rayStart.x + shotDir.x * hitDistance;
+                            trace.end.y = rayStart.y + shotDir.y * hitDistance;
+                            trace.end.z = rayStart.z + shotDir.z * hitDistance;
+                            trace.lifetime = 0.5f;  // 0.5秒表示
+                            m_bulletTraces.push_back(trace);
 
-                            switch (enemy.type)
+                            // === 設定を取得（デバッグモード対応）===
+                            EnemyTypeConfig config;
+
+                            if (m_useDebugHitboxes)
                             {
-                            case EnemyType::NORMAL:
-                                headHeight = 1.9f;
-                                headRadius = 0.6f;
-                                break;
-
-                            case EnemyType::RUNNER:
-                                headHeight = 1.8f;
-                                headRadius = 0.4f;
-                                break;
-
-                            case EnemyType::TANK:
-                                headHeight = 2.3f;
-                                headRadius = 0.7f;
-                                break;
+                                // デバッグ値を使う
+                                switch (enemy.type)
+                                {
+                                case EnemyType::NORMAL:
+                                    config = m_normalConfigDebug;
+                                    break;
+                                case EnemyType::RUNNER:
+                                    config = m_runnerConfigDebug;
+                                    break;
+                                case EnemyType::TANK:
+                                    config = m_tankConfigDebug;
+                                    break;
+                                }
                             }
+                            else
+                            {
+                                // Entities.h の値を使う
+                                config = GetEnemyConfig(enemy.type);
+                            }
+
+                            float headHeight = config.headHeight;
+                            float headRadius = config.headRadius;
 
 
                             //	敵の頭の位置を計算
@@ -2080,7 +2436,7 @@ void Game::UpdatePlaying()
                             float dz = hitPos.z - enemy.headPosition.z;
                             float distanceToHead = sqrtf(dx * dx + dy * dy + dz * dz);
 
-                            bool isHeadShot = (distanceToHead < 0.3f);
+                            bool isHeadShot = (distanceToHead < headRadius);  // ← タイプ別の値を使う
 
                             //	ヘッドショット時の特別処理
                             if (isHeadShot && !enemy.headDestroyed)
@@ -2089,7 +2445,7 @@ void Game::UpdatePlaying()
                                 enemy.bloodDirection = shotDir;
 
                                 // 後方への大量の血（300個）
-                                    m_particleSystem->CreateBloodEffect(enemy.headPosition, shotDir, 300);
+                                m_particleSystem->CreateBloodEffect(enemy.headPosition, shotDir, 300);
 
                                 // 上方向への血の噴水（300個）
                                 DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };

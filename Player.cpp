@@ -164,7 +164,7 @@ void Player::UpdateMouseCapture(HWND window)
 {
     static bool tabPressed = false;
 
-    if (GetAsyncKeyState(VK_TAB) & 0x8000)
+    if (GetAsyncKeyState(VK_F2) & 0x8000)
     {
         if (!tabPressed)
         {
