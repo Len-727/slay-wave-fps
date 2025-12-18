@@ -4,6 +4,7 @@
 #include "Entities.h"
 #include <vector>
 #include <DirectXMath.h>
+#include <unordered_map>
 
 class EnemySystem {
 public:
@@ -51,6 +52,55 @@ public:
 	void SeMaxEnemies(int max) { m_maxEnemies = max; }
 
 private:
+    // グリッドセルのキー（X, Z座標のペア）
+    struct GridKey
+    {
+        int x;  // セルのX座標
+        int z;  // セルのZ座標
+
+        // 比較演算子（unordered_mapで必要）
+        bool operator==(const GridKey& other) const
+        {
+            return x == other.x && z == other.z;
+        }
+    };
+
+    // ハッシュ関数（GridKeyを数値に変換）
+    struct GridKeyHash
+    {
+        size_t operator()(const GridKey& key) const
+        {
+            // 2つの整数を1つのハッシュ値に変換
+            // 大きな素数を使って衝突を減らす
+            return ((size_t)key.x * 73856093) ^ ((size_t)key.z * 19349663);
+        }
+    };
+
+    // === 空間分割用の関数宣言 ===
+
+    // 座標からグリッドキーを取得
+    GridKey GetGridKey(const DirectX::XMFLOAT3& position) const;
+
+    // 空間グリッドを構築（毎フレーム呼ぶ）
+    void BuildSpatialGrid();
+
+    // 空間分割を使った衝突解決
+    void ResolveCollisionsSpatial();
+
+    // スポーン位置が他の敵と重ならないかチェック
+    bool IsPositionValid(const DirectX::XMFLOAT3& position, float minDistance) const;
+
+    // === 空間分割用のメンバ変数 ===
+
+    // セルサイズ（5m × 5m のグリッド）
+    const float CELL_SIZE = 5.0f;
+
+    // 空間ハッシュテーブル
+    // キー: GridKey（セルの座標）
+    // 値: vector<size_t>（このセル内の敵のインデックス）
+    std::unordered_map<GridKey, std::vector<size_t>, GridKeyHash> m_spatialGrid;
+
+
 	// UpdateEnemyMovement - 1体の敵の移動を更新
 	// 【役割】敵をプレイヤーに向かって動かす
 	// 【引数】enemy: 動かす敵（参照で渡すので本物を変更）

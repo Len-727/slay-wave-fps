@@ -2670,7 +2670,7 @@ void Game::UpdatePlaying()
 
                 //  カメラ(視点)空の位置から玉を発射
                 DirectX::XMFLOAT3 rayStart = playerPos;
-                rayStart.y = 0.5f;  // 固定で地面から0.5m（目の高さ）
+                rayStart.y = 1.5f;  // 固定で地面から0.5m（目の高さ）
 
                 //  射撃方向
                 DirectX::XMFLOAT3 rayDir(

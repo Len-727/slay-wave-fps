@@ -17,43 +17,51 @@ EnemySystem::EnemySystem()
 //	【役割】全ての敵を動かして、プレイヤーに近づける
 void EnemySystem::Update(float deltaTime, DirectX::XMFLOAT3 playerPos)
 {
-	//	【全ての敵を一体ずつ更新】
-	//	Enemy& = 参照(コピーせず本物を触る)なので、enemy.position を変更できる
+	// === 全ての敵を一体ずつ更新 ===
 	for (auto& enemy : m_enemies)
 	{
-		//	死んでいる敵はスキップ
+		// 死んでいる敵はスキップ
 		if (!enemy.isAlive)
 			continue;
 
-		//	===	ラグドール(吹っ飛び)	===
+		// === ラグドール（吹っ飛び） ===
 		if (enemy.isRagdoll)
 		{
-			//	位置を更新
+			// 位置を更新
 			enemy.position.x += enemy.velocity.x * deltaTime;
 			enemy.position.y += enemy.velocity.y * deltaTime;
 			enemy.position.z += enemy.velocity.z * deltaTime;
 
-			//	重力を適用(下向き加速)
-			//	9.8f = 重力加速度(メートル毎秒毎秒)
+			// 重力を適用（下向き加速）
 			enemy.velocity.y -= 9.8f * deltaTime;
 
-			//	速度を原則(空気抵抗)
+			// 速度を減衰（空気抵抗）
 			enemy.velocity.x *= 0.98f;
 			enemy.velocity.z *= 0.98f;
 
-			//	地面についたら消す
+			// 地面についたら消す
 			if (enemy.position.y <= 0.0f)
 			{
 				enemy.position.y = 0.0f;
 				enemy.isAlive = false;
 			}
 
-			continue;	//	通常の移動処理をスキップ
+			continue;  // 通常の移動処理をスキップ
 		}
 
-		//	子の敵を動かす(内部関数を呼ぶ) 
+		// === 通常の移動処理 ===
 		UpdateEnemyMovement(enemy, playerPos, deltaTime);
 	}
+
+	// ========================================
+	// === 空間分割を使った高速衝突解決 ===
+	// ========================================
+
+	// Step 1: 空間グリッドを構築
+	BuildSpatialGrid();
+
+	// Step 2: 衝突を解決（押し出し処理）
+	ResolveCollisionsSpatial();
 }
 
 //	UpdateEnemyMovement	一帯の敵の移動処理
@@ -238,118 +246,99 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 //	【役割】ランダムな位置に敵を出現させる
 void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 {
-	//	敵の数が上限に達していないか確認
-	//	【理由】敵が増えすぎるとゲームが重くなる
 	if (m_enemies.size() >= m_maxEnemies)
-		return;	//	上限に達していたら何もせず終了
+		return;
 
-	//	【ステップ２】新しい敵を作成
-	Enemy enemy;	//	空のオブジェクト
-
-	//	===	一意なIDを割り当て	===
+	Enemy enemy;
 	enemy.id = m_nextEnemyID++;
 
-	
-	//	===	ランダムに敵タイプを決定	===
-	int typeRoll = rand() % 100;	//	0 - 99 のランダム値
+	// === タイプ設定 ===
+	int typeRoll = rand() % 100;
 
 	if (typeRoll < 60)
 	{
-		//	60%の確率でNORMAL
 		enemy.type = EnemyType::NORMAL;
 		enemy.health = 100;
 		enemy.maxHealth = 100;
-		enemy.color = DirectX::XMFLOAT4(0.8f, 0.2f, 0.2f, 1.0f);	//	赤
+		enemy.color = DirectX::XMFLOAT4(0.8f, 0.2f, 0.2f, 1.0f);
 	}
-	else if(typeRoll < 85)
+	else if (typeRoll < 85)
 	{
-		//	25%の確立でRUNNNER
 		enemy.type = EnemyType::RUNNER;
 		enemy.health = 50;
 		enemy.maxHealth = 50;
-		enemy.color = DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);	//	明るい赤
+		enemy.color = DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);
 	}
-	else if(typeRoll < 99)
+	else if (typeRoll < 99)
 	{
-		//	14%の確率でTANK
 		enemy.type = EnemyType::TANK;
 		enemy.health = 300;
 		enemy.maxHealth = 300;
-		enemy.color = DirectX::XMFLOAT4(0.2f, 0.2f, 0.8f, 1.0f);	//	青
+		enemy.color = DirectX::XMFLOAT4(0.2f, 0.2f, 0.8f, 1.0f);
 	}
 	else
 	{
-		//	1%の確率で中ボス
 		enemy.type = EnemyType::MIDBOSS;
 		enemy.health = 5000;
 		enemy.maxHealth = 5000;
 		enemy.color = DirectX::XMFLOAT4(1.0f, 0.8f, 0.8f, 1.0f);
 	}
 
+	// === 重ならない位置を生成 ===
+	const float MIN_SPAWN_DISTANCE = 2.5f;
+	const int MAX_ATTEMPTS = 15;
 
-	//	===	位置の設定(プレイヤーから離れた場所)	===
-	
-	//	ランダムな角度を生成（０　～　360度）
-	//	【計算】rand() / RAND_MAX = 0.0 ～ 1.0 のランダムな値
-	//	【計算】* 2π = 0 ～ 6.28(ラジアン) = 0　～ 360度
-	float angle = (float)rand() / RAND_MAX * 2.0f * 3.14159f;
+	bool positionFound = false;
+	int attempts = 0;
 
-	//	ランダムな距離を生成(10 - 20m)
-	//	【計算】10.0 + (0.0-1.0 * 10.0) = 10.0 - 20
-	float distance = 10.0f + (float)rand() / RAND_MAX * 10.0f;
+	while (!positionFound && attempts < MAX_ATTEMPTS)
+	{
+		attempts++;
 
-	//	極座標→直交座標に変換
-	//	【数式】x = プレイヤーX + cos(角度) * 距離
-	//		   z = プレイヤーZ + sin(角度) * 距離
-	//	【効果】プレイヤー周辺いランダムに配置
-	enemy.position.x = playerPos.x + cosf(angle) * distance;
-	enemy.position.y = 0.0f;	//	地面の高さ
-	enemy.position.z = playerPos.z + sinf(angle) * distance;
+		float angle = (float)rand() / RAND_MAX * 2.0f * 3.14159f;
+		float distance = 10.0f + (float)rand() / RAND_MAX * 10.0f;
 
+		DirectX::XMFLOAT3 candidatePos;
+		candidatePos.x = playerPos.x + cosf(angle) * distance;
+		candidatePos.y = 0.0f;
+		candidatePos.z = playerPos.z + sinf(angle) * distance;
 
-	//	初期速度の設定(ランダムな方向)
-	//	【範囲】-2.0 - 2.0 m/s
-	//	【計算】(0.0-1.0 - 0.5) * 4.0 = -2.0 - 2.0
+		if (IsPositionValid(candidatePos, MIN_SPAWN_DISTANCE))
+		{
+			enemy.position = candidatePos;
+			positionFound = true;
+		}
+	}
+
+	if (!positionFound)
+	{
+		float angle = (float)rand() / RAND_MAX * 2.0f * 3.14159f;
+		float distance = 10.0f + (float)rand() / RAND_MAX * 10.0f;
+
+		enemy.position.x = playerPos.x + cosf(angle) * distance;
+		enemy.position.y = 0.0f;
+		enemy.position.z = playerPos.z + sinf(angle) * distance;
+	}
+
+	// === 初期速度 ===
 	enemy.velocity.x = ((float)rand() / RAND_MAX - 0.5f) * 4.0f;
-	enemy.velocity.y = 0.0f;	//	y軸には動かない
+	enemy.velocity.y = 0.0f;
 	enemy.velocity.z = ((float)rand() / RAND_MAX - 0.5f) * 4.0f;
 
-	// == = 見た目の設定（暗めの色） == =
+	// === ステータス ===
+	enemy.isAlive = true;
 
-		// ランダムな色を生成（暗い緑っぽい色）
-		// 【R】0.3 ? 0.5（暗い赤）
-		// 【G】0.4 ? 0.6（暗い緑）
-		// 【B】0.2（低い青）→ 緑っぽくなる
-		enemy.color = DirectX::XMFLOAT4(
-			0.3f + (float)rand() / RAND_MAX * 0.2f,  // R
-			0.4f + (float)rand() / RAND_MAX * 0.2f,  // G
-			0.2f,                                      // B
-			1.0f                                       // A（透明度：不透明）
-		);
+	// === アニメーション ===
+	enemy.currentAnimation = "Idle";
+	enemy.animationTime = 0.0f;
 
+	// === その他 ===
+	enemy.isDying = false;
+	enemy.corpseTimer = 0.0f;  // ← 既存メンバー
+	enemy.rotationY = 0.0f;    // ← 既存メンバー（rotation ではない！）
 
-		//	ステータス設定
-
-		//	HP(後でウェーブ数に応じて増やす予定)
-		enemy.maxHealth = 100;	//	最大HP
-		enemy.health = 100;		//	現在HP(最初は満タン)
-
-		//	状態フラグ
-		enemy.isAlive = true;	//	生存状態
-
-		//	移動タイマー
-		enemy.moveTimer = 0.0f;	//	0秒からスタート
-
-		//	次の方向転換までの時間(2-5秒後)
-		enemy.nextDirectionChange = 2.0f + (float)rand() / RAND_MAX * 3.0f;
-
-		enemy.touchingPlayer = false;
-
-		//	【ステップ3】配列に追加
-		//	【効果】m_enemiesの末尾に新しい敵を追加
-		m_enemies.push_back(enemy);
+	m_enemies.push_back(enemy);
 }
-
 //	\死んだ敵を配列から削除
 //	【いつ呼ばれる】Update()の最後、またはウェーブ終了時
 //	【役割】isAlive == false の敵をメモリから削除
@@ -379,3 +368,178 @@ void EnemySystem::ClearDeadEnemies()
 		m_enemies.end()	//	remove_ifが返した「ここから削除」位置
 	);
 } 
+
+// === 関数1: 座標からグリッドキーを取得 ===
+EnemySystem::GridKey EnemySystem::GetGridKey(const DirectX::XMFLOAT3& position) const
+{
+	GridKey key;
+	// 位置をセルサイズで割って、セルの座標を取得
+	// 例: position.x = 12.5, CELL_SIZE = 5.0 → key.x = 2
+	key.x = (int)floorf(position.x / CELL_SIZE);
+	key.z = (int)floorf(position.z / CELL_SIZE);
+	return key;
+}
+
+// === 関数2: 空間グリッドを構築 ===
+void EnemySystem::BuildSpatialGrid()
+{
+	// 前フレームのグリッドをクリア
+	m_spatialGrid.clear();
+
+	// 全ての敵をグリッドに登録
+	for (size_t i = 0; i < m_enemies.size(); i++)
+	{
+		const Enemy& enemy = m_enemies[i];
+
+		// 死んでる敵や死亡中の敵は無視
+		if (!enemy.isAlive || enemy.isDying)
+			continue;
+
+		// この敵が属するセルを計算
+		GridKey key = GetGridKey(enemy.position);
+
+		// セルに敵のインデックスを追加
+		m_spatialGrid[key].push_back(i);
+	}
+}
+
+// === 関数3: 空間分割を使った衝突解決 ===
+void EnemySystem::ResolveCollisionsSpatial()
+{
+	const float COLLISION_RADIUS = 0.5f;   // 敵の半径
+	const float PUSH_STRENGTH = 0.05f;     // 押し出す強さ
+	const float MIN_DISTANCE = COLLISION_RADIUS * 2.0f;  // 1.0m
+
+	// === 各セル内で衝突チェック ===
+	for (auto& cellPair : m_spatialGrid)
+	{
+		const GridKey& currentKey = cellPair.first;
+		std::vector<size_t>& enemiesInCell = cellPair.second;
+
+		// === 1. 同じセル内の敵同士をチェック ===
+		for (size_t i = 0; i < enemiesInCell.size(); i++)
+		{
+			Enemy& enemyA = m_enemies[enemiesInCell[i]];
+
+			// 攻撃中は押し出さない（群れで襲う）
+			if (enemyA.currentAnimation == "Attack")
+				continue;
+
+			for (size_t j = i + 1; j < enemiesInCell.size(); j++)
+			{
+				Enemy& enemyB = m_enemies[enemiesInCell[j]];
+
+				if (enemyB.currentAnimation == "Attack")
+					continue;
+
+				// 距離を計算
+				float dx = enemyB.position.x - enemyA.position.x;
+				float dz = enemyB.position.z - enemyA.position.z;
+				float distance = sqrtf(dx * dx + dz * dz);
+
+				// 衝突判定
+				if (distance < MIN_DISTANCE && distance > 0.001f)
+				{
+					// 押し出す方向
+					float nx = dx / distance;
+					float nz = dz / distance;
+
+					// 重なり量
+					float overlap = MIN_DISTANCE - distance;
+					float pushDistance = overlap * PUSH_STRENGTH;
+
+					// 互いに押し出す
+					enemyA.position.x -= nx * pushDistance;
+					enemyA.position.z -= nz * pushDistance;
+
+					enemyB.position.x += nx * pushDistance;
+					enemyB.position.z += nz * pushDistance;
+				}
+			}
+		}
+
+		// === 2. 隣接セルの敵ともチェック ===
+		// セルの境界付近の敵のため、隣接8セルもチェック
+		for (int dx = -1; dx <= 1; dx++)
+		{
+			for (int dz = -1; dz <= 1; dz++)
+			{
+				// 同じセルはスキップ（既にチェック済み）
+				if (dx == 0 && dz == 0)
+					continue;
+
+				// 隣接セルのキー
+				GridKey neighborKey;
+				neighborKey.x = currentKey.x + dx;
+				neighborKey.z = currentKey.z + dz;
+
+				// 隣接セルが存在するか確認
+				auto it = m_spatialGrid.find(neighborKey);
+				if (it == m_spatialGrid.end())
+					continue;  // セルが空
+
+				std::vector<size_t>& neighborsInCell = it->second;
+
+				// 現在のセルの敵 vs 隣接セルの敵
+				for (size_t i : enemiesInCell)
+				{
+					Enemy& enemyA = m_enemies[i];
+
+					if (enemyA.currentAnimation == "Attack")
+						continue;
+
+					for (size_t j : neighborsInCell)
+					{
+						Enemy& enemyB = m_enemies[j];
+
+						if (enemyB.currentAnimation == "Attack")
+							continue;
+
+						float dx = enemyB.position.x - enemyA.position.x;
+						float dz = enemyB.position.z - enemyA.position.z;
+						float distance = sqrtf(dx * dx + dz * dz);
+
+						if (distance < MIN_DISTANCE && distance > 0.001f)
+						{
+							float nx = dx / distance;
+							float nz = dz / distance;
+							float overlap = MIN_DISTANCE - distance;
+							float pushDistance = overlap * PUSH_STRENGTH;
+
+							enemyA.position.x -= nx * pushDistance;
+							enemyA.position.z -= nz * pushDistance;
+
+							enemyB.position.x += nx * pushDistance;
+							enemyB.position.z += nz * pushDistance;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+
+// === 関数4: スポーン位置が有効かチェック ===
+bool EnemySystem::IsPositionValid(const DirectX::XMFLOAT3& position, float minDistance) const
+{
+	// 全ての既存の敵との距離をチェック
+	for (const auto& existingEnemy : m_enemies)
+	{
+		// 死んでる敵や死亡中の敵は無視
+		if (!existingEnemy.isAlive || existingEnemy.isDying)
+			continue;
+
+		// 距離を計算
+		float dx = position.x - existingEnemy.position.x;
+		float dz = position.z - existingEnemy.position.z;
+		float distance = sqrtf(dx * dx + dz * dz);
+
+		// 近すぎる場合はfalse
+		if (distance < minDistance)
+			return false;
+	}
+
+	// 全ての敵から十分離れていたらtrue
+	return true;
+}
