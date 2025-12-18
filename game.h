@@ -53,7 +53,7 @@ class Game
 {
 public:
     Game() noexcept;
-    ~Game() = default;
+    ~Game();
 
     // コピー禁止（DirectXリソースは複製不可）
     Game(Game const&) = delete;
@@ -296,6 +296,7 @@ private:
     std::unique_ptr<btBroadphaseInterface> m_broadphase;
     std::unique_ptr<btSequentialImpulseConstraintSolver> m_solver;
     std::unique_ptr<btDiscreteDynamicsWorld> m_dynamicsWorld;
+    std::map<int, btRigidBody*> m_enemyPhysicsBodies;
 
     void InitPhysics();
     void CleanupPhysics();
@@ -306,4 +307,6 @@ private:
         float maxDistance
     );
     void AddEnemyPhysicsBody(Enemy& enemy);
+    void UpdateEnemyPhysicsBody(Enemy& enemy);
+    void RemoveEnemyPhysicsBody(int enemyID);
 };

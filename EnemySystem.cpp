@@ -303,7 +303,7 @@ void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 	//		   z = プレイヤーZ + sin(角度) * 距離
 	//	【効果】プレイヤー周辺いランダムに配置
 	enemy.position.x = playerPos.x + cosf(angle) * distance;
-	enemy.position.y = 1.0f;	//	地面の高さ
+	enemy.position.y = 0.0f;	//	地面の高さ
 	enemy.position.z = playerPos.z + sinf(angle) * distance;
 
 

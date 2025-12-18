@@ -78,6 +78,11 @@ Game::Game() noexcept :
    
 }
 
+Game::~Game()
+{
+    CleanupPhysics();
+}
+
 
 void Game::Initialize(HWND window, int width, int height)
 {
@@ -124,6 +129,42 @@ void Game::InitPhysics()
     OutputDebugStringA("Bullet Physics initialized!\n");
 }
 
+void Game::CleanupPhysics()
+{
+    // 全ての敵の物理ボディを削除
+    for (auto& pair : m_enemyPhysicsBodies)
+    {
+        btRigidBody* body = pair.second;
+
+        if (m_dynamicsWorld)
+        {
+            m_dynamicsWorld->removeRigidBody(body);
+        }
+
+        if (body->getMotionState())
+        {
+            delete body->getMotionState();
+        }
+        if (body->getCollisionShape())
+        {
+            delete body->getCollisionShape();
+        }
+        delete body;
+    }
+    m_enemyPhysicsBodies.clear();
+
+    OutputDebugStringA("[BULLET] All enemy physics bodies cleaned up\n");
+
+    // Bullet Physics ワールドをクリーンアップ
+    m_dynamicsWorld.reset();
+    m_solver.reset();
+    m_broadphase.reset();
+    m_dispatcher.reset();
+    m_collisionConfiguration.reset();
+
+    OutputDebugStringA("Bullet Physics cleaned up!\n");
+}
+
 //  === RayPhysics  ===
 Game::RaycastResult Game::RaycastPhysics(
     DirectX::XMFLOAT3 start,
@@ -135,6 +176,14 @@ Game::RaycastResult Game::RaycastPhysics(
     result.hitEnemy = nullptr;
     result.hitPoint = { 0, 0, 0 };
     result.hitNormal = { 0, 0, 0 };
+
+    // === デバッグ: レイの開始位置と方向を出力 ===
+    char debugBuffer[512];
+    sprintf_s(debugBuffer, "[RAYCAST] Start:(%.2f, %.2f, %.2f) Dir:(%.2f, %.2f, %.2f) Dist:%.2f\n",
+        start.x, start.y, start.z,
+        direction.x, direction.y, direction.z,
+        maxDistance);
+    OutputDebugStringA(debugBuffer);
 
     //  方向を正規化
     float length = sqrtf(
@@ -242,16 +291,19 @@ void Game::AddEnemyPhysicsBody(Enemy& enemy)
     EnemyTypeConfig config = GetEnemyConfig(enemy.type);
 
     float radius = config.bodyWidth / 2.0f;
-    float height = config.bodyHeight;
+    float totalHeight = config.bodyHeight;
+    float cylinderHeight = totalHeight - 2.0f * radius;
 
-    btCollisionShape* shape = new btCapsuleShape(radius, height);
+    if (cylinderHeight < 0.0f)
+        cylinderHeight = 0.0f;
 
-    // 位置設定
+    btCollisionShape* shape = new btCapsuleShape(radius, cylinderHeight);
+
     btTransform transform;
     transform.setIdentity();
     transform.setOrigin(btVector3(
         enemy.position.x,
-        enemy.position.y + height / 1.7f,  // カプセルの中心
+        totalHeight / 2.0f,
         enemy.position.z
     ));
 
@@ -285,10 +337,56 @@ void Game::AddEnemyPhysicsBody(Enemy& enemy)
 
     m_dynamicsWorld->addRigidBody(body);
 
+    //  === マップに保存  ===
+    m_enemyPhysicsBodies[enemy.id] = body;
+
     char buffer[256];
     sprintf_s(buffer, "[BULLET] Added body for enemy ID:%d at (%.2f, %.2f, %.2f)\n",
         enemy.id, enemy.position.x, enemy.position.y, enemy.position.z);
     OutputDebugStringA(buffer);
+}
+
+void Game::UpdateEnemyPhysicsBody(Enemy& enemy)
+{
+    auto it = m_enemyPhysicsBodies.find(enemy.id);
+    if (it == m_enemyPhysicsBodies.end())
+        return;
+
+    btRigidBody* body = it->second;
+
+    EnemyTypeConfig config = GetEnemyConfig(enemy.type);
+    float totalHeight = config.bodyHeight;
+
+    btTransform transform;
+    transform.setIdentity();
+    transform.setOrigin(btVector3(
+        enemy.position.x,
+        totalHeight / 2.0f,
+        enemy.position.z
+    ));
+
+    body->setWorldTransform(transform);
+
+    if (body->getMotionState())
+    {
+        body->getMotionState()->setWorldTransform(transform);
+    }
+}
+
+void Game::RemoveEnemyPhysicsBody(int enemyID)
+{
+    auto it = m_enemyPhysicsBodies.find(enemyID);
+    if (it == m_enemyPhysicsBodies.end())
+        return;
+
+    btRigidBody* body = it->second;
+    m_dynamicsWorld->removeRigidBody(body);
+
+    delete body->getMotionState();
+    delete body->getCollisionShape();
+    delete body;
+
+    m_enemyPhysicsBodies.erase(it);
 }
 
 void Game::Tick()
@@ -2232,7 +2330,7 @@ void Game::UpdatePlaying()
         f1Pressed = false;
     }
 
-    float dt = 1.0f / 60.0f;
+    float deltaTime = 1.0f / 60.0f;
 
     // === 敵に物理ボディを追加（まだ追加されてない敵のみ）===
     static bool enemiesInitialized = false;
@@ -2253,7 +2351,7 @@ void Game::UpdatePlaying()
     // === 弾の軌跡を更新 ===
     for (auto it = m_bulletTraces.begin(); it != m_bulletTraces.end();)
     {
-        it->lifetime -= dt;
+        it->lifetime -= deltaTime;
         if (it->lifetime <= 0.0f)
         {
             it = m_bulletTraces.erase(it);
@@ -2572,7 +2670,7 @@ void Game::UpdatePlaying()
 
                 //  カメラ(視点)空の位置から玉を発射
                 DirectX::XMFLOAT3 rayStart = playerPos;
-                rayStart.y = playerPos.y + 0.3f;    //  目の高さ
+                rayStart.y = 0.5f;  // 固定で地面から0.5m（目の高さ）
 
                 //  射撃方向
                 DirectX::XMFLOAT3 rayDir(
@@ -2777,6 +2875,9 @@ void Game::UpdatePlaying()
                                 hitEnemy->currentAnimation = "Death";
                                 hitEnemy->animationTime = 0.0f;
                                 hitEnemy->corpseTimer = 5.0f;
+
+                                // === 追加: 死んだ瞬間に物理ボディを削除 ===
+                                RemoveEnemyPhysicsBody(hitEnemy->id);
                             }
 
                             // ポイント加算
@@ -2866,23 +2967,32 @@ void Game::UpdatePlaying()
     //  【型】DirectX::XMFLOAT3
     //  【意味】プレイヤーの現在位置
     //  【用途】敵がプレイヤーに向かって動くため
-    m_enemySystem->Update(1.0f / 60.0f, m_player->GetPosition());
+    m_enemySystem->Update(deltaTime, m_player->GetPosition());
 
     //  === 敵の「移動・回転・アニメーション更新・死亡」をまとめて制御するループ   ===
     DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
 
     for (auto& enemy : m_enemySystem->GetEnemies())
     {
-        if (!enemy.isAlive && !enemy.isDying)
-            continue;
+        if (enemy.isAlive && !enemy.isDying)
+        {
+            UpdateEnemyPhysicsBody(enemy);
+        }
 
+        // === 死亡処理 ===
         if (enemy.isDying)
         {
-            enemy.corpseTimer -= dt;
+            // 死亡アニメーション中の処理
+            enemy.corpseTimer -= deltaTime;
+
             if (enemy.corpseTimer <= 0.0f)
             {
+                // 死体タイマーが切れた = 完全に削除
                 enemy.isAlive = false;
                 enemy.isDying = false;
+
+                // 物理ボディを削除（まだ残ってたら）
+                RemoveEnemyPhysicsBody(enemy.id);
                 continue;
             }
         }
@@ -2897,7 +3007,7 @@ void Game::UpdatePlaying()
             if (enemy.isDying)
             {
                 //  死亡中: 終端で完全に止める
-                enemy.animationTime += dt;
+                enemy.animationTime += deltaTime;
                 if (enemy.animationTime >= duration)
                 {
                     enemy.animationTime = duration - 0.001f;  // 終端で固定
@@ -2906,7 +3016,7 @@ void Game::UpdatePlaying()
             else
             {
                 //  通常: ループさせる
-                enemy.animationTime += dt;
+                enemy.animationTime += deltaTime;
                 if (enemy.animationTime >= duration)
                 {
                     enemy.animationTime = 0.0f;
@@ -2951,7 +3061,7 @@ void Game::UpdatePlaying()
             );
         }
     }
-
+    UpdatePhysics(deltaTime);
 
     //  死んだ敵を削除 毎フレーム敵を削除しないと、配列か肥大化
     m_enemySystem->ClearDeadEnemies();  //  追加
@@ -3210,4 +3320,14 @@ void Game::ShutdownImGui()
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
+}
+
+void Game::UpdatePhysics(float deltaTime)
+{
+    if (m_dynamicsWorld)
+    {
+        // 物理シミュレーションを1ステップ進める
+        // これにより、手動で動かしたKinematic ObjectのAABB(境界ボックス)も更新されます
+        m_dynamicsWorld->stepSimulation(deltaTime, 10);
+    }
 }
