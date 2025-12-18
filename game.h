@@ -32,6 +32,9 @@
 #include <imgui.h>
 #include <imgui_impl_win32.h>
 #include <imgui_impl_dx11.h>
+#include <btBulletDynamicsCommon.h>
+#include <btBulletCollisionCommon.h>
+
 
 #include "Entities.h"
 #include "InstanceData.h"
@@ -271,8 +274,36 @@ private:
     void DrawHitboxes();
 
     //  === リアルタイム調整用のコンフィグ ===
-    EnemyTypeConfig m_normalConfigDebug;
+    EnemyTypeConfig
+    m_normalConfigDebug;
     EnemyTypeConfig m_runnerConfigDebug;
     EnemyTypeConfig m_tankConfigDebug;
     bool m_useDebugHitboxes;  // デバッグ値を使うかどうか
+
+
+    //  === Bullet Physics構造体   ===
+    struct RaycastResult
+    {
+        bool hit;                       //  ヒットしたか
+        DirectX::XMFLOAT3 hitPoint;     //  ヒット位置
+        DirectX::XMFLOAT3 hitNormal;    //  ヒット法線
+        Enemy* hitEnemy;                //  ヒットした敵(nullptr = 壁)
+    };
+
+    //  === Bullet Physics ===
+    std::unique_ptr<btDefaultCollisionConfiguration> m_collisionConfiguration;
+    std::unique_ptr<btCollisionDispatcher> m_dispatcher;
+    std::unique_ptr<btBroadphaseInterface> m_broadphase;
+    std::unique_ptr<btSequentialImpulseConstraintSolver> m_solver;
+    std::unique_ptr<btDiscreteDynamicsWorld> m_dynamicsWorld;
+
+    void InitPhysics();
+    void CleanupPhysics();
+    void UpdatePhysics(float deltaTime);
+    RaycastResult RaycastPhysics(
+        DirectX::XMFLOAT3 start,
+        DirectX::XMFLOAT3 direction,
+        float maxDistance
+    );
+    void AddEnemyPhysicsBody(Enemy& enemy);
 };

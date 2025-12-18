@@ -9,6 +9,7 @@
 EnemySystem::EnemySystem()
 	: m_maxEnemies(100)			//	最大的数：　２４体
 	, m_enemySpawnTimer(0.0f)	//	スポーンタイマー:	０秒からスタート
+	, m_nextEnemyID(0)
 {
 	//	m_enemies　は空の配列として自動初期化される
 }
@@ -244,6 +245,9 @@ void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 
 	//	【ステップ２】新しい敵を作成
 	Enemy enemy;	//	空のオブジェクト
+
+	//	===	一意なIDを割り当て	===
+	enemy.id = m_nextEnemyID++;
 
 	
 	//	===	ランダムに敵タイプを決定	===

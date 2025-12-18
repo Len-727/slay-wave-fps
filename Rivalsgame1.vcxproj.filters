@@ -40,6 +40,15 @@
     <Filter Include="imgui-master\backends">
       <UniqueIdentifier>{caa134ce-c7e2-47cb-99e9-e225c9d7fbf9}</UniqueIdentifier>
     </Filter>
+    <Filter Include="External">
+      <UniqueIdentifier>{e8ea6f93-724b-4010-beaa-4acf7cb5b39a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="External\bullet">
+      <UniqueIdentifier>{d25145a6-0699-4b22-aae8-dc928f910224}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="External\bullet\include">
+      <UniqueIdentifier>{9c17444c-9017-4db4-97f5-860d3b1c8d76}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -194,6 +203,12 @@
     </ClInclude>
     <ClInclude Include="imgui-master\backends\imgui_impl_win32.h">
       <Filter>imgui-master\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="External\bullet\include\btBulletCollisionCommon.h">
+      <Filter>External\bullet\include</Filter>
+    </ClInclude>
+    <ClInclude Include="External\bullet\include\btBulletDynamicsCommon.h">
+      <Filter>External\bullet\include</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

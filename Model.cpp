@@ -1264,10 +1264,10 @@ float animationTime)
 	//	===	アニメーションが存在しているか確認	===
 	auto it = m_animations.find(animationName);
 	if (it == m_animations.end())
-	{
+	{/*
 		OutputDebugStringA("Model::DrawInstanced - Animation not found: ");
 		OutputDebugStringA(animationName.c_str());
-		OutputDebugStringA("\n");
+		OutputDebugStringA("\n");*/
 		return;
 	}
 
@@ -1353,11 +1353,11 @@ float animationTime)
 		}
 	}
 
-	//	デバッグ出力
-	char debug[256];
-	sprintf_s(debug, "DrawInstanced: %zu instances, anim=%s, time=%.2f\n",
-		instances.size(), animationName.c_str(), animationTime);
-	OutputDebugStringA(debug);
+	////	デバッグ出力
+	//char debug[256];
+	//sprintf_s(debug, "DrawInstanced: %zu instances, anim=%s, time=%.2f\n",
+	//	instances.size(), animationName.c_str(), animationTime);
+	//OutputDebugStringA(debug);
 
 }
 

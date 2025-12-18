@@ -135,9 +135,9 @@ inline EnemyTypeConfig GetEnemyConfig(EnemyType type)
 
 	case EnemyType::RUNNER:
 		config.bodyWidth = 0.40f;
-		config.bodyHeight = 1.23f;
-		config.headHeight = 1.59f;
-		config.headRadius = 0.36f;
+		config.bodyHeight = 1.32f;
+		config.headHeight = 1.47f;
+		config.headRadius = 0.20f;
 		config.health = 50;
 		config.speedMultiplier = 2.0f;
 		config.color = DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);  // ñæÇÈÇ¢ê‘
@@ -161,6 +161,7 @@ inline EnemyTypeConfig GetEnemyConfig(EnemyType type)
 
 //	ìG
 struct Enemy {
+	int id;	//	ìGÇÃàÍà”ID
 	DirectX::XMFLOAT3 position;
 	DirectX::XMFLOAT3 velocity;
 	DirectX::XMFLOAT4 color;

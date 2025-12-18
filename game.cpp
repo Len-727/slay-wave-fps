@@ -10,7 +10,14 @@
 
 // DirectXTK用
 #pragma comment(lib, "DirectXTK.lib")
+
+//  Effekseer
 #pragma comment(lib, "Effekseer.lib")
+
+//  Bullet Physics
+#pragma comment(lib, "BulletDynamics.lib")
+#pragma comment(lib, "BulletCollision.lib")
+#pragma comment(lib, "LinearMath.lib")
 
 
 using namespace DirectX;
@@ -83,6 +90,205 @@ void Game::Initialize(HWND window, int width, int height)
     CreateResources();
 
     CreateRenderResources();  // 3D描画用の初期化
+
+    //  === Bullet Physics 初期化  ===
+    InitPhysics();
+
+}
+
+void Game::InitPhysics()
+{
+    // 衝突設定
+    m_collisionConfiguration =
+        std::make_unique<btDefaultCollisionConfiguration>();
+
+    // ディスパッチャー
+    m_dispatcher =
+        std::make_unique<btCollisionDispatcher>(m_collisionConfiguration.get());
+
+    // ブロードフェーズ
+    m_broadphase = std::make_unique<btDbvtBroadphase>();
+
+    // ソルバー
+    m_solver =
+        std::make_unique<btSequentialImpulseConstraintSolver>();
+
+    // ワールド作成
+    m_dynamicsWorld = std::make_unique<btDiscreteDynamicsWorld>(
+        m_dispatcher.get(),
+        m_broadphase.get(),
+        m_solver.get(),
+        m_collisionConfiguration.get()
+    );
+
+    OutputDebugStringA("Bullet Physics initialized!\n");
+}
+
+//  === RayPhysics  ===
+Game::RaycastResult Game::RaycastPhysics(
+    DirectX::XMFLOAT3 start,
+    DirectX::XMFLOAT3 direction,
+    float maxDistance)
+{
+    RaycastResult result;
+    result.hit = false;
+    result.hitEnemy = nullptr;
+    result.hitPoint = { 0, 0, 0 };
+    result.hitNormal = { 0, 0, 0 };
+
+    //  方向を正規化
+    float length = sqrtf(
+        direction.x * direction.x +
+        direction.y * direction.y +
+        direction.z * direction.z
+    );
+
+    if (length < 0.0001f)
+        return result;
+
+    direction.x /= length;
+    direction.y /= length;
+    direction.z /= length;
+
+    //  レイの始点と終点
+    btVector3 rayStart(start.x, start.y, start.z);
+    btVector3 rayEnd(
+        start.x + direction.x * maxDistance,
+        start.y + direction.y * maxDistance,
+        start.z + direction.z * maxDistance
+    );
+
+    //  レイキャスト実行
+    btCollisionWorld::ClosestRayResultCallback rayCallback(
+        rayStart,
+        rayEnd
+    );
+
+    //  全てのオブジェクトと衝突判定
+    rayCallback.m_collisionFilterMask = -1;
+
+    m_dynamicsWorld->rayTest(rayStart, rayEnd, rayCallback);
+
+    if (rayCallback.hasHit())
+    {
+        result.hit = true;
+
+        //  ヒット位置取得
+        result.hitPoint.x = rayCallback.m_hitPointWorld.getX();
+        result.hitPoint.y = rayCallback.m_hitPointWorld.getY();
+        result.hitPoint.z = rayCallback.m_hitPointWorld.getZ();
+
+        //  ヒット法線取得
+        result.hitNormal.x = rayCallback.m_hitNormalWorld.getX();
+        result.hitNormal.y = rayCallback.m_hitNormalWorld.getY();
+        result.hitNormal.z = rayCallback.m_hitNormalWorld.getZ();
+
+        // === UserPointer から敵IDを取得 ===
+        const btCollisionObject* hitObj = rayCallback.m_collisionObject;
+        void* userPtr = hitObj->getUserPointer();
+
+        if (userPtr != nullptr)
+        {
+            // void* を int に変換
+            int enemyID = (int)(intptr_t)userPtr;
+
+            // IDから敵を検索
+            for (auto& enemy : m_enemySystem->GetEnemies())
+            {
+                if (enemy.id == enemyID && enemy.isAlive)
+                {
+                    result.hitEnemy = &enemy;
+
+                    char buffer[512];
+                    sprintf_s(buffer,
+                        "[BULLET] ★★★ HIT ENEMY! ★★★ ID:%d at (%.2f, %.2f, %.2f) - Enemy at (%.2f, %.2f, %.2f)\n",
+                        enemyID,
+                        result.hitPoint.x, result.hitPoint.y, result.hitPoint.z,
+                        enemy.position.x, enemy.position.y, enemy.position.z);
+                    OutputDebugStringA(buffer);
+                    break;
+                }
+            }
+
+            if (result.hitEnemy == nullptr)
+            {
+                // IDが見つからない = 死んだ敵か壁
+                char buffer[256];
+                sprintf_s(buffer, "[BULLET] Hit dead enemy or wall (ID:%d)\n", enemyID);
+                OutputDebugStringA(buffer);
+            }
+        }
+        else
+        {
+            // 壁に当たった
+            char buffer[256];
+            sprintf_s(buffer,
+                "[BULLET] Raycast HIT WALL at (%.2f, %.2f, %.2f)\n",
+                result.hitPoint.x, result.hitPoint.y, result.hitPoint.z);
+            OutputDebugStringA(buffer);
+        }
+    }
+    else
+    {
+        OutputDebugStringA("[BULLET] Raycast MISS\n");
+    }
+
+    return result;
+}
+
+void Game::AddEnemyPhysicsBody(Enemy& enemy)
+{
+    //  カプセル形状を生成
+    EnemyTypeConfig config = GetEnemyConfig(enemy.type);
+
+    float radius = config.bodyWidth / 2.0f;
+    float height = config.bodyHeight;
+
+    btCollisionShape* shape = new btCapsuleShape(radius, height);
+
+    // 位置設定
+    btTransform transform;
+    transform.setIdentity();
+    transform.setOrigin(btVector3(
+        enemy.position.x,
+        enemy.position.y + height / 1.7f,  // カプセルの中心
+        enemy.position.z
+    ));
+
+    //  モーションステート
+    btDefaultMotionState* motionState = new btDefaultMotionState(transform);
+
+    //  剛体作成（静的: mass = 0）
+    btScalar mass = 0.0f;
+    btVector3 localInertia(0, 0, 0);
+
+    btRigidBody::btRigidBodyConstructionInfo rbInfo(
+        mass,
+        motionState,
+        shape,
+        localInertia
+    );
+
+    btRigidBody* body = new btRigidBody(rbInfo);
+
+    //  キネマティックフラグを設定（レイキャストに当たるようにする）
+    body->setCollisionFlags(
+        body->getCollisionFlags() |
+        btCollisionObject::CF_KINEMATIC_OBJECT
+    );
+
+    //  常にアクティブにする
+    body->setActivationState(DISABLE_DEACTIVATION);
+
+    // === 重要: 敵のIDを保存（ポインタではなくID） ===
+    body->setUserPointer((void*)(intptr_t)enemy.id);  // ← 修正！int を void* にキャスト
+
+    m_dynamicsWorld->addRigidBody(body);
+
+    char buffer[256];
+    sprintf_s(buffer, "[BULLET] Added body for enemy ID:%d at (%.2f, %.2f, %.2f)\n",
+        enemy.id, enemy.position.x, enemy.position.y, enemy.position.z);
+    OutputDebugStringA(buffer);
 }
 
 void Game::Tick()
@@ -1539,7 +1745,7 @@ float Game::CheckRayIntersection(
     XMVECTOR vEnemyPos = XMLoadFloat3(&enemyPos);
 
     // 平行移動（敵を原点に）
-    XMVECTOR vLocalOrigin = vRayOrigin - vEnemyPos;
+    XMVECTOR vLocalOrigin = XMVectorSubtract(vRayOrigin,vEnemyPos);
 
     // 逆回転（敵の回転の逆をレイにかける）
     XMMATRIX matInvRot = XMMatrixRotationY(-enemyRotationY);
@@ -1780,10 +1986,14 @@ void Game::DrawWeapon()
     DirectX::XMVECTOR up = DirectX::XMVector3Cross(forward, right);
 
     // === FPS風の位置（右下）===
-    DirectX::XMVECTOR weaponPos = cameraPosition +
-        right * (0.25f + m_weaponSwayX * 0.1f) +
-        up * (-0.35f + m_weaponSwayY * 0.1f) +
-        forward * 0.5f;
+    DirectX::XMVECTOR rightOffset = XMVectorScale(right, 0.25f + m_weaponSwayX * 0.1f);
+    DirectX::XMVECTOR upOffset = XMVectorScale(up, -0.35f + m_weaponSwayY * 0.1f);
+    DirectX::XMVECTOR forwardOffset = XMVectorScale(forward, 0.5f);
+
+    DirectX::XMVECTOR weaponPos = cameraPosition;
+    weaponPos = XMVectorAdd(weaponPos, rightOffset);
+    weaponPos = XMVectorAdd(weaponPos, upOffset);
+    weaponPos = XMVectorAdd(weaponPos, forwardOffset);
 
     // === スケール ===
     DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(0.25f, 0.25f, 0.25f);
@@ -2022,12 +2232,28 @@ void Game::UpdatePlaying()
         f1Pressed = false;
     }
 
-    float deltaTime = 1.0f / 60.0f;
+    float dt = 1.0f / 60.0f;
+
+    // === 敵に物理ボディを追加（まだ追加されてない敵のみ）===
+    static bool enemiesInitialized = false;
+    if (!enemiesInitialized && m_enemySystem->GetEnemies().size() > 0)
+    {
+        OutputDebugStringA("Initializing enemy physics bodies...\n");
+        for (auto& enemy : m_enemySystem->GetEnemies())
+        {
+            if (enemy.isAlive)
+            {
+                AddEnemyPhysicsBody(enemy);
+            }
+        }
+        enemiesInitialized = true;
+        OutputDebugStringA("Enemy physics bodies initialized!\n");
+    }
 
     // === 弾の軌跡を更新 ===
     for (auto it = m_bulletTraces.begin(); it != m_bulletTraces.end();)
     {
-        it->lifetime -= deltaTime;
+        it->lifetime -= dt;
         if (it->lifetime <= 0.0f)
         {
             it = m_bulletTraces.erase(it);
@@ -2071,12 +2297,12 @@ void Game::UpdatePlaying()
         m_cameraShake *= 0.9f;
     }
 
-    float dt = (1.0f / 60.0f) * m_timeScale;
+    float deltatime = (1.0f / 60.0f) * m_timeScale;
 
 
     m_frameCount++;
 
-    m_fpsTimer += deltaTime;
+    m_fpsTimer += deltatime;
 
     if (m_fpsTimer >= 1.0f)
     {
@@ -2346,13 +2572,13 @@ void Game::UpdatePlaying()
 
                 //  カメラ(視点)空の位置から玉を発射
                 DirectX::XMFLOAT3 rayStart = playerPos;
-                rayStart.y = playerPos.y + 0.5f;    //  目の高さ
+                rayStart.y = playerPos.y + 0.3f;    //  目の高さ
 
                 //  射撃方向
                 DirectX::XMFLOAT3 rayDir(
-                    sinf(playerRot.y)* cosf(playerRot.x),
+                    sinf(playerRot.y) * cosf(playerRot.x),
                     -sinf(playerRot.x),
-                    cosf(playerRot.y)* cosf(playerRot.x)
+                    cosf(playerRot.y) * cosf(playerRot.x)
                 );
 
                 // 散弾の場合はランダムに広がる
@@ -2365,243 +2591,229 @@ void Game::UpdatePlaying()
                     shotDir.z += ((float)rand() / RAND_MAX - 0.5f) * spread;
                 }
 
-                //  当たり判定のチェック
-                bool hit = false;
+                // === Bullet Physics でレイキャスト ===
+                auto rayResult = RaycastPhysics(rayStart, shotDir, 100.0f);
 
-                if (!hit)
+                if (rayResult.hit)
                 {
-                    for (auto& enemy : m_enemySystem->GetEnemies())
+                    // === ヒット成功！ ===
+
+                    // 弾道を記録
+                    // 弾道を記録
+                    BulletTrace trace;
+                    trace.start = rayStart;
+                    trace.end = rayResult.hitPoint;  // ← rayResult.hitPoint
+                    trace.lifetime = 0.5f;
+                    m_bulletTraces.push_back(trace);
+
+                    // UserPointer から敵を取得
+                    Enemy* hitEnemy = rayResult.hitEnemy;
+
+                    if (hitEnemy != nullptr)
                     {
-                        if (!enemy.isAlive || enemy.isDying)
-                            continue;
+                        // === 敵にヒット！ ===
 
-                        float hitDistance = CheckRayIntersection(rayStart, shotDir, enemy.position, enemy.rotationY, enemy.type);
-
-                        if (hitDistance > 0.0f)
+                        // 設定取得（デバッグモード対応）
+                        EnemyTypeConfig config;
+                        if (m_useDebugHitboxes)
                         {
-                            hit = true;
-
-                            // === 弾の軌跡を記録 ===
-                            BulletTrace trace;
-                            trace.start = rayStart;
-                            trace.end.x = rayStart.x + shotDir.x * hitDistance;
-                            trace.end.y = rayStart.y + shotDir.y * hitDistance;
-                            trace.end.z = rayStart.z + shotDir.z * hitDistance;
-                            trace.lifetime = 0.5f;  // 0.5秒表示
-                            m_bulletTraces.push_back(trace);
-
-                            // === 設定を取得（デバッグモード対応）===
-                            EnemyTypeConfig config;
-
-                            if (m_useDebugHitboxes)
+                            switch (hitEnemy->type)
                             {
-                                // デバッグ値を使う
-                                switch (enemy.type)
+                            case EnemyType::NORMAL:
+                                config = m_normalConfigDebug;
+                                break;
+                            case EnemyType::RUNNER:
+                                config = m_runnerConfigDebug;
+                                break;
+                            case EnemyType::TANK:
+                                config = m_tankConfigDebug;
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            config = GetEnemyConfig(hitEnemy->type);
+                        }
+
+                        // 頭の位置計算
+                        hitEnemy->headPosition.x = hitEnemy->position.x;
+                        hitEnemy->headPosition.y = hitEnemy->position.y + config.headHeight;
+                        hitEnemy->headPosition.z = hitEnemy->position.z;
+
+                        // ヘッドショット判定
+                        float dx = rayResult.hitPoint.x - hitEnemy->headPosition.x;
+                        float dy = rayResult.hitPoint.y - hitEnemy->headPosition.y;
+                        float dz = rayResult.hitPoint.z - hitEnemy->headPosition.z;
+                        float distanceToHead = sqrtf(dx * dx + dy * dy + dz * dz);
+
+                        bool isHeadShot = (distanceToHead < config.headRadius);
+
+                        if (isHeadShot && !hitEnemy->headDestroyed)
+                        {
+                            // === ヘッドショット処理 ===
+                            OutputDebugStringA("[BULLET] HEADSHOT!\n");
+
+                            hitEnemy->headDestroyed = true;
+                            hitEnemy->bloodDirection = shotDir;
+
+                            // 血のエフェクト（後方）
+                            m_particleSystem->CreateBloodEffect(hitEnemy->headPosition, shotDir, 300);
+
+                            // 血のエフェクト（上方）
+                            DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
+                            m_particleSystem->CreateBloodEffect(hitEnemy->headPosition, upDir, 300);
+
+                            // 放射状の血
+                            for (int i = 0; i < 12; i++)
+                            {
+                                float angle = (i / 12.0f) * 6.28318f;
+                                DirectX::XMFLOAT3 radialDir;
+                                radialDir.x = cosf(angle);
+                                radialDir.y = 0.3f + (rand() % 100) / 200.0f;
+                                radialDir.z = sinf(angle);
+                                m_particleSystem->CreateBloodEffect(hitEnemy->headPosition, radialDir, 50);
+                            }
+
+                            // ランダム方向の血
+                            for (int i = 0; i < 4; i++)
+                            {
+                                DirectX::XMFLOAT3 randomDir;
+                                randomDir.x = ((rand() % 200) - 100) / 100.0f;
+                                randomDir.y = ((rand() % 100) + 50) / 100.0f;
+                                randomDir.z = ((rand() % 200) - 100) / 100.0f;
+                                m_particleSystem->CreateBloodEffect(hitEnemy->headPosition, randomDir, 50);
+                            }
+
+                            m_particleSystem->CreateExplosion(hitEnemy->headPosition);
+
+                            // ダメージ
+                            hitEnemy->health = 0;
+
+                            // 吹っ飛ばす
+                            hitEnemy->isRagdoll = true;
+                            hitEnemy->velocity.x = shotDir.x * 15.0f;
+                            hitEnemy->velocity.y = 8.0f;
+                            hitEnemy->velocity.z = shotDir.z * 15.0f;
+
+                            // Effekseer エフェクト
+                            if (m_effekseerManager != nullptr && m_effectBlood != nullptr)
+                            {
+                                auto handle = m_effekseerManager->Play(
+                                    m_effectBlood,
+                                    hitEnemy->headPosition.x,
+                                    hitEnemy->headPosition.y,
+                                    hitEnemy->headPosition.z
+                                );
+                                m_effekseerManager->SetScale(handle, 2.0f, 2.0f, 2.0f);
+                            }
+
+                            // ヒットストップ
+                            m_timeScale = 0.0f;
+                            m_hitStopTimer = 0.15f;
+
+                            // スローモーション
+                            m_timeScale = 0.15f;
+                            m_slowMoTimer = 0.5f;
+
+                            // カメラシェイク
+                            m_cameraShake = 0.3f;
+                            m_cameraShakeTimer = 0.5f;
+                        }
+                        else
+                        {
+                            // === ボディショット処理 ===
+                            OutputDebugStringA("[BULLET] Body shot\n");
+
+                            m_particleSystem->CreateBloodEffect(rayResult.hitPoint, shotDir, 15);
+                            hitEnemy->health -= weapon.damage;
+
+                            // ヒットストップ（軽め）
+                            m_timeScale = 0.1f;
+                            m_hitStopTimer = 0.03f;
+
+                            // カメラシェイク（軽め）
+                            m_cameraShake = 0.05f;
+                            m_cameraShakeTimer = 0.1f;
+
+                            // 死亡時の吹っ飛ばし
+                            if (hitEnemy->health <= 0.0f)
+                            {
+                                hitEnemy->isRagdoll = true;
+                                float knockbackPower = 10.0f;
+
+                                switch (currentWeapon)
                                 {
-                                case EnemyType::NORMAL:
-                                    config = m_normalConfigDebug;
+                                case WeaponType::PISTOL:
+                                    knockbackPower = 8.0f;
                                     break;
-                                case EnemyType::RUNNER:
-                                    config = m_runnerConfigDebug;
+                                case WeaponType::SHOTGUN:
+                                    knockbackPower = 25.0f;
                                     break;
-                                case EnemyType::TANK:
-                                    config = m_tankConfigDebug;
+                                case WeaponType::RIFLE:
+                                    knockbackPower = 12.0f;
+                                    break;
+                                case WeaponType::SNIPER:
+                                    knockbackPower = 20.0f;
                                     break;
                                 }
+
+                                hitEnemy->velocity.x = shotDir.x * knockbackPower;
+                                hitEnemy->velocity.y = 5.0f;
+                                hitEnemy->velocity.z = shotDir.z * knockbackPower;
                             }
-                            else
+                        }
+
+                        // ノックバック
+                        float knockbackStrength = isHeadShot ? 0.5f : 0.2f;
+                        hitEnemy->position.x += shotDir.x * knockbackStrength;
+                        hitEnemy->position.z += shotDir.z * knockbackStrength;
+
+                        // 死亡処理
+                        if (hitEnemy->health <= 0)
+                        {
+                            if (!hitEnemy->isDying)
                             {
-                                // Entities.h の値を使う
-                                config = GetEnemyConfig(enemy.type);
+                                hitEnemy->isDying = true;
+                                hitEnemy->currentAnimation = "Death";
+                                hitEnemy->animationTime = 0.0f;
+                                hitEnemy->corpseTimer = 5.0f;
                             }
 
-                            float headHeight = config.headHeight;
-                            float headRadius = config.headRadius;
+                            // ポイント加算
+                            int waveBonus = m_waveManager->OnEnemyKilled();
+                            int totalPoints = (isHeadShot ? 150 : 60) + waveBonus;
+                            m_player->AddPoints(totalPoints);
 
+                            // ダメージ表示
+                            m_showDamageDisplay = true;
+                            m_damageDisplayTimer = 2.0f;
+                            m_damageDisplayPos = hitEnemy->position;
+                            m_damageDisplayPos.y += 2.0f;
+                            m_damageValue = isHeadShot ? 150 : 60;
 
-                            //	敵の頭の位置を計算
-                            enemy.headPosition.x = enemy.position.x;
-                            enemy.headPosition.y = enemy.position.y + headHeight;
-                            enemy.headPosition.z = enemy.position.z;
-
-                            //	ヒット位置を計算
-                            DirectX::XMFLOAT3 hitPos;
-                            hitPos.x = rayStart.x + shotDir.x * hitDistance;
-                            hitPos.y = rayStart.y + shotDir.y * hitDistance;
-                            hitPos.z = rayStart.z + shotDir.z * hitDistance;
-
-                            //	頭に当たったか判定（球体の当たり判定）
-                            float dx = hitPos.x - enemy.headPosition.x;
-                            float dy = hitPos.y - enemy.headPosition.y;
-                            float dz = hitPos.z - enemy.headPosition.z;
-                            float distanceToHead = sqrtf(dx * dx + dy * dy + dz * dz);
-
-                            bool isHeadShot = (distanceToHead < headRadius);  // ← タイプ別の値を使う
-
-                            //	ヘッドショット時の特別処理
-                            if (isHeadShot && !enemy.headDestroyed)
-                            {
-                                enemy.headDestroyed = true;
-                                enemy.bloodDirection = shotDir;
-
-                                // 後方への大量の血（300個）
-                                m_particleSystem->CreateBloodEffect(enemy.headPosition, shotDir, 300);
-
-                                // 上方向への血の噴水（300個）
-                                DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
-                                m_particleSystem->CreateBloodEffect(enemy.headPosition, upDir, 300);
-
-                                // 放射状に飛び散る血（12方向 × 50個 = 600個）
-                                for (int i = 0; i < 12; i++)
-                                {
-                                    float angle = (i / 12.0f) * 6.28318f;
-                                    DirectX::XMFLOAT3 radialDir;
-                                    radialDir.x = cosf(angle);
-                                    radialDir.y = 0.3f + (rand() % 100) / 200.0f;  // ランダムな高さ
-                                    radialDir.z = sinf(angle);
-                                    m_particleSystem->CreateBloodEffect(enemy.headPosition, radialDir, 50);
-                                }
-
-                                // ランダム方向への追加の血（200個）
-                                for (int i = 0; i < 4; i++)
-                                {
-                                    DirectX::XMFLOAT3 randomDir;
-                                    randomDir.x = ((rand() % 200) - 100) / 100.0f;
-                                    randomDir.y = ((rand() % 100) + 50) / 100.0f;
-                                    randomDir.z = ((rand() % 200) - 100) / 100.0f;
-                                    m_particleSystem->CreateBloodEffect(enemy.headPosition, randomDir, 50);
-                                }
-
-                                m_particleSystem->CreateExplosion(enemy.headPosition);
-                                enemy.health = 0;
-
-                                //  === 敵を吹っ飛ばす ===
-                                enemy.isRagdoll = true;
-                                enemy.velocity.x = shotDir.x * 15.0f;   //  撃った方向に早く
-                                enemy.velocity.y = 8.0f;                //  上にはねる
-                                enemy.velocity.z = shotDir.z * 15.0f;   //  撃った方向に早く
-
-                                //  === エフェクト再生 ===
-                                if (m_effekseerManager != nullptr && m_effectBlood != nullptr)
-                                {
-                                    //  敵の頭の位置で再生
-                                    auto handle = m_effekseerManager->Play(
-                                        m_effectBlood,
-                                        enemy.headPosition.x,
-                                        enemy.headPosition.y,
-                                        enemy.headPosition.z
-                                    );
-                                    //  サイズ２倍
-                                    m_effekseerManager->SetScale(handle, 2.0f, 2.0f, 2.0f);
-                                }
-
-                                //  === ヒットストップ発動   ===
-                                m_timeScale = 0.0f;     //  完全停止
-                                m_hitStopTimer = 0.15f; //  0.08秒
-
-                                //  === スローモーション適用  ===
-                                m_timeScale = 0.15f;
-                                m_slowMoTimer = 0.5f;
-
-                                //  === カメラシェイク適用   ===
-                                m_cameraShake = 0.3f;
-                                m_cameraShakeTimer = 0.5f;
-
-
-                                OutputDebugStringA("=== HEADSHOT! HEAD DESTROYED! ===\n");
-                            }
-                            else
-                            {
-                                m_particleSystem->CreateBloodEffect(hitPos, shotDir, 15);
-                                enemy.health -= weapon.damage;
-
-                                //  ヒットストップ発動(通常ヒット)
-                                m_timeScale = 0.1f;     //  10%速度
-                                m_hitStopTimer = 0.03f; //  0.03秒
-
-                                //  軽いカメラシェイク
-                                m_cameraShake = 0.05f;
-                                m_cameraShakeTimer = 0.1f;
-
-                                //  HPが0になったら吹っ飛ばす(武器ごとに強さを変える)
-                                if (enemy.health <= 0.0f)
-                                {
-                                    enemy.isRagdoll = true;
-                                    // 武器ごとの吹っ飛び強度
-                                    float knockbackPower = 10.0f;  // デフォルト
-
-                                    switch (currentWeapon)
-                                    {
-                                    case WeaponType::PISTOL:
-                                        knockbackPower = 8.0f;   // 軽く吹っ飛ぶ
-                                        break;
-                                    case WeaponType::SHOTGUN:
-                                        knockbackPower = 25.0f;  // 超強力に吹っ飛ぶ！
-                                        break;
-                                    case WeaponType::RIFLE:
-                                        knockbackPower = 12.0f;  // 中程度
-                                        break;
-                                    case WeaponType::SNIPER:
-                                        knockbackPower = 20.0f;  // 強力
-                                        break;
-                                    }
-
-                                    // 吹っ飛ばす！
-                                    enemy.velocity.x = shotDir.x * knockbackPower;
-                                    enemy.velocity.y = 5.0f;  // 少し跳ねる
-                                    enemy.velocity.z = shotDir.z * knockbackPower;
-
-                                }
-                            }
-                            //	ノックバック処理
-                            float knockbackStrength = isHeadShot ? 0.5f : 0.2f;
-                            enemy.position.x += shotDir.x * knockbackStrength;
-                            enemy.position.z += shotDir.z * knockbackStrength;
-
-                            //	死亡処理
-                            if (enemy.health <= 0)
-                            {
-                                if (!enemy.isDying)
-                                {
-                                    enemy.isDying = true;
-                                    enemy.currentAnimation = "Death";
-                                    enemy.animationTime = 0.0f;
-                                    enemy.corpseTimer = 5.0f;
-                                }
-
-                                int waveBonus = m_waveManager->OnEnemyKilled();
-                                int totalPoints = (isHeadShot ? 150 : 60) + waveBonus;
-                                m_player->AddPoints(totalPoints);
-
-                                m_showDamageDisplay = true;
-                                m_damageDisplayTimer = 2.0f;
-                                m_damageDisplayPos = enemy.position;
-                                m_damageDisplayPos.y += 2.0f;
-                                m_damageValue = isHeadShot ? 150 : 60;
-
-                                char debug[256];
-                                sprintf_s(debug, isHeadShot ? "HEADSHOT!! Points:%d" : "Hit! Points:%d",
-                                    m_player->GetPoints());
-                                SetWindowTextA(m_window, debug);
-                            }
-
-                            break;
-
+                            // ウィンドウタイトル更新
+                            char debug[256];
+                            sprintf_s(debug, isHeadShot ? "HEADSHOT!! Points:%d" : "Hit! Points:%d",
+                                m_player->GetPoints());
+                            SetWindowTextA(m_window, debug);
                         }
                     }
+                    else
+                    {
+                        // 敵に当たらなかった（壁など）
+                        OutputDebugStringA("[BULLET] Hit wall or object\n");
+                    }
                 }
-
-
-                if (!hit)
+                else
                 {
-                    char debug[256];
-                    sprintf_s(debug, "射撃...外れ スコア:%d", m_score);
-                    SetWindowTextA(m_window, debug);
+                    // 何にも当たらなかった
+                    OutputDebugStringA("[BULLET] Complete miss\n");
                 }
             }
-        }
+}
         m_lastMouseState = currentMouseState;
-    }
+    
+}
 
     // Rキーでリロード開始
     if (IsFirstKeyPress('R') &&

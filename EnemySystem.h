@@ -62,4 +62,5 @@ private:
 	std::vector<Enemy> m_enemies;	//	マップにいるすべての敵を格納
 	int m_maxEnemies;				//	同時に存在できる敵の最大数
 	float m_enemySpawnTimer;		//	敵の自動スポーン用タイマー
+	int m_nextEnemyID;				//	次に割り当てるID
 };
