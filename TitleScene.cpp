@@ -5,6 +5,7 @@
 #include "TitleScene.h"
 #include <d3dcompiler.h>
 #include <stdexcept>
+#include <WICTextureLoader.h> 
 
 #pragma comment(lib, "d3dcompiler.lib")
 
@@ -56,7 +57,7 @@ void TitleScene::Render(ID3D11DeviceContext* context)
     MatrixBufferType matrixData;
 
     // ワールド行列（単位行列）
-    DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(2.5f, 1.5f, 1.0f);
+    DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(1.8f, 1.2f, 1.0f);
     matrixData.world = scale;
 
     // ビュー行列（カメラは原点から正面を見る）
@@ -247,50 +248,64 @@ void TitleScene::CreateBuffers(ID3D11Device* device)
 
 void TitleScene::CreateTexture(ID3D11Device* device)
 {
-    // TODO: 実際のテクスチャを読み込む
-    // とりあえずダミーテクスチャを作成
+    // === 画像ファイルから読み込み ===
+    HRESULT hr = DirectX::CreateWICTextureFromFile(
+        device,
+        L"flag_with_logo.png",  // ← ファイル名
+        nullptr,
+        &m_flagTexture
+    );
 
-    // 4×4の白いテクスチャ
-    uint32_t textureData[16];
-    for (int i = 0; i < 16; i++)
-    {
-        textureData[i] = 0xFFFFFFFF;  // 白
-    }
-
-    D3D11_TEXTURE2D_DESC texDesc = {};
-    texDesc.Width = 4;
-    texDesc.Height = 4;
-    texDesc.MipLevels = 1;
-    texDesc.ArraySize = 1;
-    texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    texDesc.SampleDesc.Count = 1;
-    texDesc.Usage = D3D11_USAGE_IMMUTABLE;
-    texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-
-    D3D11_SUBRESOURCE_DATA initData = {};
-    initData.pSysMem = textureData;
-    initData.SysMemPitch = 4 * sizeof(uint32_t);
-
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
-    HRESULT hr = device->CreateTexture2D(&texDesc, &initData, &texture);
     if (FAILED(hr))
     {
-        throw std::runtime_error("Failed to create texture");
-    }
+        // 画像読み込み失敗時は白いテクスチャを作成
+        OutputDebugStringA("[TEXTURE] Failed to load flag_with_logo.png, creating white texture\n");
 
-    // シェーダーリソースビューを作成
-    hr = device->CreateShaderResourceView(texture.Get(), nullptr, &m_flagTexture);
-    if (FAILED(hr))
+        // 4×4の白いテクスチャ（フォールバック）
+        uint32_t textureData[16];
+        for (int i = 0; i < 16; i++)
+        {
+            textureData[i] = 0xFFFFFFFF;  // 白
+        }
+
+        D3D11_TEXTURE2D_DESC texDesc = {};
+        texDesc.Width = 4;
+        texDesc.Height = 4;
+        texDesc.MipLevels = 1;
+        texDesc.ArraySize = 1;
+        texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        texDesc.SampleDesc.Count = 1;
+        texDesc.Usage = D3D11_USAGE_IMMUTABLE;
+        texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+        D3D11_SUBRESOURCE_DATA initData = {};
+        initData.pSysMem = textureData;
+        initData.SysMemPitch = 4 * sizeof(uint32_t);
+
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+        hr = device->CreateTexture2D(&texDesc, &initData, &texture);
+        if (FAILED(hr))
+        {
+            throw std::runtime_error("Failed to create fallback texture");
+        }
+
+        hr = device->CreateShaderResourceView(texture.Get(), nullptr, &m_flagTexture);
+        if (FAILED(hr))
+        {
+            throw std::runtime_error("Failed to create shader resource view");
+        }
+    }
+    else
     {
-        throw std::runtime_error("Failed to create shader resource view");
+        OutputDebugStringA("[TEXTURE] Successfully loaded flag_with_logo.png\n");
     }
 
-    // サンプラーステートを作成
+    // === サンプラーステート作成 ===
     D3D11_SAMPLER_DESC samplerDesc = {};
     samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;  // ← WRAP から CLAMP に変更
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;  // ← WRAP から CLAMP に変更
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
     samplerDesc.MaxAnisotropy = 1;
     samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
     samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;

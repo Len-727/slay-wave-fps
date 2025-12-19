@@ -162,6 +162,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Beziercurve.h" />
     <ClInclude Include="Effekseer\include\EffekseerRendererDX11\EffekseerRendererDX11.h" />
     <ClInclude Include="Effekseer\include\Effekseer\Effekseer.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
@@ -176,6 +177,7 @@
     <ClInclude Include="Entities.h" />
     <ClInclude Include="External\bullet\include\btBulletCollisionCommon.h" />
     <ClInclude Include="External\bullet\include\btBulletDynamicsCommon.h" />
+    <ClInclude Include="FireParticleSystem.h" />
     <ClInclude Include="FlagMesh.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="game.h" />
@@ -267,7 +269,9 @@
     <ClInclude Include="WeaponSystem.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Beziecurve.cpp" />
     <ClCompile Include="EnemySystem.cpp" />
+    <ClCompile Include="FireParticleSystem.cpp" />
     <ClCompile Include="FlagMesh.cpp" />
     <ClCompile Include="game.cpp" />
     <ClCompile Include="imgui-master\backends\imgui_impl_allegro5.cpp">
