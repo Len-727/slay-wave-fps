@@ -100,6 +100,11 @@ void Game::Initialize(HWND window, int width, int height)
     //  === Bullet Physics 初期化  ===
     InitPhysics();
 
+    // Initialize で初期化
+    m_titleScene = std::make_unique<TitleScene>();
+    m_titleScene->Initialize(m_d3dDevice.Get(), m_d3dContext.Get(),
+        m_outputWidth, m_outputHeight);
+
 }
 
 void Game::InitPhysics()
@@ -2211,6 +2216,18 @@ void Game::UpdateTitle()
     sprintf_s(debug, "TITLE - Press SPACE - Fade:%.2f", m_fadeAlpha);
     SetWindowTextA(m_window, debug);
 
+    // === TitleScene の更新 ===
+    if (m_titleScene)
+    {
+        // デルタタイムの計算（簡易版）
+        float deltaTime = 1.0f / 60.0f;  // 60FPS想定
+
+        m_titleScene->Update(deltaTime);
+    }
+
+    // === フェード更新 ===
+    UpdateFade();
+
     // タイトル画面：Spaceキーでゲーム開始
     if (GetAsyncKeyState(VK_SPACE) & 0x8000)
     {
@@ -2219,9 +2236,14 @@ void Game::UpdateTitle()
         m_fadingIn = true;
         m_fadeActive = true;
     }
-
-
 }
+
+
+
+// ========================================
+// より正確なデルタタイム版（推奨）
+// ========================================
+
 
 void Game::DrawWeapon()
 {
@@ -3362,9 +3384,70 @@ void Game::RenderDamageFlash()
 }
 
 
+
 void Game::RenderTitle()
 {
+    // === 画面クリア ===
+    Clear();
 
+    // === タイトルシーンを描画 ===
+    if (m_titleScene)
+    {
+        try
+        {
+            m_titleScene->Render(m_d3dContext.Get());
+        }
+        catch (const std::exception& e)
+        {
+            OutputDebugStringA("[RENDER ERROR] TitleScene render failed: ");
+            OutputDebugStringA(e.what());
+            OutputDebugStringA("\n");
+        }
+    }
+    else
+    {
+        // TitleScene がない場合はエラーメッセージを表示
+        OutputDebugStringA("[RENDER WARNING] TitleScene is null\n");
+    }
+
+    // === UI描画（オプション）===
+    // タイトルテキストなどを追加する場合
+    /*
+    m_spriteBatch->Begin();
+
+    DirectX::XMFLOAT2 titlePos(
+        m_outputWidth / 2.0f,
+        m_outputHeight / 2.0f
+    );
+
+    m_fontLarge->DrawString(
+        m_spriteBatch.get(),
+        L"GOTHIC SWARM",
+        titlePos,
+        DirectX::Colors::White,
+        0.0f,
+        DirectX::XMFLOAT2(0.5f, 0.5f)
+    );
+
+    DirectX::XMFLOAT2 startPos(
+        m_outputWidth / 2.0f,
+        m_outputHeight / 2.0f + 100.0f
+    );
+
+    m_font->DrawString(
+        m_spriteBatch.get(),
+        L"Press ENTER to Start",
+        startPos,
+        DirectX::Colors::White,
+        0.0f,
+        DirectX::XMFLOAT2(0.5f, 0.5f)
+    );
+
+    m_spriteBatch->End();
+    */
+
+    // === フェード描画 ===
+    RenderFade();
 }
 
 void Game::RenderGameOver()

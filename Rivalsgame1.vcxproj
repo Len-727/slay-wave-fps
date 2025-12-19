@@ -176,6 +176,7 @@
     <ClInclude Include="Entities.h" />
     <ClInclude Include="External\bullet\include\btBulletCollisionCommon.h" />
     <ClInclude Include="External\bullet\include\btBulletDynamicsCommon.h" />
+    <ClInclude Include="FlagMesh.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="game.h" />
     <ClInclude Include="imgui-master\backends\imgui_impl_allegro5.h">
@@ -259,6 +260,7 @@
     <ClInclude Include="Shadow.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="TexturedQuad.h" />
+    <ClInclude Include="TitleScene.h" />
     <ClInclude Include="UISystem.h" />
     <ClInclude Include="WaveManager.h" />
     <ClInclude Include="WeaponSpawn.h" />
@@ -266,6 +268,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="EnemySystem.cpp" />
+    <ClCompile Include="FlagMesh.cpp" />
     <ClCompile Include="game.cpp" />
     <ClCompile Include="imgui-master\backends\imgui_impl_allegro5.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
@@ -332,6 +335,7 @@
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="Shadow.cpp" />
     <ClCompile Include="TexturedQuad.cpp" />
+    <ClCompile Include="TitleScene.cpp" />
     <ClCompile Include="UISystem.cpp" />
     <ClCompile Include="WaveManager.cpp" />
     <ClCompile Include="WeaponSpawn.cpp" />
@@ -376,6 +380,18 @@
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
       <FileType>Document</FileType>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="FlagPS_Standalone.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+      <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(Filename).cso</ObjectFileOutput>
+    </FxCompile>
+    <FxCompile Include="FlagVS_Standalone.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+      <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(Filename).cso</ObjectFileOutput>
+    </FxCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

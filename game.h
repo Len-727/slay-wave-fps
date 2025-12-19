@@ -36,6 +36,7 @@
 #include <btBulletCollisionCommon.h>
 
 
+#include "TitleScene.h"
 #include "Entities.h"
 #include "InstanceData.h"
 #include "WeaponSystem.h"
@@ -65,6 +66,9 @@ public:
     void OnWindowSizeChanged(int width, int height);      // ウィンドウサイズ変更
 
 private:
+
+    std::unique_ptr<TitleScene> m_titleScene;
+
     //  m_weaponSystem->Update()    みたいに使う
     std::unique_ptr<WeaponSystem> m_weaponSystem;       //  武器管理システム    unique_ptr 自動でメモリ管理
 
