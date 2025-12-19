@@ -163,9 +163,15 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Effekseer\include\EffekseerRendererDX11\EffekseerRendererDX11.h" />
-    <ClInclude Include="Effekseer\include\Effekseer\Effekseer.h" />
-    <ClInclude Include="Effekseer\include\Effekseer\Effekseer.Modules.h" />
-    <ClInclude Include="Effekseer\include\Effekseer\Effekseer.SIMD.h" />
+    <ClInclude Include="Effekseer\include\Effekseer\Effekseer.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="Effekseer\include\Effekseer\Effekseer.Modules.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="Effekseer\include\Effekseer\Effekseer.SIMD.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClInclude>
     <ClInclude Include="EnemySystem.h" />
     <ClInclude Include="Entities.h" />
     <ClInclude Include="External\bullet\include\btBulletCollisionCommon.h" />

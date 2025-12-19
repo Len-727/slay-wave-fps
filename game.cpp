@@ -65,6 +65,7 @@ Game::Game() noexcept :
     m_showHitboxes(true),
     m_showHeadHitboxes(true),
     m_showBulletTrajectory(true),
+    m_showPhysicsHitboxes(false),
     m_debugRunnerSpeed(2.0f),
     m_debugTankSpeed(0.5f),
     m_debugRunnerHP(50.0f),
@@ -372,6 +373,8 @@ void Game::UpdateEnemyPhysicsBody(Enemy& enemy)
         body->getMotionState()->setWorldTransform(transform);
     }
 }
+
+
 
 void Game::RemoveEnemyPhysicsBody(int enemyID)
 {
@@ -796,34 +799,34 @@ void Game::CreateRenderResources()
     
       /*描画管理クラス(レンダラー)の作成
       第3引数は最大パーティクル数*/
-    m_effekseerRenderer = EffekseerRendererDX11::Renderer::Create(
+   /* m_effekseerRenderer = EffekseerRendererDX11::Renderer::Create(
         m_d3dDevice.Get(),
         m_d3dContext.Get(),
         8000
-    );
+    );*/
 
     //  エッフェクト管理クラス
-    m_effekseerManager = Effekseer::Manager::Create(8000);
+    //m_effekseerManager = Effekseer::Manager::Create(8000);
 
-    //  描画設定の紐づけ
-    m_effekseerManager->SetSpriteRenderer(m_effekseerRenderer->CreateSpriteRenderer());
-    m_effekseerManager->SetRibbonRenderer(m_effekseerRenderer->CreateRibbonRenderer());
-    m_effekseerManager->SetRingRenderer(m_effekseerRenderer->CreateRingRenderer());
-    m_effekseerManager->SetTrackRenderer(m_effekseerRenderer->CreateTrackRenderer());
-    m_effekseerManager->SetModelRenderer(m_effekseerRenderer->CreateModelRenderer());
+    ////  描画設定の紐づけ
+    //m_effekseerManager->SetSpriteRenderer(m_effekseerRenderer->CreateSpriteRenderer());
+    //m_effekseerManager->SetRibbonRenderer(m_effekseerRenderer->CreateRibbonRenderer());
+    //m_effekseerManager->SetRingRenderer(m_effekseerRenderer->CreateRingRenderer());
+    //m_effekseerManager->SetTrackRenderer(m_effekseerRenderer->CreateTrackRenderer());
+    //m_effekseerManager->SetModelRenderer(m_effekseerRenderer->CreateModelRenderer());
 
-    //  エッフェクトファイルの読み込み
-    // ※ パスは u"..." で囲んで UTF-16 文字列にする
-    m_effectBlood = Effekseer::Effect::Create(m_effekseerManager, u"Assets//Effects/Laser01.efkefc");
+    ////  エッフェクトファイルの読み込み
+    //// ※ パスは u"..." で囲んで UTF-16 文字列にする
+    //m_effectBlood = Effekseer::Effect::Create(m_effekseerManager, u"Assets//Effects/Laser01.efkefc");
 
-    if (m_effectBlood == nullptr)
-    {
-        OutputDebugStringA("Failed to load Effekseer effect!\n");
-    }
-    else
-    {
-        OutputDebugStringA("Effekseer initialized successfully!\n");
-    }
+    //if (m_effectBlood == nullptr)
+    //{
+    //    OutputDebugStringA("Failed to load Effekseer effect!\n");
+    //}
+    //else
+    //{
+    //    OutputDebugStringA("Effekseer initialized successfully!\n");
+    //}
 
     //  === Imgui   ===
     InitImGui();
@@ -899,7 +902,29 @@ void Game::DrawDebugUI()
         ImGui::Text("Visual Debug:");
         ImGui::Checkbox("Show Body Hitboxes", &m_showHitboxes);
         ImGui::Checkbox("Show Head Hitboxes", &m_showHeadHitboxes);
+        ImGui::Checkbox("Show Physics Capsules", &m_showPhysicsHitboxes);  // ← 追加
         ImGui::Checkbox("Show Bullet Trajectory", &m_showBulletTrajectory);
+
+        // 凡例を追加
+        if (m_showHitboxes || m_showHeadHitboxes || m_showPhysicsHitboxes)
+        {
+            ImGui::Separator();
+            ImGui::Text("Color Legend:");
+            if (m_showHitboxes)
+            {
+                ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "  Red = Normal Body");
+                ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "  Yellow = Runner Body");
+                ImGui::TextColored(ImVec4(0.0f, 0.5f, 1.0f, 1.0f), "  Blue = Tank Body");
+            }
+            if (m_showPhysicsHitboxes)
+            {
+                ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), "  Green = Physics Capsule");
+            }
+            if (m_showHeadHitboxes)
+            {
+                ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "  Magenta = Head");
+            }
+        }
         ImGui::Separator();
 
         // ===================================================
@@ -1047,9 +1072,133 @@ void Game::DrawDebugUI()
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
 
+void Game::DrawCapsule(
+    DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
+    const DirectX::XMFLOAT3& center,
+    float radius,
+    float cylinderHeight,
+    const DirectX::XMFLOAT4& color)
+{
+    // カプセルは「シリンダー + 上下の半球」
+    // 簡易版として、輪郭だけ描画
+
+    const int segments = 16;  // 分割数
+    const float pi = 3.14159f;
+
+    // === 1. シリンダー部分（縦の線） ===
+    float halfCylinder = cylinderHeight / 2.0f;
+
+    for (int i = 0; i < segments; i++)
+    {
+        float angle = (float)i / segments * 2.0f * pi;
+        float x = cosf(angle) * radius;
+        float z = sinf(angle) * radius;
+
+        DirectX::XMFLOAT3 bottom(center.x + x, center.y - halfCylinder, center.z + z);
+        DirectX::XMFLOAT3 top(center.x + x, center.y + halfCylinder, center.z + z);
+
+        batch->DrawLine(
+            DirectX::VertexPositionColor(bottom, color),
+            DirectX::VertexPositionColor(top, color)
+        );
+    }
+
+    // === 2. シリンダーの上下の円 ===
+    for (int i = 0; i < segments; i++)
+    {
+        float angle1 = (float)i / segments * 2.0f * pi;
+        float angle2 = (float)(i + 1) / segments * 2.0f * pi;
+
+        // 下の円
+        DirectX::XMFLOAT3 p1_bottom(
+            center.x + cosf(angle1) * radius,
+            center.y - halfCylinder,
+            center.z + sinf(angle1) * radius
+        );
+        DirectX::XMFLOAT3 p2_bottom(
+            center.x + cosf(angle2) * radius,
+            center.y - halfCylinder,
+            center.z + sinf(angle2) * radius
+        );
+
+        batch->DrawLine(
+            DirectX::VertexPositionColor(p1_bottom, color),
+            DirectX::VertexPositionColor(p2_bottom, color)
+        );
+
+        // 上の円
+        DirectX::XMFLOAT3 p1_top(
+            center.x + cosf(angle1) * radius,
+            center.y + halfCylinder,
+            center.z + sinf(angle1) * radius
+        );
+        DirectX::XMFLOAT3 p2_top(
+            center.x + cosf(angle2) * radius,
+            center.y + halfCylinder,
+            center.z + sinf(angle2) * radius
+        );
+
+        batch->DrawLine(
+            DirectX::VertexPositionColor(p1_top, color),
+            DirectX::VertexPositionColor(p2_top, color)
+        );
+    }
+
+    // === 3. 上下の半球（簡易版：弧を描画） ===
+    for (int i = 0; i < segments / 2; i++)
+    {
+        float angle1 = (float)i / (segments / 2) * pi / 2.0f;
+        float angle2 = (float)(i + 1) / (segments / 2) * pi / 2.0f;
+
+        // 下の半球（4方向）
+        for (int j = 0; j < 4; j++)
+        {
+            float dir = (float)j / 4.0f * 2.0f * pi;
+
+            DirectX::XMFLOAT3 p1(
+                center.x + cosf(dir) * cosf(angle1) * radius,
+                center.y - halfCylinder - sinf(angle1) * radius,
+                center.z + sinf(dir) * cosf(angle1) * radius
+            );
+            DirectX::XMFLOAT3 p2(
+                center.x + cosf(dir) * cosf(angle2) * radius,
+                center.y - halfCylinder - sinf(angle2) * radius,
+                center.z + sinf(dir) * cosf(angle2) * radius
+            );
+
+            batch->DrawLine(
+                DirectX::VertexPositionColor(p1, color),
+                DirectX::VertexPositionColor(p2, color)
+            );
+        }
+
+        // 上の半球（4方向）
+        for (int j = 0; j < 4; j++)
+        {
+            float dir = (float)j / 4.0f * 2.0f * pi;
+
+            DirectX::XMFLOAT3 p1(
+                center.x + cosf(dir) * cosf(angle1) * radius,
+                center.y + halfCylinder + sinf(angle1) * radius,
+                center.z + sinf(dir) * cosf(angle1) * radius
+            );
+            DirectX::XMFLOAT3 p2(
+                center.x + cosf(dir) * cosf(angle2) * radius,
+                center.y + halfCylinder + sinf(angle2) * radius,
+                center.z + sinf(dir) * cosf(angle2) * radius
+            );
+
+            batch->DrawLine(
+                DirectX::VertexPositionColor(p1, color),
+                DirectX::VertexPositionColor(p2, color)
+            );
+        }
+    }
+}
+
 void Game::DrawHitboxes()
 {
-    if (!m_showHitboxes && !m_showHeadHitboxes)
+    if (!m_showHitboxes && !m_showHeadHitboxes && !m_showPhysicsHitboxes)
         return;
 
     DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
@@ -1221,7 +1370,39 @@ void Game::DrawHitboxes()
                 DirectX::XMFLOAT3 p6(headPos.x, headPos.y + cosf(angle2) * headRadius, headPos.z + sinf(angle2) * headRadius);
                 primitiveBatch->DrawLine(DirectX::VertexPositionColor(p5, headColor), DirectX::VertexPositionColor(p6, headColor));
             }
+
+
         }
+
+        // ========================================
+        // === ここに追加: Bullet Physics カプセル ===
+        // ========================================
+        if (m_showPhysicsHitboxes)
+        {
+            auto it = m_enemyPhysicsBodies.find(enemy.id);
+            if (it != m_enemyPhysicsBodies.end())
+            {
+                btRigidBody* body = it->second;
+                btCollisionShape* shape = body->getCollisionShape();
+
+                if(shape&& shape->getShapeType() == CAPSULE_SHAPE_PROXYTYPE)
+                {
+                    btCapsuleShape* capsule = static_cast<btCapsuleShape*>(shape);
+
+                    float radius = capsule->getRadius();
+                    float cylinderHeight = capsule->getHalfHeight() * 2.0f;
+
+                    btTransform transform = body->getWorldTransform();
+                    btVector3 origin = transform.getOrigin();
+
+                    DirectX::XMFLOAT3 center(origin.x(), origin.y(), origin.z());
+                    DirectX::XMFLOAT4 capsuleColor(0.0f, 1.0f, 0.0f, 1.0f);
+
+                    DrawCapsule(primitiveBatch.get(), center, radius, cylinderHeight, capsuleColor);
+                }
+            }
+        }
+
     }
 
     // === 弾の軌跡を描画 ===
@@ -2206,25 +2387,25 @@ void Game::RenderPlaying()
 
 
     //  === Effekseerの描画　===
-    if (m_effekseerManager != nullptr && m_effekseerRenderer != nullptr)
-    {
-        //  変換用変数を用意
-        Effekseer::Matrix44 efkView;
-        Effekseer::Matrix44 efkProj;
+    //if (m_effekseerManager != nullptr && m_effekseerRenderer != nullptr)
+    //{
+    //    //  変換用変数を用意
+    //    Effekseer::Matrix44 efkView;
+    //    Effekseer::Matrix44 efkProj;
 
-        //  DirectXの行列をEffekseer用の変数にコピーする
-        //  (reinterpret_castを使って「中身は同じ4x4の数字だよ」と伝えてコピーする)
-        DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&efkView), viewMatrix);
-        DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&efkProj), projectionMatrix);
+    //    //  DirectXの行列をEffekseer用の変数にコピーする
+    //    //  (reinterpret_castを使って「中身は同じ4x4の数字だよ」と伝えてコピーする)
+    //    DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&efkView), viewMatrix);
+    //    DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&efkProj), projectionMatrix);
 
-        //  変数にしたのを渡す
-        m_effekseerRenderer->SetCameraMatrix(efkView);
-        m_effekseerRenderer->SetProjectionMatrix(efkProj);
+    //    //  変数にしたのを渡す
+    //    m_effekseerRenderer->SetCameraMatrix(efkView);
+    //    m_effekseerRenderer->SetProjectionMatrix(efkProj);
 
-        m_effekseerRenderer->BeginRendering();
-        m_effekseerManager->Draw();
-        m_effekseerRenderer->EndRendering();
-    }
+    //    m_effekseerRenderer->BeginRendering();
+    //    m_effekseerManager->Draw();
+    //    m_effekseerRenderer->EndRendering();
+    //}
 
     if (m_shadow)
     {
@@ -2794,7 +2975,7 @@ void Game::UpdatePlaying()
                             hitEnemy->velocity.z = shotDir.z * 15.0f;
 
                             // Effekseer エフェクト
-                            if (m_effekseerManager != nullptr && m_effectBlood != nullptr)
+                            /*if (m_effekseerManager != nullptr && m_effectBlood != nullptr)
                             {
                                 auto handle = m_effekseerManager->Play(
                                     m_effectBlood,
@@ -2803,7 +2984,7 @@ void Game::UpdatePlaying()
                                     hitEnemy->headPosition.z
                                 );
                                 m_effekseerManager->SetScale(handle, 2.0f, 2.0f, 2.0f);
-                            }
+                            }*/
 
                             // ヒットストップ
                             m_timeScale = 0.0f;
@@ -2956,10 +3137,10 @@ void Game::UpdatePlaying()
     }
 
     //  アニメーションを進める
-    if (m_effekseerManager != nullptr)
+   /* if (m_effekseerManager != nullptr)
     {
         m_effekseerManager->Update(1.0f / 60.0f);
-    }
+    }*/
 
     m_particleSystem->Update(1.0f / 60.0f);
 

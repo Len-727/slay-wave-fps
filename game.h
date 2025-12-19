@@ -27,8 +27,8 @@
 #include <DDSTextureLoader.h>   // DDSテクスチャ
 #include <CommonStates.h>
 #include <set>
-#include <Effekseer.h>
-#include <EffekseerRendererDX11.h>
+//#include <Effekseer.h>
+//#include <EffekseerRendererDX11.h>
 #include <imgui.h>
 #include <imgui_impl_win32.h>
 #include <imgui_impl_dx11.h>
@@ -234,11 +234,11 @@ private:
     float m_hitStopTimer;   //  ヒットストップ残り時間
 
     //  Effekseerの管理クラス
-    Effekseer::ManagerRef m_effekseerManager;
-    EffekseerRendererDX11::RendererRef m_effekseerRenderer;
+    //Effekseer::ManagerRef m_effekseerManager;
+    //EffekseerRendererDX11::RendererRef m_effekseerRenderer;
 
-    //  読み込んだエフェクトデータ
-    Effekseer::EffectRef m_effectBlood; //  血のエフェクト用(テスト)
+    ////  読み込んだエフェクトデータ
+    //Effekseer::EffectRef m_effectBlood; //  血のエフェクト用(テスト)
 
 
     //  ==========================
@@ -250,6 +250,7 @@ private:
     bool m_showHitboxes;        //  当たり判定表示
     bool m_showHeadHitboxes;    //  頭の当たり判定を表示
     bool m_showBulletTrajectory; //  弾の軌跡表示
+    bool m_showPhysicsHitboxes;
 
     //  === リアルタイム調整用変数 ===
     float m_debugRunnerSpeed;   //  Runner速度調整用
@@ -267,11 +268,20 @@ private:
     };
     std::vector<BulletTrace> m_bulletTraces;
 
+    
+
+
     //  === ImGui 用変数   ===
     void InitImGui();
     void ShutdownImGui();
     void DrawDebugUI();
     void DrawHitboxes();
+    void DrawCapsule(
+        DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
+        const DirectX::XMFLOAT3& center,
+        float radius,
+        float cylinderHeight,
+        const DirectX::XMFLOAT4& color);
 
     //  === リアルタイム調整用のコンフィグ ===
     EnemyTypeConfig
