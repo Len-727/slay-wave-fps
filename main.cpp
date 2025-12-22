@@ -46,8 +46,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     }
 
     // ウィンドウサイズ設定（ここは変更してみよう！）
-    int width = 1280;   // 幅を変えてみる → 800, 1920など
-    int height = 720;   // 高さを変えてみる → 600, 1080など
+    int width = 1280;  
+    int height = 720;
 
     RECT rc = { 0, 0, static_cast<LONG>(width), static_cast<LONG>(height) };
     AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);

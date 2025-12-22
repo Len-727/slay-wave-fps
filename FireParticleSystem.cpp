@@ -26,7 +26,7 @@ static float RandomFloat(float min, float max)
 FireParticleSystem::FireParticleSystem()
     : m_maxParticles(1000)
     , m_isEmitting(false)
-    , m_emissionRate(100.0f)  // 100パーティクル/秒
+    , m_emissionRate(100.0f)
     , m_emissionAccumulator(0.0f)
 {
 }
@@ -46,10 +46,10 @@ void FireParticleSystem::Initialize(ID3D11Device* device, int maxParticles)
 
     // デフォルトのベジェ曲線（左下から右上）
     SetBezierCurve(
-        XMFLOAT3(-1.0f, -1.0f, 0.0f),  // 左下
-        XMFLOAT3(-0.5f, 0.0f, 0.0f),  // 制御点1
-        XMFLOAT3(0.5f, 0.5f, 0.0f),  // 制御点2
-        XMFLOAT3(1.0f, 1.0f, 0.0f)   // 右上
+        XMFLOAT3(-1.0f, -1.0f, 0.0f),
+        XMFLOAT3(-0.5f, 0.0f, 0.0f),
+        XMFLOAT3(0.5f, 0.5f, 0.0f),
+        XMFLOAT3(1.0f, 1.0f, 0.0f)
     );
 
     CreateBuffers(device);
@@ -96,17 +96,14 @@ void FireParticleSystem::SetEmissionRate(float particlesPerSecond)
 
 void FireParticleSystem::EmitParticle()
 {
-    // 最大数チェック
     if (m_particles.size() >= m_maxParticles)
         return;
 
     FireParticle particle;
 
-    // === 初期位置（ベジェ曲線の開始点）===
     particle.curveT = 0.0f;
     particle.position = m_bezierCurve.GetPosition(0.0f);
 
-    // === 初期速度（曲線の接線方向）===
     XMFLOAT3 tangent = m_bezierCurve.GetTangent(0.0f);
     float speed = RandomFloat(0.5f, 1.0f);
     particle.velocity = XMFLOAT3(
@@ -115,22 +112,15 @@ void FireParticleSystem::EmitParticle()
         tangent.z * speed
     );
 
-    // === 色（オレンジ～黄色）===
-    // XMFLOAT4は x=赤, y=緑, z=青, w=アルファ
-    float r = RandomFloat(0.8f, 1.0f);   // 赤
-    float g = RandomFloat(0.3f, 0.8f);   // 緑
-    float b = RandomFloat(0.0f, 0.2f);   // 青（ほぼ0）
-    float a = RandomFloat(0.7f, 1.0f);   // アルファ
+    float r = RandomFloat(0.8f, 1.0f);
+    float g = RandomFloat(0.3f, 0.8f);
+    float b = RandomFloat(0.0f, 0.2f);
+    float a = RandomFloat(0.7f, 1.0f);
     particle.color = XMFLOAT4(r, g, b, a);
 
-    // === サイズ ===
-    particle.size = RandomFloat(0.05f, 0.15f);
-
-    // === 寿命 ===
+    particle.size = RandomFloat(0.1f, 0.3f);
     particle.lifetime = RandomFloat(2.0f, 3.0f);
     particle.age = 0.0f;
-
-    // === アクティブ化 ===
     particle.active = true;
 
     m_particles.push_back(particle);
@@ -142,7 +132,6 @@ void FireParticleSystem::EmitParticle()
 
 void FireParticleSystem::Update(float deltaTime)
 {
-    // === パーティクル放出 ===
     if (m_isEmitting)
     {
         m_emissionAccumulator += deltaTime * m_emissionRate;
@@ -154,21 +143,18 @@ void FireParticleSystem::Update(float deltaTime)
         }
     }
 
-    // === 既存パーティクルの更新 ===
     for (auto it = m_particles.begin(); it != m_particles.end();)
     {
         if (it->active)
         {
             UpdateParticle(*it, deltaTime);
 
-            // 寿命チェック
             if (it->age >= it->lifetime)
             {
                 it->active = false;
             }
         }
 
-        // 非アクティブなパーティクルを削除
         if (!it->active)
         {
             it = m_particles.erase(it);
@@ -182,64 +168,365 @@ void FireParticleSystem::Update(float deltaTime)
 
 void FireParticleSystem::UpdateParticle(FireParticle& particle, float deltaTime)
 {
-    // === 経過時間を増やす ===
     particle.age += deltaTime;
 
-    // === ベジェ曲線上を移動 ===
-    particle.curveT += deltaTime * 0.3f;  // 3秒で全行程
+    particle.curveT += deltaTime * 0.3f;
     if (particle.curveT > 1.0f)
         particle.curveT = 1.0f;
 
-    // 新しい位置を取得
     particle.position = m_bezierCurve.GetPosition(particle.curveT);
 
-    // === ランダムな揺らぎ（炎らしさ）===
     particle.position.x += RandomFloat(-0.02f, 0.02f);
     particle.position.y += RandomFloat(-0.01f, 0.03f);
 
-    // === サイズを徐々に大きく ===
     particle.size += deltaTime * 0.05f;
 
-    // === アルファをフェードアウト ===
     float lifeRatio = particle.age / particle.lifetime;
-    particle.color.w = 1.0f - lifeRatio;  // w=アルファ: 1.0 → 0.0
-
-    // === 色を黄色→赤→黒に変化 ===
-    // 若い: 黄色（明るい）
-    // 古い: 赤→黒（暗い）
-    particle.color.y = (1.0f - lifeRatio) * 0.6f;  // y=緑を減らす
-    particle.color.x = 1.0f - lifeRatio * 0.3f;    // x=赤を少し減らす
+    particle.color.w = 1.0f - lifeRatio;
+    particle.color.y = (1.0f - lifeRatio) * 0.6f;
+    particle.color.x = 1.0f - lifeRatio * 0.3f;
 }
 
 // ========================================
-// バッファ作成（簡易版）
+// バッファ作成
 // ========================================
 
 void FireParticleSystem::CreateBuffers(ID3D11Device* device)
 {
-    // TODO: 実装（次のステップで）
-    OutputDebugStringA("[FIRE] CreateBuffers: TODO\n");
+    struct ParticleVertex
+    {
+        XMFLOAT3 position;
+        XMFLOAT2 texCoord;
+        XMFLOAT4 color;
+        float size;
+    };
+
+    D3D11_BUFFER_DESC vertexBufferDesc = {};
+    vertexBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+    vertexBufferDesc.ByteWidth = sizeof(ParticleVertex) * 4 * m_maxParticles;
+    vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    vertexBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+    HRESULT hr = device->CreateBuffer(&vertexBufferDesc, nullptr, &m_vertexBuffer);
+    if (FAILED(hr))
+    {
+        throw std::runtime_error("Failed to create particle vertex buffer");
+    }
+
+    D3D11_BUFFER_DESC matrixBufferDesc = {};
+    matrixBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+    matrixBufferDesc.ByteWidth = sizeof(XMMATRIX) * 2;
+    matrixBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    matrixBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+    hr = device->CreateBuffer(&matrixBufferDesc, nullptr, &m_matrixBuffer);
+    if (FAILED(hr))
+    {
+        throw std::runtime_error("Failed to create matrix buffer");
+    }
+
+    OutputDebugStringA("[FIRE] Buffers created\n");
 }
+
+// ========================================
+// シェーダー作成
+// ========================================
 
 void FireParticleSystem::CreateShaders(ID3D11Device* device)
 {
-    // TODO: 実装（次のステップで）
-    OutputDebugStringA("[FIRE] CreateShaders: TODO\n");
+    HRESULT hr;
+    Microsoft::WRL::ComPtr<ID3DBlob> vsBlob;
+    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+
+    hr = D3DCompileFromFile(
+        L"FireParticleVS_Standalone.hlsl",
+        nullptr,
+        nullptr,
+        "main",
+        "vs_5_0",
+        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
+        0,
+        &vsBlob,
+        &errorBlob
+    );
+
+    if (FAILED(hr))
+    {
+        if (errorBlob)
+        {
+            OutputDebugStringA("[FIRE VS] ");
+            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+            OutputDebugStringA("\n");
+        }
+        throw std::runtime_error("Failed to compile FireParticleVS_Standalone.hlsl");
+    }
+
+    hr = device->CreateVertexShader(
+        vsBlob->GetBufferPointer(),
+        vsBlob->GetBufferSize(),
+        nullptr,
+        &m_vertexShader
+    );
+
+    if (FAILED(hr))
+    {
+        throw std::runtime_error("Failed to create FireParticle VS");
+    }
+
+    Microsoft::WRL::ComPtr<ID3DBlob> psBlob;
+
+    hr = D3DCompileFromFile(
+        L"FireParticlePS_Standalone.hlsl",
+        nullptr,
+        nullptr,
+        "main",
+        "ps_5_0",
+        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
+        0,
+        &psBlob,
+        &errorBlob
+    );
+
+    if (FAILED(hr))
+    {
+        if (errorBlob)
+        {
+            OutputDebugStringA("[FIRE PS] ");
+            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+            OutputDebugStringA("\n");
+        }
+        throw std::runtime_error("Failed to compile FireParticlePS_Standalone.hlsl");
+    }
+
+    hr = device->CreatePixelShader(
+        psBlob->GetBufferPointer(),
+        psBlob->GetBufferSize(),
+        nullptr,
+        &m_pixelShader
+    );
+
+    if (FAILED(hr))
+    {
+        throw std::runtime_error("Failed to create FireParticle PS");
+    }
+
+    D3D11_INPUT_ELEMENT_DESC layout[] =
+    {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "PSIZE", 0, DXGI_FORMAT_R32_FLOAT, 0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    };
+
+    hr = device->CreateInputLayout(
+        layout,
+        ARRAYSIZE(layout),
+        vsBlob->GetBufferPointer(),
+        vsBlob->GetBufferSize(),
+        &m_inputLayout
+    );
+
+    if (FAILED(hr))
+    {
+        throw std::runtime_error("Failed to create input layout");
+    }
+
+    OutputDebugStringA("[FIRE] Shaders created successfully\n");
 }
 
 void FireParticleSystem::CreateTexture(ID3D11Device* device)
 {
-    // TODO: 実装（次のステップで）
-    OutputDebugStringA("[FIRE] CreateTexture: TODO\n");
+    const int SIZE = 64;
+    uint32_t textureData[SIZE * SIZE];
+
+    for (int y = 0; y < SIZE; y++)
+    {
+        for (int x = 0; x < SIZE; x++)
+        {
+            float fx = (x - SIZE / 2.0f) / (SIZE / 2.0f);
+            float fy = (y - SIZE / 2.0f) / (SIZE / 2.0f);
+            float dist = sqrtf(fx * fx + fy * fy);
+
+            float alpha = 1.0f - min(dist, 1.0f);
+            alpha = alpha * alpha;
+
+            uint8_t a = (uint8_t)(alpha * 255);
+            textureData[y * SIZE + x] = (a << 24) | 0x00FFFFFF;
+        }
+    }
+
+    D3D11_TEXTURE2D_DESC texDesc = {};
+    texDesc.Width = SIZE;
+    texDesc.Height = SIZE;
+    texDesc.MipLevels = 1;
+    texDesc.ArraySize = 1;
+    texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    texDesc.SampleDesc.Count = 1;
+    texDesc.Usage = D3D11_USAGE_IMMUTABLE;
+    texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    D3D11_SUBRESOURCE_DATA initData = {};
+    initData.pSysMem = textureData;
+    initData.SysMemPitch = SIZE * sizeof(uint32_t);
+
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+    HRESULT hr = device->CreateTexture2D(&texDesc, &initData, &texture);
+    if (FAILED(hr))
+    {
+        throw std::runtime_error("Failed to create fire texture");
+    }
+
+    hr = device->CreateShaderResourceView(texture.Get(), nullptr, &m_texture);
+    if (FAILED(hr))
+    {
+        throw std::runtime_error("Failed to create SRV");
+    }
+
+    D3D11_SAMPLER_DESC samplerDesc = {};
+    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.MaxAnisotropy = 1;
+    samplerDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
+    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+    hr = device->CreateSamplerState(&samplerDesc, &m_samplerState);
+    if (FAILED(hr))
+    {
+        throw std::runtime_error("Failed to create sampler state");
+    }
+
+    OutputDebugStringA("[FIRE] Texture created\n");
 }
+
+// ========================================
+// ブレンドステート作成
+// ========================================
 
 void FireParticleSystem::CreateBlendState(ID3D11Device* device)
 {
-    // TODO: 実装（次のステップで）
-    OutputDebugStringA("[FIRE] CreateBlendState: TODO\n");
+    D3D11_BLEND_DESC blendDesc = {};
+    blendDesc.RenderTarget[0].BlendEnable = TRUE;
+    blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+    blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+    blendDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+    blendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+    blendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+    blendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+    HRESULT hr = device->CreateBlendState(&blendDesc, &m_blendState);
+    if (FAILED(hr))
+    {
+        throw std::runtime_error("Failed to create blend state");
+    }
+
+    OutputDebugStringA("[FIRE] Blend state created\n");
 }
+
+// ========================================
+// 描画
+// ========================================
 
 void FireParticleSystem::Render(ID3D11DeviceContext* context, XMMATRIX view, XMMATRIX projection)
 {
-  
+    if (m_particles.empty())
+        return;
+
+    struct ParticleVertex
+    {
+        XMFLOAT3 position;
+        XMFLOAT2 texCoord;
+        XMFLOAT4 color;
+        float size;
+    };
+
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+    HRESULT hr = context->Map(m_vertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+    if (FAILED(hr))
+    {
+        OutputDebugStringA("[FIRE] Failed to map vertex buffer\n");
+        return;
+    }
+
+    ParticleVertex* vertices = (ParticleVertex*)mappedResource.pData;
+    int vertexIndex = 0;
+
+    for (const auto& particle : m_particles)
+    {
+        if (!particle.active)
+            continue;
+
+        vertices[vertexIndex].position = particle.position;
+        vertices[vertexIndex].texCoord = XMFLOAT2(0.0f, 1.0f);
+        vertices[vertexIndex].color = particle.color;
+        vertices[vertexIndex].size = particle.size;
+        vertexIndex++;
+
+        vertices[vertexIndex].position = particle.position;
+        vertices[vertexIndex].texCoord = XMFLOAT2(1.0f, 1.0f);
+        vertices[vertexIndex].color = particle.color;
+        vertices[vertexIndex].size = particle.size;
+        vertexIndex++;
+
+        vertices[vertexIndex].position = particle.position;
+        vertices[vertexIndex].texCoord = XMFLOAT2(0.0f, 0.0f);
+        vertices[vertexIndex].color = particle.color;
+        vertices[vertexIndex].size = particle.size;
+        vertexIndex++;
+
+        vertices[vertexIndex].position = particle.position;
+        vertices[vertexIndex].texCoord = XMFLOAT2(1.0f, 0.0f);
+        vertices[vertexIndex].color = particle.color;
+        vertices[vertexIndex].size = particle.size;
+        vertexIndex++;
+    }
+
+    context->Unmap(m_vertexBuffer.Get(), 0);
+
+    if (vertexIndex == 0)
+        return;
+
+    struct MatrixBufferType
+    {
+        XMMATRIX view;
+        XMMATRIX projection;
+    };
+
+    hr = context->Map(m_matrixBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+    if (SUCCEEDED(hr))
+    {
+        MatrixBufferType* matrixData = (MatrixBufferType*)mappedResource.pData;
+        matrixData->view = XMMatrixTranspose(view);
+        matrixData->projection = XMMatrixTranspose(projection);
+        context->Unmap(m_matrixBuffer.Get(), 0);
+    }
+
+    context->IASetInputLayout(m_inputLayout.Get());
+
+    UINT stride = sizeof(ParticleVertex);
+    UINT offset = 0;
+    context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride, &offset);
+
+    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+    context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+    context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+
+    context->VSSetConstantBuffers(0, 1, m_matrixBuffer.GetAddressOf());
+
+    context->PSSetShaderResources(0, 1, m_texture.GetAddressOf());
+    context->PSSetSamplers(0, 1, m_samplerState.GetAddressOf());
+
+    float blendFactor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    context->OMSetBlendState(m_blendState.Get(), blendFactor, 0xffffffff);
+
+    int particleCount = vertexIndex / 4;
+    for (int i = 0; i < particleCount; i++)
+    {
+        context->Draw(4, i * 4);
+    }
+
+    context->OMSetBlendState(nullptr, blendFactor, 0xffffffff);
 }

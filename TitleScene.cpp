@@ -13,8 +13,9 @@ TitleScene::TitleScene()
     : m_screenWidth(0)
     , m_screenHeight(0)
     , m_time(0.0f)
-    , m_waveSpeed(5.0f)
-    , m_waveAmplitude(0.8f)
+    , m_waveSpeed(4.0f)
+    , m_waveAmplitude(0.6f)
+    , m_fireParticleSystem(nullptr)
 {
 }
 
@@ -22,33 +23,49 @@ TitleScene::~TitleScene()
 {
 }
 
-void TitleScene::Initialize(
-    ID3D11Device* device,
-    ID3D11DeviceContext* context,
-    int screenWidth,
-    int screenHeight)
+void TitleScene::Initialize(ID3D11Device* device, int screenWidth, int screenHeight)
 {
     m_screenWidth = screenWidth;
     m_screenHeight = screenHeight;
 
-    // === 旗メッシュを作成 ===
+    // 旗のメッシュを作成
     m_flagMesh = std::make_unique<FlagMesh>();
-    m_flagMesh->Initialize(device, 32, 24);  // 32×24のグリッド
+    m_flagMesh->Initialize(device, 32, 24);
 
-    // === シェーダーを作成 ===
+    // シェーダーとテクスチャを作成
     CreateShaders(device);
-
-    // === 定数バッファを作成 ===
     CreateBuffers(device);
-
-    // === テクスチャを作成 ===
     CreateTexture(device);
+
+    // === 炎パーティクルシステムを作成（追加）===
+    m_fireParticleSystem = std::make_unique<FireParticleSystem>();
+    m_fireParticleSystem->Initialize(device, 1000);  // 最大1000パーティクル
+
+    // ベジェ曲線を設定（左下から右上へ）
+    m_fireParticleSystem->SetBezierCurve(
+        DirectX::XMFLOAT3(-1.2f, -1.0f, 0.0f),  // 開始点（左下）
+        DirectX::XMFLOAT3(-0.6f, -0.3f, 0.0f),  // 制御点1
+        DirectX::XMFLOAT3(0.0f, 0.3f, 0.0f),  // 制御点2
+        DirectX::XMFLOAT3(0.8f, 1.0f, 0.0f)   // 終了点（右上）
+    );
+
+    // パーティクル放出を開始
+    m_fireParticleSystem->SetEmissionRate(100.0f);  // 50パーティクル/秒
+    m_fireParticleSystem->StartEmitting();
+
+    OutputDebugStringA("[TITLE] TitleScene initialized with fire particles\n");
 }
 
 void TitleScene::Update(float deltaTime)
 {
     // 時間を進める
     m_time += deltaTime;
+
+    // == = 炎パーティクルシステムを更新（追加） == =
+        if (m_fireParticleSystem)
+        {
+            m_fireParticleSystem->Update(deltaTime);
+        }
 }
 
 void TitleScene::Render(ID3D11DeviceContext* context)
@@ -106,7 +123,20 @@ void TitleScene::Render(ID3D11DeviceContext* context)
     context->PSSetSamplers(0, 1, m_samplerState.GetAddressOf());
 
     // === 旗を描画 ===
-    m_flagMesh->Draw(context);
+    if (m_flagMesh)
+    {
+        m_flagMesh->Draw(context);
+    }
+
+    // === 炎パーティクルを描画   ===
+    if (m_fireParticleSystem)
+    {
+        // view と projection は転置を戻す（パーティクルシステムは転置しない形式を期待）
+        DirectX::XMMATRIX viewForParticles = DirectX::XMMatrixTranspose(matrixData.view);
+        DirectX::XMMATRIX projectionForParticles = DirectX::XMMatrixTranspose(matrixData.projection);
+
+        m_fireParticleSystem->Render(context, viewForParticles, projectionForParticles);
+    }
 }
 
 void TitleScene::CreateShaders(ID3D11Device* device)

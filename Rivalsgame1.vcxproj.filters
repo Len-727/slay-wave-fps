@@ -383,4 +383,12 @@
       <Filter>Assets\shader</Filter>
     </FxCompile>
   </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="FireParticlePS_Standalone.hlsl">
+      <Filter>Assets\shader</Filter>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="FireParticleVS_Standalone.hlsl">
+      <Filter>Assets\shader</Filter>
+    </CopyFileToFolders>
+  </ItemGroup>
 </Project>

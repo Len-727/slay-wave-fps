@@ -8,6 +8,7 @@
 #include <wrl/client.h>
 #include <memory>
 #include "FlagMesh.h"
+#include "FireParticleSystem.h"
 
 class TitleScene
 {
@@ -18,7 +19,6 @@ public:
     // 初期化
     void Initialize(
         ID3D11Device* device,
-        ID3D11DeviceContext* context,
         int screenWidth,
         int screenHeight
     );
@@ -32,6 +32,9 @@ public:
 private:
     // 旗メッシュ
     std::unique_ptr<FlagMesh> m_flagMesh;
+
+    //  炎パーティクルシステム
+    std::unique_ptr<FireParticleSystem> m_fireParticleSystem;
 
     // シェーダー
     Microsoft::WRL::ComPtr<ID3D11VertexShader> m_vertexShader;

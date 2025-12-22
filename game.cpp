@@ -91,7 +91,7 @@ void Game::Initialize(HWND window, int width, int height)
     m_outputWidth = (width > 1) ? width : 1;
     m_outputHeight = (height > 1) ? height : 1;
 
-    // DirectX初期化（複雑なのでコピペOK）
+   
     CreateDevice();
     CreateResources();
 
@@ -102,7 +102,7 @@ void Game::Initialize(HWND window, int width, int height)
 
     // Initialize で初期化
     m_titleScene = std::make_unique<TitleScene>();
-    m_titleScene->Initialize(m_d3dDevice.Get(), m_d3dContext.Get(),
+    m_titleScene->Initialize(m_d3dDevice.Get(),
         m_outputWidth, m_outputHeight);
 
 }
@@ -433,7 +433,7 @@ void Game::Update()
 void Game::Clear()
 {
     // 画面を青でクリア
-    m_d3dContext->ClearRenderTargetView(m_renderTargetView.Get(), Colors::Blue);
+    m_d3dContext->ClearRenderTargetView(m_renderTargetView.Get(), Colors::Black);
 
     // ★重要: 深度バッファ(DEPTH) と ステンシルバッファ(STENCIL) の両方をクリアする
     m_d3dContext->ClearDepthStencilView(
