@@ -53,6 +53,14 @@ void TitleScene::Initialize(ID3D11Device* device, int screenWidth, int screenHei
     m_fireParticleSystem->SetEmissionRate(100.0f);  // 50パーティクル/秒
     m_fireParticleSystem->StartEmitting();
 
+    // ========================================
+    // ポストプロセス初期化
+    // ========================================
+    CreatePostProcessResources(device);
+    CreatePostProcessShaders(device);
+
+    m_blurStrength = 0.5f;
+
     OutputDebugStringA("[TITLE] TitleScene initialized with fire particles\n");
 }
 
@@ -68,75 +76,16 @@ void TitleScene::Update(float deltaTime)
         }
 }
 
-void TitleScene::Render(ID3D11DeviceContext* context)
+void TitleScene::Render(
+    ID3D11DeviceContext* context,
+    ID3D11RenderTargetView* backBufferRTV,
+    ID3D11DepthStencilView* depthStencilView)
 {
-    // === 行列を設定 ===
-    MatrixBufferType matrixData;
+    // === パス1: レンダーテクスチャに3D描画 ===
+    RenderToTexture(context);
 
-    // ワールド行列（単位行列）
-    DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(1.8f, 1.2f, 1.0f);
-    matrixData.world = scale;
-
-    // ビュー行列（カメラは原点から正面を見る）
-    DirectX::XMVECTOR eye = DirectX::XMVectorSet(0.0f, 0.0f, -2.0f, 0.0f);
-    DirectX::XMVECTOR at = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
-    DirectX::XMVECTOR up = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    matrixData.view = DirectX::XMMatrixLookAtLH(eye, at, up);
-
-    // プロジェクション行列（透視投影）
-    float aspectRatio = (float)m_screenWidth / (float)m_screenHeight;
-    matrixData.projection = DirectX::XMMatrixPerspectiveFovLH(
-        DirectX::XMConvertToRadians(45.0f),
-        aspectRatio,
-        0.1f,
-        100.0f
-    );
-
-    // 転置（DirectXMathの行列はシェーダーと異なる形式）
-    matrixData.world = DirectX::XMMatrixTranspose(matrixData.world);
-    matrixData.view = DirectX::XMMatrixTranspose(matrixData.view);
-    matrixData.projection = DirectX::XMMatrixTranspose(matrixData.projection);
-
-    // 定数バッファを更新
-    context->UpdateSubresource(m_matrixBuffer.Get(), 0, nullptr, &matrixData, 0, 0);
-
-    // === 時間バッファを設定 ===
-    TimeBufferType timeData;
-    timeData.time = m_time;
-    timeData.waveSpeed = m_waveSpeed;
-    timeData.waveAmplitude = m_waveAmplitude;
-    timeData.padding = 0.0f;
-
-    context->UpdateSubresource(m_timeBuffer.Get(), 0, nullptr, &timeData, 0, 0);
-
-    // === シェーダーをセット ===
-    context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
-    context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
-    context->IASetInputLayout(m_inputLayout.Get());
-
-    // === 定数バッファをセット ===
-    context->VSSetConstantBuffers(0, 1, m_matrixBuffer.GetAddressOf());
-    context->VSSetConstantBuffers(1, 1, m_timeBuffer.GetAddressOf());
-
-    // === テクスチャをセット ===
-    context->PSSetShaderResources(0, 1, m_flagTexture.GetAddressOf());
-    context->PSSetSamplers(0, 1, m_samplerState.GetAddressOf());
-
-    // === 旗を描画 ===
-    if (m_flagMesh)
-    {
-        m_flagMesh->Draw(context);
-    }
-
-    // === 炎パーティクルを描画   ===
-    if (m_fireParticleSystem)
-    {
-        // view と projection は転置を戻す（パーティクルシステムは転置しない形式を期待）
-        DirectX::XMMATRIX viewForParticles = DirectX::XMMatrixTranspose(matrixData.view);
-        DirectX::XMMATRIX projectionForParticles = DirectX::XMMatrixTranspose(matrixData.projection);
-
-        m_fireParticleSystem->Render(context, viewForParticles, projectionForParticles);
-    }
+    // === パス2: ブラーを適用して画面に描画 ===
+    ApplyBlur(context, backBufferRTV, depthStencilView);
 }
 
 void TitleScene::CreateShaders(ID3D11Device* device)
@@ -345,4 +294,291 @@ void TitleScene::CreateTexture(ID3D11Device* device)
     {
         throw std::runtime_error("Failed to create sampler state");
     }
+}
+
+void TitleScene::CreatePostProcessResources(ID3D11Device* device)
+{
+    // === 1) レンダーテクスチャを作成 ===
+    D3D11_TEXTURE2D_DESC texDesc = {};
+    texDesc.Width = m_screenWidth;              // 画面幅
+    texDesc.Height = m_screenHeight;            // 画面高さ
+    texDesc.MipLevels = 1;                      // ミップマップなし
+    texDesc.ArraySize = 1;                      // 配列サイズ1
+    texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // RGBA 8bit
+    texDesc.SampleDesc.Count = 1;               // マルチサンプルなし
+    texDesc.Usage = D3D11_USAGE_DEFAULT;        // GPU読み書き
+    texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+    texDesc.CPUAccessFlags = 0;
+
+    HRESULT hr = device->CreateTexture2D(&texDesc, nullptr, &m_renderTexture);
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create render texture");
+
+    // === 2) レンダーターゲットビューを作成 ===
+    hr = device->CreateRenderTargetView(m_renderTexture.Get(), nullptr, &m_renderTargetView);
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create render target view");
+
+    // === 3) シェーダーリソースビューを作成 ===
+    hr = device->CreateShaderResourceView(m_renderTexture.Get(), nullptr, &m_renderTextureSRV);
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create shader resource view");
+
+    // === 4) フルスクリーンクアッド（四角形）の頂点データ ===
+    struct VertexPos2D
+    {
+        DirectX::XMFLOAT3 position;  // 位置（X, Y, Z）
+        DirectX::XMFLOAT2 texcoord;  // UV座標
+    };
+
+    // 画面全体を覆う四角形（2つの三角形）
+    VertexPos2D vertices[] =
+    {
+        // 位置（NDC座標: -1?1）      UV座標（0?1）
+        { DirectX::XMFLOAT3(-1.0f,  1.0f, 0.0f), DirectX::XMFLOAT2(0.0f, 0.0f) },  // 左上
+        { DirectX::XMFLOAT3(1.0f,  1.0f, 0.0f), DirectX::XMFLOAT2(1.0f, 0.0f) },  // 右上
+        { DirectX::XMFLOAT3(-1.0f, -1.0f, 0.0f), DirectX::XMFLOAT2(0.0f, 1.0f) },  // 左下
+        { DirectX::XMFLOAT3(1.0f, -1.0f, 0.0f), DirectX::XMFLOAT2(1.0f, 1.0f) },  // 右下
+    };
+
+    // 頂点バッファ作成
+    D3D11_BUFFER_DESC vbDesc = {};
+    vbDesc.Usage = D3D11_USAGE_IMMUTABLE;       // 不変（変更しない）
+    vbDesc.ByteWidth = sizeof(vertices);         // サイズ
+    vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER; // 頂点バッファ
+    vbDesc.CPUAccessFlags = 0;
+
+    D3D11_SUBRESOURCE_DATA vbData = {};
+    vbData.pSysMem = vertices;                   // データ
+
+    hr = device->CreateBuffer(&vbDesc, &vbData, &m_fullscreenQuadVB);
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create fullscreen quad vertex buffer");
+
+    // === 5) サンプラーステート作成 ===
+    D3D11_SAMPLER_DESC samplerDesc = {};
+    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;  // 線形補間
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;    // 端はクランプ
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.MaxAnisotropy = 1;
+    samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+    hr = device->CreateSamplerState(&samplerDesc, &m_postProcessSampler);
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create post-process sampler");
+
+    OutputDebugStringA("[TITLE] Post-process resources created\n");
+}
+
+void TitleScene::CreatePostProcessShaders(ID3D11Device* device)
+{
+    HRESULT hr;
+    Microsoft::WRL::ComPtr<ID3DBlob> vsBlob;
+    Microsoft::WRL::ComPtr<ID3DBlob> psBlob;
+    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+
+    // === 1) 頂点シェーダーをコンパイル ===
+    hr = D3DCompileFromFile(
+        L"PostProcessVS.hlsl",  // ファイル名
+        nullptr,
+        nullptr,
+        "main",                  // エントリーポイント
+        "vs_5_0",                // シェーダーモデル
+        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
+        0,
+        &vsBlob,
+        &errorBlob
+    );
+
+    if (FAILED(hr))
+    {
+        if (errorBlob)
+        {
+            OutputDebugStringA("[SHADER ERROR - PostProcessVS]\n");
+            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+        }
+        throw std::runtime_error("Failed to compile post-process vertex shader");
+    }
+
+    // 頂点シェーダーを作成
+    hr = device->CreateVertexShader(
+        vsBlob->GetBufferPointer(),
+        vsBlob->GetBufferSize(),
+        nullptr,
+        &m_postProcessVS
+    );
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create post-process vertex shader");
+
+    // === 2) 入力レイアウト作成 ===
+    D3D11_INPUT_ELEMENT_DESC layout[] =
+    {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    };
+
+    hr = device->CreateInputLayout(
+        layout,
+        ARRAYSIZE(layout),
+        vsBlob->GetBufferPointer(),
+        vsBlob->GetBufferSize(),
+        &m_postProcessLayout
+    );
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create post-process input layout");
+
+    // === 3) ピクセルシェーダーをコンパイル ===
+    hr = D3DCompileFromFile(
+        L"BlurPS.hlsl",  // ファイル名
+        nullptr,
+        nullptr,
+        "main",
+        "ps_5_0",
+        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
+        0,
+        &psBlob,
+        &errorBlob
+    );
+
+    if (FAILED(hr))
+    {
+        if (errorBlob)
+        {
+            OutputDebugStringA("[SHADER ERROR - BlurPS]\n");
+            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+        }
+        throw std::runtime_error("Failed to compile blur pixel shader");
+    }
+
+    // ピクセルシェーダーを作成
+    hr = device->CreatePixelShader(
+        psBlob->GetBufferPointer(),
+        psBlob->GetBufferSize(),
+        nullptr,
+        &m_blurPS
+    );
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create blur pixel shader");
+
+    OutputDebugStringA("[TITLE] Post-process shaders created\n");
+}
+
+void TitleScene::RenderToTexture(ID3D11DeviceContext* context)
+{
+    // === 1) レンダーターゲットをレンダーテクスチャに切り替え ===
+    context->OMSetRenderTargets(1, m_renderTargetView.GetAddressOf(), nullptr);
+
+    // === 2) クリア（黒）===
+    float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    context->ClearRenderTargetView(m_renderTargetView.Get(), clearColor);
+
+    // === 3) 既存の3D描画処理（旗と炎）===
+
+    // 行列設定
+    MatrixBufferType matrixData;
+    DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(1.8f, 1.2f, 1.0f);
+    matrixData.world = scale;
+
+    DirectX::XMVECTOR eye = DirectX::XMVectorSet(0.0f, 0.0f, -2.0f, 0.0f);
+    DirectX::XMVECTOR at = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+    DirectX::XMVECTOR up = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    matrixData.view = DirectX::XMMatrixLookAtLH(eye, at, up);
+
+    float aspectRatio = (float)m_screenWidth / (float)m_screenHeight;
+    matrixData.projection = DirectX::XMMatrixPerspectiveFovLH(
+        DirectX::XMConvertToRadians(45.0f),
+        aspectRatio,
+        0.1f,
+        100.0f
+    );
+
+    matrixData.world = DirectX::XMMatrixTranspose(matrixData.world);
+    matrixData.view = DirectX::XMMatrixTranspose(matrixData.view);
+    matrixData.projection = DirectX::XMMatrixTranspose(matrixData.projection);
+
+    context->UpdateSubresource(m_matrixBuffer.Get(), 0, nullptr, &matrixData, 0, 0);
+
+    // 時間バッファ
+    TimeBufferType timeData;
+    timeData.time = m_time;
+    timeData.waveSpeed = m_waveSpeed;
+    timeData.waveAmplitude = m_waveAmplitude;
+    timeData.padding = 0.0f;
+    context->UpdateSubresource(m_timeBuffer.Get(), 0, nullptr, &timeData, 0, 0);
+
+    // シェーダー設定
+    context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
+    context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+    context->IASetInputLayout(m_inputLayout.Get());
+    context->VSSetConstantBuffers(0, 1, m_matrixBuffer.GetAddressOf());
+    context->VSSetConstantBuffers(1, 1, m_timeBuffer.GetAddressOf());
+    context->PSSetShaderResources(0, 1, m_flagTexture.GetAddressOf());
+    context->PSSetSamplers(0, 1, m_samplerState.GetAddressOf());
+
+    // 旗を描画
+    if (m_flagMesh)
+    {
+        m_flagMesh->Draw(context);
+    }
+
+    // 炎パーティクルを描画
+    if (m_fireParticleSystem)
+    {
+        DirectX::XMMATRIX viewForParticles = DirectX::XMMatrixTranspose(matrixData.view);
+        DirectX::XMMATRIX projectionForParticles = DirectX::XMMatrixTranspose(matrixData.projection);
+        m_fireParticleSystem->Render(context, viewForParticles, projectionForParticles);
+    }
+
+    OutputDebugStringA("[RENDER] Rendered to texture\n");
+}
+
+// ========================================
+// ApplyBlur() - ブラーを適用（修正版）
+// ========================================
+
+void TitleScene::ApplyBlur(
+    ID3D11DeviceContext* context,
+    ID3D11RenderTargetView* backBufferRTV,
+    ID3D11DepthStencilView* depthStencilView)
+{
+    // ========================================
+    // 1) バックバッファに戻す（重要！）
+    // ========================================
+    context->OMSetRenderTargets(1, &backBufferRTV, depthStencilView);
+
+    // ビューポートを設定（画面全体）
+    D3D11_VIEWPORT viewport = {};
+    viewport.TopLeftX = 0.0f;
+    viewport.TopLeftY = 0.0f;
+    viewport.Width = static_cast<float>(m_screenWidth);
+    viewport.Height = static_cast<float>(m_screenHeight);
+    viewport.MinDepth = 0.0f;
+    viewport.MaxDepth = 1.0f;
+    context->RSSetViewports(1, &viewport);
+
+    // === 2) ポストプロセス用シェーダーを設定 ===
+    context->VSSetShader(m_postProcessVS.Get(), nullptr, 0);
+    context->PSSetShader(m_blurPS.Get(), nullptr, 0);
+    context->IASetInputLayout(m_postProcessLayout.Get());
+
+    // === 3) レンダーテクスチャをシェーダーに渡す ===
+    context->PSSetShaderResources(0, 1, m_renderTextureSRV.GetAddressOf());
+    context->PSSetSamplers(0, 1, m_postProcessSampler.GetAddressOf());
+
+    // === 4) フルスクリーンクアッドを描画 ===
+    UINT stride = sizeof(DirectX::XMFLOAT3) + sizeof(DirectX::XMFLOAT2);
+    UINT offset = 0;
+    context->IASetVertexBuffers(0, 1, m_fullscreenQuadVB.GetAddressOf(), &stride, &offset);
+    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+
+    // 描画（4頂点）
+    context->Draw(4, 0);
+
+    // === 5) シェーダーリソースをクリア（重要！）===
+    ID3D11ShaderResourceView* nullSRV = nullptr;
+    context->PSSetShaderResources(0, 1, &nullSRV);
+
+    OutputDebugStringA("[BLUR] Applied successfully to back buffer\n");
 }

@@ -14,7 +14,8 @@ Player::Player() :
     m_mouseCaptured(false),
     m_firstMouse(true),
     m_lastMouseX(0),
-    m_lastMouseY(0)
+    m_lastMouseY(0),
+    m_meleeAttackCooldown(0.0f)
 {
 }
 
@@ -39,6 +40,9 @@ void Player::Update(HWND window)
             m_isDamaged = false;
         }
     }
+
+    //  近接攻撃のクールダウンを更新
+    UpdateMeleeAttackCooldown(1.0f / 60.0f);
 }
 
 //  AddCameraRecoil -   カメラリコイル(反動)

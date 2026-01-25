@@ -382,6 +382,12 @@
     <FxCompile Include="FlagVS_Standalone.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
+    <FxCompile Include="PostProcessVS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="BlurPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="FireParticlePS_Standalone.hlsl">

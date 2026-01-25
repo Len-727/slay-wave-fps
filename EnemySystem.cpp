@@ -1,5 +1,6 @@
 //	EnemySystem.cpp	敵管理システムの実装
 #include "EnemySystem.h"
+#include<windows.h>
 #include <Algorithm>	//	std::remmove_if(配列から要素を削除)を使うため
 #include <cmath>		//	sprtf(平方根), conf, sinfを使うため
 
@@ -47,6 +48,35 @@ void EnemySystem::Update(float deltaTime, DirectX::XMFLOAT3 playerPos)
 			}
 
 			continue;  // 通常の移動処理をスキップ
+		}
+
+		//	===	よろめき状態判定	===
+
+		//	HPが30%以下ならよろめき状態にする
+		float hpRatio = (float)enemy.health / (float)enemy.maxHealth;
+
+		if (hpRatio <= 0.3f && enemy.health > 0)
+		{
+			enemy.isStaggered = true;
+
+			//	点滅タイマー(5倍速)
+			enemy.staggerFlashTimer += deltaTime * 0.5f;
+
+			// デバッグログ（最初の1回だけ）
+			static int lastStaggeredID = -1;
+			if (lastStaggeredID != enemy.id)
+			{
+				char buffer[128];
+				sprintf_s(buffer, "[GLORY] Enemy ID:%d is STAGGERED! HP:%.1f/%.1f\n",
+					enemy.id, (float)enemy.health, (float)enemy.maxHealth);
+				OutputDebugStringA(buffer);
+				lastStaggeredID = enemy.id;
+			}
+		}
+		else
+		{
+			enemy.isStaggered = false;
+			enemy.staggerFlashTimer = 0.0f;
 		}
 
 		// === 通常の移動処理 ===

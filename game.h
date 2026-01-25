@@ -159,6 +159,8 @@ private:
         EnemyType enemyType
     );
 
+    void PerformMeleeAttack();  //  近接攻撃を実行
+
     // DirectXデバイス（GPU制御）
     Microsoft::WRL::ComPtr<ID3D11Device>            m_d3dDevice;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext>     m_d3dContext;

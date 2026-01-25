@@ -1658,7 +1658,25 @@ void Game::DrawEnemies()
         // ========================================================================
         InstanceData instance;
         DirectX::XMStoreFloat4x4(&instance.world, world);
-        instance.color = enemy.color;
+
+        //  === よろめき状態なら点滅させる   ===
+        if (enemy.isStaggered)
+        {
+            float flash = sinf(enemy.staggerFlashTimer);    //  -1.0 - 1.0
+            flash = (flash + 1.0f) * 0.5f;  //  0.0 - 1.0に変換
+
+            //  オレンジ色に光る
+            instance.color = DirectX::XMFLOAT4(
+                1.0f,                    // R: 赤 MAX
+                0.5f + flash * 0.5f,     // G: 0.5?1.0 で点滅
+                0.0f,                    // B: 青 0
+                1.0f
+            );
+        }
+        else
+        {
+            instance.color = enemy.color;
+        }
 
         switch (enemy.type)
         {
@@ -2654,6 +2672,35 @@ void Game::UpdatePlaying()
 
     m_player->SetPosition(newPosition);
 
+    
+    //  === 近接攻撃の入力処理   ===
+    static bool lastFKeyState = false;  //  前フレームのFキー状態
+    bool fKeyPressed = (GetAsyncKeyState('F') & 0x8000) != 0;   //  現在Fキーの状態
+
+    //  Fキーが押された瞬間(前フレームは話されていて、今フレームは押されている)
+    if (fKeyPressed && !lastFKeyState)
+    {
+        //  クールダウン中でなければ近接攻撃を実行
+        if (m_player->CanMeleeAttack())
+        {
+            PerformMeleeAttack();   //  近接攻撃実行
+            m_player->StartMeleeAttackCooldown();   //  クールダウン開始
+
+            OutputDebugStringA("[MELEE] Melee attack executed!\n");
+        }
+        else
+        {
+            // クールダウン中のログ
+            char buffer[64];
+            sprintf_s(buffer, "[MELEE] Cooldown: %.2fs\n",
+                m_player->GetMeleeAttackCooldown());
+            OutputDebugStringA(buffer);
+        }
+    }
+
+    //  現在の状態を保存(次フレーム用)
+    lastFKeyState = fKeyPressed;
+
 
     //  === 壁武器購入システム
     m_nearbyWeaponSpawn = m_weaponSpawnSystem->CheckPlayerNearWeapon(
@@ -3395,7 +3442,11 @@ void Game::RenderTitle()
     {
         try
         {
-            m_titleScene->Render(m_d3dContext.Get());
+            m_titleScene->Render(
+                m_d3dContext.Get(),
+                m_renderTargetView.Get(),    // バックバッファ
+                m_depthStencilView.Get()     // 深度バッファ
+            );
         }
         catch (const std::exception& e)
         {
@@ -3594,4 +3645,130 @@ void Game::UpdatePhysics(float deltaTime)
         // これにより、手動で動かしたKinematic ObjectのAABB(境界ボックス)も更新されます
         m_dynamicsWorld->stepSimulation(deltaTime, 10);
     }
+}
+
+void Game::PerformMeleeAttack()
+{
+    using namespace DirectX;
+
+    //  プレイヤーの位置と向きを取得
+    XMFLOAT3 playerPos = m_player->GetPosition();
+    float cameraRotY = m_player->GetCameraRotationY();  //  Y軸回転(左右)
+
+    //  前方ベクトルを計算
+    // カメラの向きから前方ベクトルを作成
+    XMFLOAT3 forward;
+    forward.x = sinf(cameraRotY);   //  X方向成分
+    forward.y = 0.0f;   //  Y方向は０（水平方向のみ）
+    forward.z = cosf(cameraRotY);   //  Z方向成分
+
+    //  レイキャストの開始位置と方向
+    const float meleeRange = 2.0f;  //  近接攻撃の射程(2メートル)
+
+    //  レイキャストを実行(Bullet Physic)
+    RaycastResult result = RaycastPhysics(
+        playerPos,  // 開始位置
+        forward,    // 方向
+        meleeRange  // 最大距離
+    );
+
+    //  敵に当たったか確認
+    if (result.hit && result.hitEnemy)
+    {
+        Enemy* hitEnemy = result.hitEnemy;
+
+        //  グローリー判定(敵がよろめいてる状態)
+        if (hitEnemy->isStaggered)
+        {
+            //  グローリーキル
+            OutputDebugStringA("[GLORY KILL] GLORY KILL EXECUTED!\n");
+
+            //  即死させる
+            hitEnemy->health = 0;
+
+            //  弾薬を50%回復
+            WeaponType currentWeapon = m_weaponSystem->GetCurrentWeapon();
+            WeaponData weaponData = m_weaponSystem->GetWeaponData(currentWeapon);
+
+            int currentAmmo = m_weaponSystem->GetReserveAmmo();
+            int maxReserve = weaponData.maxAmmo;
+
+            int ammoReward = (int)(maxReserve * 0.5f);  //  50%回復
+            int newAmmo = currentAmmo + ammoReward;
+
+            //  最大値を超えないように
+            if (newAmmo > maxReserve)
+                newAmmo = maxReserve;
+
+            m_weaponSystem->SetReserveAmmo(newAmmo);
+
+            char buffer[128];
+            sprintf_s(buffer, "[GLORY KILL] Ammo recovered: +%d (Total: %d/%d)\n",
+                ammoReward, newAmmo, maxReserve);
+            OutputDebugStringA(buffer);
+
+
+            //  カメラシェイク
+            m_cameraShake = 0.3f;   //  通常の２倍
+            m_cameraShakeTimer = 0.3f;
+
+            //  ヒットストップ
+            m_hitStopTimer = 0.1f;  //  通常の２倍
+
+            //  スローモーション
+            m_timeScale = 0.2f; //  20%スロー
+            m_slowMoTimer = 0.8f;   //  0.8秒間
+
+            //  パーティクル
+            if (m_particleSystem)
+            {
+                XMFLOAT3 bloodDir(0.0f, 1.0f, 0.0f);
+
+                m_particleSystem->CreateBloodEffect(
+                    hitEnemy->position,
+                    bloodDir,
+                    150
+                );
+            }
+        }
+        else
+        {
+            const float normalMeleeDamage = 25.0f;  // 小ダメージ
+
+            int oldHealth = hitEnemy->health;
+            hitEnemy->health -= (int)normalMeleeDamage;
+
+            char buffer[128];
+            sprintf_s(buffer, "[MELEE] Normal hit! Damage:%.0f HP:%d->%d\n",
+                normalMeleeDamage, oldHealth, hitEnemy->health);
+            OutputDebugStringA(buffer);
+
+            // 軽いフィードバック
+            m_cameraShake = 0.08f;
+            m_cameraShakeTimer = 0.15f;
+
+            m_hitStopTimer = 0.03f;
+
+            // 少量のパーティクル
+            if (m_particleSystem)
+            {
+                XMFLOAT3 bloodDir(0.0f, 1.0f, 0.0f);
+
+                m_particleSystem->CreateBloodEffect(
+                    hitEnemy->position,
+                    bloodDir,
+                    30  // 少量
+                );
+            }
+        }
+    }
+    else
+    {
+        //  空振り
+        OutputDebugStringA("[MELEE] Missed!\n");
+
+        m_cameraShake = 0.05f;
+        m_cameraShakeTimer = 0.1f;
+    }
+
 }

@@ -188,6 +188,11 @@ struct Enemy {
 	float animationTime;	//	アニメーションの再生時刻
 	float rotationY;		//	敵の向き
 
+	//	---	グローリーキル用	---
+	bool isStaggered;	//	よろめき状態(HP30%以下)
+	float staggerFlashTimer;	//	点滅用タイマー
+
+
 	Enemy()
 		: position(0, 0, 0)
 		, velocity(0, 0, 0)
@@ -206,6 +211,8 @@ struct Enemy {
 		, headPosition(0, 0, 0)
 		, bloodDirection(0, 1, 0)
 		, isRagdoll(false)
+		, isStaggered(false)
+		, staggerFlashTimer(0.0f)
 	{
 
 	}

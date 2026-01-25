@@ -76,6 +76,31 @@ public:
             DirectX::XMMatrixTranslation(m_position.x, m_position.y, m_position.z);
     }
 
+    //  === 近接攻撃用   ===
+
+    //  カメラのY軸回転を取得
+    float GetCameraRotationY() const { return m_rotation.y; }
+
+    //  近接攻撃可能か
+    bool CanMeleeAttack() const {return m_meleeAttackCooldown <= 0.0f;}
+
+    //  近接武器用のクールダウンを開始
+    void StartMeleeAttackCooldown() { m_meleeAttackCooldown = 1.0f; }
+
+    //  クールダウンタイマーを取得
+    float GetMeleeAttackCooldown() const { return m_meleeAttackCooldown; }
+
+    //  クールダウンを更新(毎フレーム)
+    void UpdateMeleeAttackCooldown(float deltaTime)
+    {
+        if (m_meleeAttackCooldown > 0.0f)
+        {
+            m_meleeAttackCooldown -= deltaTime;
+            if (m_meleeAttackCooldown < 0.0f)
+                m_meleeAttackCooldown = 0.0f;
+        }
+    }
+
 private:
     // UpdateMovement - 移動処理
     void UpdateMovement();
@@ -105,4 +130,7 @@ private:
     bool m_firstMouse;                 // 初回マウス移動か
     int m_lastMouseX;                  // 前フレームのマウスX
     int m_lastMouseY;                  // 前フレームのマウスY
+
+    //  近接攻撃用メンバ変数
+    float m_meleeAttackCooldown;    //  クールダウンタイマー
 };
