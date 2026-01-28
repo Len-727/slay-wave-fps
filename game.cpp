@@ -74,9 +74,15 @@ Game::Game() noexcept :
     m_useDebugHitboxes(false),
     m_normalConfigDebug(GetEnemyConfig(EnemyType::NORMAL)),
     m_runnerConfigDebug(GetEnemyConfig(EnemyType::RUNNER)),
-    m_tankConfigDebug(GetEnemyConfig(EnemyType::TANK))
+    m_tankConfigDebug(GetEnemyConfig(EnemyType::TANK)),
+    m_deltaTime(0.0f),
+    m_accumulatedAnimTime(0.0f),
+    m_gloryKillTargetID(-1),
+    m_gloryKillRange(2.5f)
 {
-   
+   //   パフォーマンスカウンターの初期化
+    QueryPerformanceFrequency(&m_performanceFrequency);
+    QueryPerformanceCounter(&m_lastFrameTime);
 }
 
 Game::~Game()
@@ -245,14 +251,35 @@ Game::RaycastResult Game::RaycastPhysics(
         if (userPtr != nullptr)
         {
             // void* を int に変換
-            int enemyID = (int)(intptr_t)userPtr;
+            int enemyID = (int)(intptr_t)userPtr - 1;
+
+            // === デバッグ: UserPointerから取得したIDを出力 ===
+            char debugID[256];
+            sprintf_s(debugID, "[DEBUG] UserPointer EnemyID: %d\n", enemyID);
+            OutputDebugStringA(debugID);
+
+            // === デバッグ: 現在の敵リストを出力 ===
+            const auto& enemies = m_enemySystem->GetEnemies();
+            char debugCount[256];
+            sprintf_s(debugCount, "[DEBUG] Total enemies in system: %zu\n", enemies.size());
+            OutputDebugStringA(debugCount);
 
             // IDから敵を検索
-            for (auto& enemy : m_enemySystem->GetEnemies())
+            bool found = false;
+            for (const auto& enemy : enemies)  // ← constに変更
             {
+                // === デバッグ: 各敵の情報を出力 ===
+                char debugEnemy[512];
+                sprintf_s(debugEnemy, "[DEBUG] Checking enemy ID:%d, isAlive:%d, position:(%.2f, %.2f, %.2f)\n",
+                    enemy.id, enemy.isAlive ? 1 : 0,
+                    enemy.position.x, enemy.position.y, enemy.position.z);
+                OutputDebugStringA(debugEnemy);
+
                 if (enemy.id == enemyID && enemy.isAlive)
                 {
-                    result.hitEnemy = &enemy;
+                    // === 重要: const_castを使って非constポインタを取得 ===
+                    result.hitEnemy = const_cast<Enemy*>(&enemy);
+                    found = true;
 
                     char buffer[512];
                     sprintf_s(buffer,
@@ -265,11 +292,11 @@ Game::RaycastResult Game::RaycastPhysics(
                 }
             }
 
-            if (result.hitEnemy == nullptr)
+            if (!found)
             {
                 // IDが見つからない = 死んだ敵か壁
                 char buffer[256];
-                sprintf_s(buffer, "[BULLET] Hit dead enemy or wall (ID:%d)\n", enemyID);
+                sprintf_s(buffer, "[BULLET] Hit dead enemy or wall (ID:%d) - Enemy not found or not alive\n", enemyID);
                 OutputDebugStringA(buffer);
             }
         }
@@ -339,7 +366,7 @@ void Game::AddEnemyPhysicsBody(Enemy& enemy)
     body->setActivationState(DISABLE_DEACTIVATION);
 
     // === 重要: 敵のIDを保存（ポインタではなくID） ===
-    body->setUserPointer((void*)(intptr_t)enemy.id);  // ← 修正！int を void* にキャスト
+    body->setUserPointer((void*)(intptr_t)(enemy.id + 1));  // ← 修正！int を void* にキャスト
 
     m_dynamicsWorld->addRigidBody(body);
 
@@ -354,14 +381,55 @@ void Game::AddEnemyPhysicsBody(Enemy& enemy)
 
 void Game::UpdateEnemyPhysicsBody(Enemy& enemy)
 {
+    // === デバッグ: 物理ボディの検索 ===
+    char debugSearch[256];
+    sprintf_s(debugSearch, "[PHYSICS UPDATE] Searching for enemy ID:%d physics body\n", enemy.id);
+    OutputDebugStringA(debugSearch);
+
     auto it = m_enemyPhysicsBodies.find(enemy.id);
     if (it == m_enemyPhysicsBodies.end())
+    {
+        // === デバッグ: 物理ボディが見つからない ===
+        char debugNotFound[256];
+        sprintf_s(debugNotFound, "[PHYSICS UPDATE] ? Physics body NOT FOUND for enemy ID:%d\n", enemy.id);
+        OutputDebugStringA(debugNotFound);
+
+        // === デバッグ: 登録されている物理ボディのIDを表示 ===
+        OutputDebugStringA("[PHYSICS UPDATE] Registered physics bodies:\n");
+        for (const auto& pair : m_enemyPhysicsBodies)
+        {
+            char debugRegistered[256];
+            sprintf_s(debugRegistered, "  - Enemy ID:%d\n", pair.first);
+            OutputDebugStringA(debugRegistered);
+        }
         return;
+    }
+
+    // === デバッグ: 物理ボディが見つかった ===
+    char debugFound[256];
+    sprintf_s(debugFound, "[PHYSICS UPDATE] ? Found physics body for enemy ID:%d\n", enemy.id);
+    OutputDebugStringA(debugFound);
 
     btRigidBody* body = it->second;
 
     EnemyTypeConfig config = GetEnemyConfig(enemy.type);
     float totalHeight = config.bodyHeight;
+
+    // === デバッグ: 更新前の位置 ===
+    btTransform oldTransform;
+    body->getMotionState()->getWorldTransform(oldTransform);
+    btVector3 oldPos = oldTransform.getOrigin();
+
+    char debugOldPos[256];
+    sprintf_s(debugOldPos, "[PHYSICS UPDATE] Old position: (%.2f, %.2f, %.2f)\n",
+        oldPos.x(), oldPos.y(), oldPos.z());
+    OutputDebugStringA(debugOldPos);
+
+    // === デバッグ: 新しい位置 ===
+    char debugNewPos[256];
+    sprintf_s(debugNewPos, "[PHYSICS UPDATE] New position: (%.2f, %.2f, %.2f)\n",
+        enemy.position.x, totalHeight / 2.0f, enemy.position.z);
+    OutputDebugStringA(debugNewPos);
 
     btTransform transform;
     transform.setIdentity();
@@ -377,9 +445,10 @@ void Game::UpdateEnemyPhysicsBody(Enemy& enemy)
     {
         body->getMotionState()->setWorldTransform(transform);
     }
+
+    // === デバッグ: 更新完了 ===
+    OutputDebugStringA("[PHYSICS UPDATE] ? Physics body updated successfully\n\n");
 }
-
-
 
 void Game::RemoveEnemyPhysicsBody(int enemyID)
 {
@@ -399,8 +468,32 @@ void Game::RemoveEnemyPhysicsBody(int enemyID)
 
 void Game::Tick()
 {
+    //  === deltaTimeを計算    ===
+    LARGE_INTEGER currentTime;
+    QueryPerformanceCounter(&currentTime);
+
+    float elapsedSeconds = static_cast<float>(currentTime.QuadPart - m_lastFrameTime.QuadPart)
+        / static_cast<float>(m_performanceFrequency.QuadPart);
+
+    m_lastFrameTime = currentTime;
+
+    //  deltaTimeを更新(最大値を制限して、スパイクを防ぐ)
+    m_deltaTime = min(elapsedSeconds, 0.1f);    //  最大0.1秒
+
+    // === デバッグ: deltaTimeとFPSを表示 ===
+    static float debugTimer = 0.0f;
+    debugTimer += m_deltaTime;
+    if (debugTimer >= 1.0f)  // 1秒ごとに表示
+    {
+        float currentFPS = 1.0f / m_deltaTime;
+        char debugBuffer[256];
+        sprintf_s(debugBuffer, "[DEBUG] deltaTime: %.4f, FPS: %.1f\n", m_deltaTime, currentFPS);
+        OutputDebugStringA(debugBuffer);
+        debugTimer = 0.0f;
+    }
+
     // ゲームの1フレーム処理
-    Update();  // ゲームロジック（自分で書く部分）
+    Update();  // ゲームロジック
     Render();  // 描画処理
 }
 
@@ -1761,7 +1854,7 @@ void Game::DrawEnemies()
         // Walking - 頭あり
         if (!normalWalking.empty())
         {
-            float walkTime = fmod((float)frameCount / 60.0f,
+            float walkTime = fmod(m_accumulatedAnimTime,
                 m_enemyModel->GetAnimationDuration("Walk"));
             m_enemyModel->DrawInstanced(m_d3dContext.Get(), normalWalking,
                 viewMatrix, projectionMatrix, "Walk", walkTime);
@@ -1770,7 +1863,7 @@ void Game::DrawEnemies()
         // Attacking - 頭あり
         if (!normalAttacking.empty())
         {
-            float attackTime = fmod((float)frameCount / 60.0f,
+            float attackTime = fmod(m_accumulatedAnimTime,
                 m_enemyModel->GetAnimationDuration("Attack"));
             m_enemyModel->DrawInstanced(m_d3dContext.Get(), normalAttacking,
                 viewMatrix, projectionMatrix, "Attack", attackTime);
@@ -1790,7 +1883,7 @@ void Game::DrawEnemies()
         // Walking - 頭なし
         if (!normalWalkingHeadless.empty())
         {
-            float walkTime = fmod((float)frameCount / 60.0f,
+            float walkTime = fmod(m_accumulatedAnimTime,
                 m_enemyModel->GetAnimationDuration("Walk"));
             m_enemyModel->DrawInstanced(m_d3dContext.Get(), normalWalkingHeadless,
                 viewMatrix, projectionMatrix, "Walk", walkTime);
@@ -1799,7 +1892,7 @@ void Game::DrawEnemies()
         // Attacking - 頭なし
         if (!normalAttackingHeadless.empty())
         {
-            float attackTime = fmod((float)frameCount / 60.0f,
+            float attackTime = fmod(m_accumulatedAnimTime,
                 m_enemyModel->GetAnimationDuration("Attack"));
             m_enemyModel->DrawInstanced(m_d3dContext.Get(), normalAttackingHeadless,
                 viewMatrix, projectionMatrix, "Attack", attackTime);
@@ -1826,7 +1919,7 @@ void Game::DrawEnemies()
         // Walking - 頭あり
         if (!runnerWalking.empty())
         {
-            float walkTime = fmod((float)frameCount / 60.0f,
+            float walkTime = fmod(m_accumulatedAnimTime,
                 m_runnerModel->GetAnimationDuration("Walk"));
             m_runnerModel->DrawInstanced(m_d3dContext.Get(), runnerWalking,
                 viewMatrix, projectionMatrix, "Walk", walkTime);
@@ -1835,7 +1928,7 @@ void Game::DrawEnemies()
         // Attacking - 頭あり
         if (!runnerAttacking.empty())
         {
-            float attackTime = fmod((float)frameCount / 60.0f,
+            float attackTime = fmod(m_accumulatedAnimTime,
                 m_runnerModel->GetAnimationDuration("Attack"));
             m_runnerModel->DrawInstanced(m_d3dContext.Get(), runnerAttacking,
                 viewMatrix, projectionMatrix, "Attack", attackTime);
@@ -1855,7 +1948,7 @@ void Game::DrawEnemies()
         // Walking - 頭なし
         if (!runnerWalkingHeadless.empty())
         {
-            float walkTime = fmod((float)frameCount / 60.0f,
+            float walkTime = fmod(m_accumulatedAnimTime,
                 m_runnerModel->GetAnimationDuration("Walk"));
             m_runnerModel->DrawInstanced(m_d3dContext.Get(), runnerWalkingHeadless,
                 viewMatrix, projectionMatrix, "Walk", walkTime);
@@ -1864,7 +1957,7 @@ void Game::DrawEnemies()
         // Attacking - 頭なし
         if (!runnerAttackingHeadless.empty())
         {
-            float attackTime = fmod((float)frameCount / 60.0f,
+            float attackTime = fmod(m_accumulatedAnimTime,
                 m_runnerModel->GetAnimationDuration("Attack"));
             m_runnerModel->DrawInstanced(m_d3dContext.Get(), runnerAttackingHeadless,
                 viewMatrix, projectionMatrix, "Attack", attackTime);
@@ -1891,7 +1984,7 @@ void Game::DrawEnemies()
         // Walking - 頭あり
         if (!tankWalking.empty())
         {
-            float walkTime = fmod((float)frameCount / 60.0f,
+            float walkTime = fmod(m_accumulatedAnimTime,
                 m_tankModel->GetAnimationDuration("Walk"));
             m_tankModel->DrawInstanced(m_d3dContext.Get(), tankWalking,
                 viewMatrix, projectionMatrix, "Walk", walkTime);
@@ -1900,7 +1993,7 @@ void Game::DrawEnemies()
         // Attacking - 頭あり
         if (!tankAttacking.empty())
         {
-            float attackTime = fmod((float)frameCount / 60.0f,
+            float attackTime = fmod(m_accumulatedAnimTime,
                 m_tankModel->GetAnimationDuration("Attack"));
             m_tankModel->DrawInstanced(m_d3dContext.Get(), tankAttacking,
                 viewMatrix, projectionMatrix, "Attack", attackTime);
@@ -1920,7 +2013,7 @@ void Game::DrawEnemies()
         // Walking - 頭なし
         if (!tankWalkingHeadless.empty())
         {
-            float walkTime = fmod((float)frameCount / 60.0f,
+            float walkTime = fmod(m_accumulatedAnimTime,
                 m_tankModel->GetAnimationDuration("Walk"));
             m_tankModel->DrawInstanced(m_d3dContext.Get(), tankWalkingHeadless,
                 viewMatrix, projectionMatrix, "Walk", walkTime);
@@ -1929,7 +2022,7 @@ void Game::DrawEnemies()
         // Attacking - 頭なし
         if (!tankAttackingHeadless.empty())
         {
-            float attackTime = fmod((float)frameCount / 60.0f,
+            float attackTime = fmod(m_accumulatedAnimTime,
                 m_tankModel->GetAnimationDuration("Attack"));
             m_tankModel->DrawInstanced(m_d3dContext.Get(), tankAttackingHeadless,
                 viewMatrix, projectionMatrix, "Attack", attackTime);
@@ -2551,7 +2644,8 @@ void Game::UpdatePlaying()
         f1Pressed = false;
     }
 
-    float deltaTime = 1.0f / 60.0f;
+    float deltaTime = m_deltaTime;
+    m_accumulatedAnimTime += deltaTime * 0.5f;
 
     // === 敵に物理ボディを追加（まだ追加されてない敵のみ）===
     static bool enemiesInitialized = false;
@@ -2586,7 +2680,7 @@ void Game::UpdatePlaying()
     //  --- ヒットストップ処理   ---
     if (m_hitStopTimer > 0.0f)
     {
-        m_hitStopTimer -= 1.0f / 60.0f;
+        m_hitStopTimer -= deltaTime;
 
         if (m_hitStopTimer <= 0.0f)
         {
@@ -2597,12 +2691,86 @@ void Game::UpdatePlaying()
         }
     }
 
+    //  --- グローリーキルシステム ---
+   // Fキーが押されたか検出
+    static bool fKeyPressed = false;
+    bool fKeyDown = (GetAsyncKeyState('F') & 0x8000) != 0;
+
+    if (fKeyDown && !fKeyPressed)
+    {
+        // Fキーが押された瞬間
+        DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+
+        // 近くのstaggered敵を探す
+        Enemy* targetEnemy = nullptr;
+        float closestDist = m_gloryKillRange;
+
+        for (auto& enemy : m_enemySystem->GetEnemies())
+        {
+            if (!enemy.isAlive || enemy.isDying)
+                continue;
+
+            if (!enemy.isStaggered)
+                continue;
+
+            // 距離を計算
+            float dx = enemy.position.x - playerPos.x;
+            float dz = enemy.position.z - playerPos.z;
+            float dist = sqrtf(dx * dx + dz * dz);
+
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                targetEnemy = &enemy;
+            }
+        }
+
+        // 敵が見つかったらグローリーキル実行
+        if (targetEnemy != nullptr)
+        {
+            // === グローリーキル実行！ ===
+
+            //  敵を即座に倒す
+            targetEnemy->isDying = true;
+            targetEnemy->animationTime = 0.0f;
+            targetEnemy->currentAnimation = "Death";
+            targetEnemy->corpseTimer = 3.0f;
+
+            //  HP回復（最大HPを超えないように）
+            int currentHP = m_player->GetHealth();
+            int maxHP = m_player->GetMaxHealth();
+            int healAmount = 30;
+            int newHP = min(currentHP + healAmount, maxHP);
+            m_player->SetHealth(newHP);
+
+            // 3. スコア加算
+            m_score += 100;
+
+            //  デバッグログ
+            char buffer[256];
+            sprintf_s(buffer, "[GLORY KILL] Enemy ID:%d killed! HP: %d→%d, Score: +100\n",
+                targetEnemy->id, currentHP, newHP);
+            OutputDebugStringA(buffer);
+
+            //  エフェクト
+            m_cameraShake = 0.3f;
+            m_cameraShakeTimer = 0.2f;
+
+            // 上方向へのベクトルを用意
+            DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
+
+            // 既存の関数を使って30個の血しぶきを生成
+            m_particleSystem->CreateBloodEffect(targetEnemy->position, upDir, 500);
+        }
+    }
+
+    fKeyPressed = fKeyDown;
 
 
     //  --- スローモーション更新  ---
     if (m_slowMoTimer > 0.0f)
     {
-        m_slowMoTimer -= 1.0f / 60.0f;
+        m_slowMoTimer -= deltaTime;
         if (m_slowMoTimer <= 0.0f)
         {
             m_timeScale = 1.0f;
@@ -2612,7 +2780,7 @@ void Game::UpdatePlaying()
     //  --- カメラシェイク減衰   ---
     if (m_cameraShakeTimer > 0.0f)
     {
-        m_cameraShakeTimer -= 1.0f / 60.0f;
+        m_cameraShakeTimer -= deltaTime;
         m_cameraShake *= 0.9f;
     }
 
@@ -2675,10 +2843,10 @@ void Game::UpdatePlaying()
     
     //  === 近接攻撃の入力処理   ===
     static bool lastFKeyState = false;  //  前フレームのFキー状態
-    bool fKeyPressed = (GetAsyncKeyState('F') & 0x8000) != 0;   //  現在Fキーの状態
+    bool isMeleeKeyDown = (GetAsyncKeyState('F') & 0x8000) != 0;   //  現在Fキーの状態
 
     //  Fキーが押された瞬間(前フレームは話されていて、今フレームは押されている)
-    if (fKeyPressed && !lastFKeyState)
+    if (isMeleeKeyDown && !lastFKeyState)
     {
         //  クールダウン中でなければ近接攻撃を実行
         if (m_player->CanMeleeAttack())
@@ -2699,7 +2867,7 @@ void Game::UpdatePlaying()
     }
 
     //  現在の状態を保存(次フレーム用)
-    lastFKeyState = fKeyPressed;
+    lastFKeyState = isMeleeKeyDown;
 
 
     //  === 壁武器購入システム
@@ -2865,6 +3033,12 @@ void Game::UpdatePlaying()
             m_weaponSystem->GetFireRateTimer() <= 0.0f)
         {
             auto& weapon = m_weaponSystem->GetWeaponData(m_weaponSystem->GetCurrentWeapon());
+
+            // === デバッグ: 取得した武器データを確認 ===
+            char debugWeapon[512];
+            sprintf_s(debugWeapon, "[DEBUG WEAPON] GetWeaponData returned: damage=%d, maxAmmo=%d, fireRate=%.2f, cost=%d\n",
+                weapon.damage, weapon.maxAmmo, weapon.fireRate, weapon.cost);
+            OutputDebugStringA(debugWeapon);
 
             //  弾を消費
             m_weaponSystem->SetCurrentAmmo(m_weaponSystem->GetCurrentAmmo() - 1);
@@ -3072,8 +3246,26 @@ void Game::UpdatePlaying()
                             // === ボディショット処理 ===
                             OutputDebugStringA("[BULLET] Body shot\n");
 
+                            // === デバッグ: ダメージ前のHP ===
+                            char debugHP1[256];
+                            sprintf_s(debugHP1, "[DEBUG] Enemy ID:%d HP BEFORE damage: %df\n",
+                                hitEnemy->id, hitEnemy->health);
+                            OutputDebugStringA(debugHP1);
+
+                            // === デバッグ: 武器のダメージ ===
+                            char debugDamage[256];
+                            sprintf_s(debugDamage, "[DEBUG] Weapon damage: %d (WeaponType:%d)\n",
+                                weapon.damage, (int)currentWeapon);
+                            OutputDebugStringA(debugDamage);
+
                             m_particleSystem->CreateBloodEffect(rayResult.hitPoint, shotDir, 15);
                             hitEnemy->health -= weapon.damage;
+
+                            // === デバッグ: ダメージ後のHP ===
+                            char debugHP2[256];
+                            sprintf_s(debugHP2, "[DEBUG] Enemy ID:%d HP AFTER damage: %d\n",
+                                hitEnemy->id, hitEnemy->health);
+                            OutputDebugStringA(debugHP2);
 
                             // ヒットストップ（軽め）
                             m_timeScale = 0.1f;
@@ -3086,6 +3278,9 @@ void Game::UpdatePlaying()
                             // 死亡時の吹っ飛ばし
                             if (hitEnemy->health <= 0.0f)
                             {
+                                // === デバッグ: ラグドール処理に入った ===
+                                OutputDebugStringA("[DEBUG] Entering ragdoll processing (HP <= 0.0f)\n");
+
                                 hitEnemy->isRagdoll = true;
                                 float knockbackPower = 10.0f;
 
@@ -3109,6 +3304,11 @@ void Game::UpdatePlaying()
                                 hitEnemy->velocity.y = 5.0f;
                                 hitEnemy->velocity.z = shotDir.z * knockbackPower;
                             }
+                            else
+                            {
+                                // === デバッグ: ラグドール処理に入らなかった ===
+                                OutputDebugStringA("[DEBUG] NOT entering ragdoll (HP > 0.0f)\n");
+                            }
                         }
 
                         // ノックバック
@@ -3119,15 +3319,31 @@ void Game::UpdatePlaying()
                         // 死亡処理
                         if (hitEnemy->health <= 0)
                         {
+                            // === デバッグ: 死亡判定に入った ===
+                            OutputDebugStringA("[DEBUG] Entering death check (HP <= 0)\n");
+
                             if (!hitEnemy->isDying)
                             {
+                                // === デバッグ: 死亡処理実行 ===
+                                char debugDeath[256];
+                                sprintf_s(debugDeath, "[DEBUG] Setting isDying=true, isAlive=false for enemy ID:%d\n",
+                                    hitEnemy->id);
+                                OutputDebugStringA(debugDeath);
+
                                 hitEnemy->isDying = true;
+                                hitEnemy->isAlive = false;
                                 hitEnemy->currentAnimation = "Death";
                                 hitEnemy->animationTime = 0.0f;
                                 hitEnemy->corpseTimer = 5.0f;
 
                                 // === 追加: 死んだ瞬間に物理ボディを削除 ===
                                 RemoveEnemyPhysicsBody(hitEnemy->id);
+                            }
+
+                            else
+                            {
+                                // === デバッグ: すでにisDying=true ===
+                                OutputDebugStringA("[DEBUG] Enemy already dying (isDying=true)\n");
                             }
 
                             // ポイント加算
@@ -3148,6 +3364,11 @@ void Game::UpdatePlaying()
                                 m_player->GetPoints());
                             SetWindowTextA(m_window, debug);
                         }
+                        else
+                        {
+                            // === デバッグ: 死亡判定に入らなかった ===
+                            OutputDebugStringA("[DEBUG] NOT entering death check (HP > 0)\n");
+                        }
                     }
                     else
                     {
@@ -3159,6 +3380,8 @@ void Game::UpdatePlaying()
                 {
                     // 何にも当たらなかった
                     OutputDebugStringA("[BULLET] Complete miss\n");
+                    // === デバッグ: 死亡判定に入らなかった ===
+                    OutputDebugStringA("[DEBUG] NOT entering death check (HP > 0)\n");
                 }
             }
 }
@@ -3180,7 +3403,7 @@ void Game::UpdatePlaying()
     // リロードタイマー更新
     if (m_weaponSystem->IsReloading())
     {
-        float newTimer = m_weaponSystem->GetReloadTimer() - 1.0f / 60.0f;
+        float newTimer = m_weaponSystem->GetReloadTimer() - deltaTime;
         m_weaponSystem->SetReloadTimer(newTimer);
         if (newTimer <= 0.0f)
         {
@@ -3198,7 +3421,7 @@ void Game::UpdatePlaying()
 
     if (m_showDamageDisplay)
     {
-        m_damageDisplayTimer -= (1.0f / 60.0f); // 60FPS想定
+        m_damageDisplayTimer -= deltaTime; // 60FPS想定
         if (m_damageDisplayTimer <= 0.0f)
         {
             m_showDamageDisplay = false;
@@ -3211,7 +3434,7 @@ void Game::UpdatePlaying()
         m_effekseerManager->Update(1.0f / 60.0f);
     }*/
 
-    m_particleSystem->Update(1.0f / 60.0f);
+    m_particleSystem->Update(deltaTime);
 
     //  m_cameraPOs
     //  【型】DirectX::XMFLOAT3
@@ -3257,7 +3480,7 @@ void Game::UpdatePlaying()
             if (enemy.isDying)
             {
                 //  死亡中: 終端で完全に止める
-                enemy.animationTime += deltaTime;
+                enemy.animationTime += deltaTime * 0.1f;
                 if (enemy.animationTime >= duration)
                 {
                     enemy.animationTime = duration - 0.001f;  // 終端で固定
@@ -3266,7 +3489,7 @@ void Game::UpdatePlaying()
             else
             {
                 //  通常: ループさせる
-                enemy.animationTime += deltaTime;
+                enemy.animationTime += deltaTime * 0.1f;
                 if (enemy.animationTime >= duration)
                 {
                     enemy.animationTime = 0.0f;
@@ -3314,11 +3537,25 @@ void Game::UpdatePlaying()
     UpdatePhysics(deltaTime);
 
     //  死んだ敵を削除 毎フレーム敵を削除しないと、配列か肥大化
-    m_enemySystem->ClearDeadEnemies();  //  追加
+    m_enemySystem->ClearDeadEnemies();
 
     //  ウェーブ管理
     m_waveManager->Update(1.0f / 60.0f, m_player->GetPosition(), m_enemySystem.get());
   
+
+    //  新しくスポーンされた敵に物理ボディを追加
+    for (auto& enemy : m_enemySystem->GetEnemies())
+    {
+        if (enemy.isAlive)
+        {
+            //  子の敵がまだ物理ボディを持っていないか確認
+            if (m_enemyPhysicsBodies.find(enemy.id) == m_enemyPhysicsBodies.end())
+            {
+                AddEnemyPhysicsBody(enemy);
+            }
+        }
+    }
+
 
     // === 接触ダメージ処理 ===
 // 【目的】敵に触れられたらプレイヤーがダメージを受ける

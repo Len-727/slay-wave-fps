@@ -131,8 +131,8 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 			float normalizedX = dirX / distance;
 			float normalizedZ = dirZ / distance;
 
-			enemy.velocity.x = normalizedX * 1.0f;
-			enemy.velocity.z = normalizedZ * 1.0f;
+			enemy.velocity.x = normalizedX * 0.5f;
+			enemy.velocity.z = normalizedZ * 0.5f;
 		}
 
 		//	タイマーをリセット

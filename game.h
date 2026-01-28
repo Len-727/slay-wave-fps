@@ -228,9 +228,20 @@ private:
     int m_frameCount;
     float m_currentFPS;
 
+    //  deltaTime計測用
+    LARGE_INTEGER m_lastFrameTime;
+    LARGE_INTEGER m_performanceFrequency;
+    float m_deltaTime;
+
     //  スローモーション
     float m_timeScale;      //  時間の流れる速度
     float m_slowMoTimer;    //  スローモーション残り時間
+
+    //  アニメーション累積時間
+    float m_accumulatedAnimTime;
+
+    int m_gloryKillTargetID;
+    float m_gloryKillRange;
 
     //  カメラシェイク
     float m_cameraShake;        //  カメラの揺れ強度

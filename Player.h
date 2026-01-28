@@ -51,6 +51,15 @@ public:
     // GetHealth - Œ»İ‚ÌHP
     int GetHealth() const { return m_health; }
 
+    int GetMaxHealth() const { return 100; }
+
+    void SetHealth(int health)
+    {
+        m_health = health;
+        if (m_health > 100) m_health = 100;  // Å‘åHP100
+        if (m_health < 0) m_health = 0;      // Å¬HP0
+    }
+
     // GetPoints - Œ»İ‚Ìƒ|ƒCƒ“ƒg
     int GetPoints() const { return m_points; }
 

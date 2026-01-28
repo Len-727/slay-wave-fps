@@ -1,17 +1,21 @@
 //	WavaManager.cpp	-	ウェーブ管理システムの実装
+#define NOMINMAX
+#include <windows.h>
 #include "WaveManager.h"
 #include <algorithm>	//	min, max
+#include <cmath>		//	pow (累乗計算用)
 
 //	コンストラクタ
-//	【役割】ウェーブ1, 敵６体,準備時間5秒スタート
+//	【役割】ウェーブ1、敵10体、準備時間3秒でスタート
 WaveManager::WaveManager() :
 	m_currentWave(1),
-	m_enemiesPerWave(200),
 	m_enemiesKilledThisWave(0),
-	m_totalEnemiesThisWave(200),
+	m_totalEnemiesThisWave(10),		//	Wave1は10体
 	m_betweenWaves(true),
-	m_waveStartTimer(5.0f),
-	m_enemySpawnTimer(0.0f)
+	m_waveStartTimer(3.0f),			//	3秒の準備時間
+	m_enemySpawnTimer(0.0f),
+	m_baseEnemyCount(10),			//	基本敵数: 10体
+	m_difficultyScale(1.2f)			//	難易度スケール: 1.2倍ずつ増加
 {
 }
 
@@ -28,13 +32,21 @@ void WaveManager::Update(float deltaTime, DirectX::XMFLOAT3 playerPos, EnemySyst
 			//	新ウェーブ開始
 			m_betweenWaves = false;
 			m_enemiesKilledThisWave = 0;
-			m_totalEnemiesThisWave = m_enemiesPerWave;
 
-			//	初期スポーン(2 - 4体)
-			//	【計算】Wave1:2体, Wave2:3体, Wave3以降:4体
-			int initialSpawn = 80 + (m_currentWave - 1) * 10;
-			//	【制限】総数を超えないように
-			initialSpawn = std::min(initialSpawn, m_totalEnemiesThisWave);
+			//	=== 新機能: GetEnemyCountForWave を使う ===
+			m_totalEnemiesThisWave = GetEnemyCountForWave(m_currentWave);
+
+			//	デバッグログ
+			char buffer[128];
+			sprintf_s(buffer, "[WAVE] Wave %d started! Total enemies: %d\n",
+				m_currentWave, m_totalEnemiesThisWave);
+			OutputDebugStringA(buffer);
+
+			//	難易度に応じたHP倍率を適用（将来的に使用）
+			float hpMultiplier = GetDifficultyMultiplier();
+
+			//	初期スポーン: 最初は 3～5体だけ
+			int initialSpawn = std::min(5, m_totalEnemiesThisWave);
 
 			for (int i = 0; i < initialSpawn; i++)
 			{
@@ -62,9 +74,9 @@ void WaveManager::Update(float deltaTime, DirectX::XMFLOAT3 playerPos, EnemySyst
 			m_enemySpawnTimer += deltaTime;
 
 			//	ウェーブが進むにつれてスポーン速度アップ
-			//	【計算】Wave1:2秒、Wave10:1秒、Wave16以降:0.5秒
-			float spawnInterval = 0.3f - (m_currentWave * 0.05f);
-			spawnInterval = std::max(0.1f, spawnInterval);
+			//	【計算式】2.0秒 → 1.5秒 → 1.0秒 → 0.5秒（最速）
+			float spawnInterval = 2.0f - (m_currentWave * 0.15f);
+			spawnInterval = std::max(0.5f, spawnInterval);  // 最速0.5秒
 
 			if (m_enemySpawnTimer >= spawnInterval)
 			{
@@ -76,26 +88,57 @@ void WaveManager::Update(float deltaTime, DirectX::XMFLOAT3 playerPos, EnemySyst
 }
 
 //	OnEnemyKilled	-	敵を倒したときに呼ぶ
-//	【戻り値】ウェーブクリアボーナス(0 or 100)
+//	【戻り値】ウェーブクリアボーナス（0 or 100）
 int WaveManager::OnEnemyKilled()
 {
 	m_enemiesKilledThisWave++;
 
 	//	ウェーブクリア判定
-	if (m_enemiesKilledThisWave >= m_totalEnemiesThisWave)	//	このウェーブで倒した敵が総敵数以上になったら
+	if (m_enemiesKilledThisWave >= m_totalEnemiesThisWave)
 	{
 		m_currentWave++;
 
-		//	敵の数を増やす(毎ウェーブ３体)
-		//	【計算】Wave1:6体、Wave2:9体、Wave3:12体
-		m_enemiesPerWave = 200 + (m_currentWave - 1) * 40;
+		//	デバッグログ
+		char buffer[128];
+		sprintf_s(buffer, "[WAVE] Wave %d completed!\n", m_currentWave - 1);
+		OutputDebugStringA(buffer);
 
 		//	準備時間に入る
 		m_betweenWaves = true;
-		m_waveStartTimer = 10.0f;	//	10秒の準備時間
+		m_waveStartTimer = 3.0f;	// 3秒の準備時間
 
-		return 100;
+		return 100;	// ウェーブクリアボーナス
 	}
 
-	return 0;	//	まだクリアしていない
+	return 0;	// まだクリアしていない
+}
+
+//	=== 新機能: 動的な敵数計算	===
+
+//	GetEnemyCountForWave - 指定Waveの敵数を計算
+//	【計算式】baseEnemyCount * (difficultyScale ^ (wave - 1))
+//	【例】Wave1=10体, Wave2=12体, Wave3=14体, Wave5=20体
+int WaveManager::GetEnemyCountForWave(int wave) const
+{
+	//	累乗計算: 10 * (1.2 ^ (wave - 1))
+	float enemyCount = (float)m_baseEnemyCount * powf(m_difficultyScale, (float)(wave - 1));
+
+	//	整数に変換（四捨五入）
+	return (int)(enemyCount + 0.5f);
+}
+
+//	GetDifficultyMultiplier - 難易度倍率を取得
+//	【計算式】1.0 + (currentWave - 1) * 0.1
+//	【例】Wave1=1.0倍, Wave5=1.4倍, Wave10=1.9倍
+float WaveManager::GetDifficultyMultiplier() const
+{
+	return 1.0f + ((m_currentWave - 1) * 0.1f);
+}
+
+//	IsVictoryWave - 現在がボスWaveか判定
+//	【ルール】10Waveごとにボス戦
+//	【例】Wave10, Wave20, Wave30... → true
+bool WaveManager::IsVictoryWave() const
+{
+	return (m_currentWave % 10 == 0);
 }
