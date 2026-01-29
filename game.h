@@ -148,6 +148,7 @@ private:
     void RenderGameOver();
     void RenderFade();
     void RenderDamageFlash();
+    void RenderGloryKillFlash();
 
 
 
@@ -242,6 +243,34 @@ private:
 
     int m_gloryKillTargetID;
     float m_gloryKillRange;
+
+    //  グローリーキル演出用
+    bool m_gloryKillActive;           // グローリーキル実行中
+    float m_gloryKillInvincibleTimer; // 無敵時間タイマー
+    float m_gloryKillFlashTimer;      // 画面フラッシュタイマー
+    float m_gloryKillFlashAlpha;      // フラッシュの透明度
+    Enemy* m_gloryKillTargetEnemy;    // ターゲット敵へのポインタ
+
+    //  グローリーキルカメラ用
+    bool m_gloryKillCameraActive;   //  グローリーキルカメラ有効
+    DirectX::XMFLOAT3 m_gloryKillCameraPos; //  カメラ位置
+    DirectX::XMFLOAT3 m_gloryKillCameraTarget;  //  カメラターゲット
+    float m_gloryKillCameraLerpTime;    //  カメラ補間時間
+
+
+    // グローリーキル腕・ナイフアニメーション用
+    bool m_gloryKillArmAnimActive;       // アニメーション再生中
+    float m_gloryKillArmAnimTime;        // アニメーション時間（0.0～1.0）
+    DirectX::XMFLOAT3 m_gloryKillArmPos; // 腕の位置
+    DirectX::XMFLOAT3 m_gloryKillArmRot; // 腕の回転
+
+    // グローリーキル腕・ナイフモデル（プリミティブ）
+    std::unique_ptr<DirectX::GeometricPrimitive> m_gloryKillArm;   // 腕（円柱）
+    std::unique_ptr<DirectX::GeometricPrimitive> m_gloryKillKnife; // ナイフ（円錐）
+
+    //  描画会深度(ぼかし用)
+    bool m_gloryKillDOFActive; //  描写会深度有効
+    float m_gloryKillDOFIntensity;  //  ぼかし強度
 
     //  カメラシェイク
     float m_cameraShake;        //  カメラの揺れ強度

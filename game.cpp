@@ -78,7 +78,23 @@ Game::Game() noexcept :
     m_deltaTime(0.0f),
     m_accumulatedAnimTime(0.0f),
     m_gloryKillTargetID(-1),
-    m_gloryKillRange(2.5f)
+    m_gloryKillRange(2.5f),
+    m_gloryKillActive(false),
+    m_gloryKillInvincibleTimer(0.0f),
+    m_gloryKillFlashTimer(0.0f),
+    m_gloryKillFlashAlpha(0.0f),
+    m_gloryKillTargetEnemy(nullptr),
+    m_gloryKillCameraActive(false),
+    m_gloryKillCameraPos(0.0f, 0.0f, 0.0f),
+    m_gloryKillCameraTarget(0.0f, 0.0f, 0.0f),
+    m_gloryKillCameraLerpTime(0.0f),
+    m_gloryKillDOFActive(false),
+    m_gloryKillDOFIntensity(0.0f),
+    m_gloryKillArmAnimActive(false),
+    m_gloryKillArmAnimTime(0.0f),
+    m_gloryKillArmPos(0.0f, 0.0f, 0.0f),
+    m_gloryKillArmRot(0.0f, 0.0f, 0.0f)
+
 {
    //   パフォーマンスカウンターの初期化
     QueryPerformanceFrequency(&m_performanceFrequency);
@@ -687,6 +703,10 @@ void Game::CreateRenderResources()
         throw std::runtime_error("CreateInputLayout failed");
 
     m_cube = DirectX::GeometricPrimitive::CreateCube(m_d3dContext.Get());
+
+    // グローリーキル用の腕とナイフ（プリミティブ）
+    m_gloryKillArm = DirectX::GeometricPrimitive::CreateCylinder(m_d3dContext.Get(), 0.6f, 0.05f);  // 腕（長さ0.6、太さ0.05）
+    m_gloryKillKnife = DirectX::GeometricPrimitive::CreateCone(m_d3dContext.Get(), 0.2f, 0.03f);   // ナイフ（長さ0.2、太さ0.03）
 
     m_weaponModel = std::make_unique<Model>();
     if (!m_weaponModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Gun/PISTOL.fbx"))
@@ -2465,49 +2485,77 @@ void Game::RenderPlaying()
     DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
     DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
 
-    //  カメラシェイク適用
-    DirectX::XMFLOAT3 shakeOffset(0.0f, 0.0f, 0.0f);
-    if (m_cameraShakeTimer > 0.0f)
+    DirectX::XMVECTOR cameraPosition;
+    DirectX::XMVECTOR cameraTarget;
+
+    //  グローリーキルカメラ
+    if (m_gloryKillCameraActive)
     {
-        shakeOffset.x = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
-        shakeOffset.y = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
-        shakeOffset.z = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
+        //  カメラシェイクは無効か
+        cameraPosition = DirectX::XMVectorSet(
+            m_gloryKillCameraPos.x,
+            m_gloryKillCameraPos.y,
+            m_gloryKillCameraPos.z,
+            0.0f
+        );
+
+        cameraTarget = DirectX::XMVectorSet(
+            m_gloryKillCameraTarget.x,
+            m_gloryKillCameraTarget.y,
+            m_gloryKillCameraTarget.z,
+            0.0f
+        );
+    }
+    else
+    {
+        //  カメラシェイク適用
+        DirectX::XMFLOAT3 shakeOffset(0.0f, 0.0f, 0.0f);
+        if (m_cameraShakeTimer > 0.0f)
+        {
+            shakeOffset.x = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
+            shakeOffset.y = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
+            shakeOffset.z = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
+        }
+
+        // カメラ位置にシェイクを加える
+        cameraPosition = DirectX::XMVectorSet(
+            playerPos.x + shakeOffset.x,
+            playerPos.y + shakeOffset.y,
+            playerPos.z + shakeOffset.z,
+            0.0f
+        );
+
+        cameraTarget = DirectX::XMVectorSet(
+            playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
+            playerPos.y - sinf(playerRot.x),
+            playerPos.z + cosf(playerRot.y) * cosf(playerRot.x),
+            0.0f
+        );
+
     }
 
-    // カメラ位置にシェイクを加える
-    DirectX::XMVECTOR cameraPosition = DirectX::XMVectorSet(
-        playerPos.x + shakeOffset.x,
-        playerPos.y + shakeOffset.y,
-        playerPos.z + shakeOffset.z,
-        0.0f
-    );
+        DirectX::XMVECTOR upVector = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(cameraPosition, cameraTarget, upVector);
 
-    DirectX::XMVECTOR cameraTarget = DirectX::XMVectorSet(
-        playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
-        playerPos.y - sinf(playerRot.x),
-        playerPos.z + cosf(playerRot.y) * cosf(playerRot.x),
-        0.0f
-    );
-    DirectX::XMVECTOR upVector = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(cameraPosition, cameraTarget, upVector);
+        float aspectRatio = (float)m_outputWidth / (float)m_outputHeight;
+        DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
+            DirectX::XMConvertToRadians(70.0f), aspectRatio, 0.1f, 1000.0f
+        );
+    
 
-    float aspectRatio = (float)m_outputWidth / (float)m_outputHeight;
-    DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
-    DirectX::XMConvertToRadians(70.0f), aspectRatio, 0.1f, 1000.0f
-    );
-
-    //  === マップ描画   ===
-    if (m_mapSystem)
-    {
-        m_mapSystem->Draw(m_d3dContext.Get(), viewMatrix, projectionMatrix);
-    }
+        //  === マップ描画   ===
+        if (m_mapSystem)
+        {
+            m_mapSystem->Draw(m_d3dContext.Get(), viewMatrix, projectionMatrix);
+        }
 
 
-    //  === 壁武器テクスチャ描画  ===
-    if (m_weaponSpawnSystem)
-    {
-        m_weaponSpawnSystem->DrawWallTextures(m_d3dContext.Get(), viewMatrix, projectionMatrix);
-    }
+        //  === 壁武器テクスチャ描画  ===
+        if (m_weaponSpawnSystem)
+        {
+            m_weaponSpawnSystem->DrawWallTextures(m_d3dContext.Get(), viewMatrix, projectionMatrix);
+        }
+    
 
     // 最初に3D空間のものをすべて描画する
     DrawParticles();
@@ -2517,6 +2565,70 @@ void Game::RenderPlaying()
     DrawWeapon();
     DrawWeaponSpawns();
 
+
+    // === グローリーキル腕・ナイフ描画 ===
+    if (m_gloryKillArmAnimActive && m_gloryKillArm && m_gloryKillKnife)
+    {
+        // 【重要】現在のカメラの位置とターゲットを使う
+        DirectX::XMFLOAT3 camPos, camTarget;
+        DirectX::XMStoreFloat3(&camPos, cameraPosition);
+        DirectX::XMStoreFloat3(&camTarget, cameraTarget);
+
+        // カメラの向きベクトルを計算
+        DirectX::XMVECTOR forward = DirectX::XMVectorSubtract(cameraTarget, cameraPosition);
+        forward = DirectX::XMVector3Normalize(forward);
+
+        // カメラの右ベクトルを計算
+        DirectX::XMVECTOR worldUp = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        DirectX::XMVECTOR right = DirectX::XMVector3Cross(worldUp, forward);
+        right = DirectX::XMVector3Normalize(right);
+
+        // カメラの上ベクトルを再計算
+        DirectX::XMVECTOR up = DirectX::XMVector3Cross(forward, right);
+
+        // 腕の位置（カメラの前、画面内に固定）
+        DirectX::XMVECTOR armWorldPos = cameraPosition;
+        armWorldPos += forward * 0.8f;  // カメラの前
+        armWorldPos += right * m_gloryKillArmPos.x * 0.4f;    // 右（アニメーション）
+        armWorldPos += up * m_gloryKillArmPos.y;    // 上下
+
+        // カメラの向きから回転を計算
+        float cameraYaw = atan2f(
+            DirectX::XMVectorGetX(forward),
+            DirectX::XMVectorGetZ(forward)
+        );
+
+        // 腕のワールド行列（横向き、カメラに対して垂直）
+        DirectX::XMMATRIX armWorld = DirectX::XMMatrixIdentity();
+        // まず横向きに回転（90度）
+        armWorld *= DirectX::XMMatrixRotationZ(DirectX::XM_PIDIV2);  // Z軸で90度回転（横向き）
+        // カメラの向きに合わせる
+        armWorld *= DirectX::XMMatrixRotationY(cameraYaw);
+        // 位置を設定
+        armWorld *= DirectX::XMMatrixTranslationFromVector(armWorldPos);
+
+        // 腕を描画（肌色に近い色）
+        DirectX::XMVECTOR skinColor = DirectX::XMVectorSet(0.8f, 0.6f, 0.5f, 1.0f);
+        m_gloryKillArm->Draw(armWorld, viewMatrix, projectionMatrix, skinColor);
+
+        // ナイフの位置（腕の先端、左側）
+        DirectX::XMVECTOR knifeLocalOffset = DirectX::XMVectorSet(0.0f, 0.0f, 0.35f, 0.0f);  // 腕の先端
+
+        // ナイフのワールド行列
+        DirectX::XMMATRIX knifeWorld = DirectX::XMMatrixIdentity();
+        // ナイフを横向きに
+        knifeWorld *= DirectX::XMMatrixRotationZ(DirectX::XM_PIDIV2);  // 横向き
+        knifeWorld *= DirectX::XMMatrixRotationX(-DirectX::XM_PIDIV2);  // 先端を前に
+        // 腕のローカル座標でオフセット
+        knifeWorld *= DirectX::XMMatrixTranslationFromVector(knifeLocalOffset);
+        // 腕と同じ回転
+        knifeWorld *= DirectX::XMMatrixRotationY(cameraYaw);
+        // 腕と同じ位置
+        knifeWorld *= DirectX::XMMatrixTranslationFromVector(armWorldPos);
+
+        // ナイフを描画（銀色）
+        m_gloryKillKnife->Draw(knifeWorld, viewMatrix, projectionMatrix, DirectX::Colors::Silver);
+    }
 
 
     //  === Effekseerの描画　===
@@ -2564,11 +2676,16 @@ void Game::RenderPlaying()
     // 最後にUIをすべて手前に描画する
     DrawUI();
 
+    
+
     // ダメージエフェクトを一番上に重ねる
     if (m_player->IsDamaged())
     {
         RenderDamageFlash();
     }
+
+    //  グローリーキルの画面フラッシュ
+    //RenderGloryKillFlash();
 
     // === デバッグ描画 ===
     DrawHitboxes();      // 当たり判定可視化
@@ -2644,7 +2761,7 @@ void Game::UpdatePlaying()
         f1Pressed = false;
     }
 
-    float deltaTime = m_deltaTime;
+    float deltaTime = m_deltaTime * m_timeScale;
     m_accumulatedAnimTime += deltaTime * 0.5f;
 
     // === 敵に物理ボディを追加（まだ追加されてない敵のみ）===
@@ -2691,76 +2808,212 @@ void Game::UpdatePlaying()
         }
     }
 
-    //  --- グローリーキルシステム ---
-   // Fキーが押されたか検出
+    // 無敵時間の更新
+    if (m_gloryKillInvincibleTimer > 0.0f)
+    {
+        m_gloryKillInvincibleTimer -= deltaTime;
+        if (m_gloryKillInvincibleTimer < 0.0f)
+            m_gloryKillInvincibleTimer = 0.0f;
+    }
+
+    //  グローリーキルカメラ更新
+    if (m_gloryKillCameraActive)
+    {
+        m_gloryKillCameraLerpTime += m_deltaTime * 3.0f;
+        if (m_gloryKillCameraLerpTime > 1.0f)
+            m_gloryKillCameraLerpTime = 1.0f;
+
+        //  被写界深度の強度を徐々に上げる
+        if (m_gloryKillDOFActive)
+        {
+            m_gloryKillDOFIntensity += m_deltaTime * 4.0f;
+            if (m_gloryKillDOFIntensity > 1.0f)
+                m_gloryKillDOFIntensity = 1.0f;
+        }
+    }
+
+    // グローリーキル腕アニメーション更新（横からこめかみへ）
+    if (m_gloryKillArmAnimActive)
+    {
+        // アニメーション時間を進める（0.0～1.0）
+        m_gloryKillArmAnimTime += m_deltaTime * 1.5f;  // 0.4秒で完了
+
+        if (m_gloryKillArmAnimTime >= 1.0f)
+        {
+            m_gloryKillArmAnimTime = 1.0f;
+            m_gloryKillArmAnimActive = false;
+        }
+
+        // イージング関数（滑らかな動き）
+        float t = m_gloryKillArmAnimTime;
+        float easeInOut = t < 0.5f
+            ? 2.0f * t * t
+            : 1.0f - pow(-2.0f * t + 2.0f, 2.0f) / 2.0f;
+
+        // 腕の位置を計算（横から刺す）
+        // 0.0: 右側（画面外） → 0.4: 中央（敵のこめかみ） → 1.0: 元の位置
+         // 腕の位置を計算（横から刺す）
+        if (t < 0.5f)
+        {
+            // 右から中央へ（刺す）0.0～0.5
+            float t1 = t / 0.5f;  // 0.0～1.0に正規化
+            m_gloryKillArmPos.x = 1.5f - easeInOut * 2.0f;  // 右から左へ
+            m_gloryKillArmPos.y = 0.0f;  // 中央の高さ
+            m_gloryKillArmPos.z = 0.5f;  // カメラの前
+        }
+        else
+        {
+            // 中央から右へ（戻る）0.5～1.0
+            float t2 = (t - 0.5f) / 0.5f;  // 0.0～1.0に正規化
+            m_gloryKillArmPos.x = -0.5f + t2 * 2.0f;  // 左から右へ
+            m_gloryKillArmPos.y = 0.0f;
+            m_gloryKillArmPos.z = 0.5f;
+        }
+
+        // 腕の回転（横向き）
+        m_gloryKillArmRot.x = 0.0f;  // X軸回転なし
+        m_gloryKillArmRot.y = DirectX::XM_PIDIV2;  // 90度（横向き）
+        m_gloryKillArmRot.z = 0.0f;  // Z軸回転なし
+    }
+
+    // 画面フラッシュタイマーの更新
+    if (m_gloryKillFlashTimer > 0.0f)
+    {
+        m_gloryKillFlashTimer -= m_deltaTime;
+        if (m_gloryKillFlashTimer < 0.0f)
+        {
+            m_gloryKillFlashTimer = 0.0f;
+            m_gloryKillFlashAlpha = 0.0f;
+        }
+        else
+        {
+            // 正規化された時間（0.0～1.0）
+            float normalizedTime = m_gloryKillFlashTimer / 0.3f;  // 0.15f → 0.3f（長めに）
+
+            // イージング関数：quadratic ease-out（二次関数）
+            // 最初は速く減少、最後はゆっくり減少
+            float easeOut = 1.0f - (1.0f - normalizedTime) * (1.0f - normalizedTime);
+
+            m_gloryKillFlashAlpha = easeOut;
+        }
+    }
+
+    // グローリーキル可能な敵を探す（常に）
+    m_gloryKillTargetEnemy = nullptr;
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+    float closestDist = m_gloryKillRange;
+
+    for (auto& enemy : m_enemySystem->GetEnemies())
+    {
+        if (!enemy.isAlive || enemy.isDying)
+            continue;
+
+        if (!enemy.isStaggered)
+            continue;
+
+        // 距離を計算
+        float dx = enemy.position.x - playerPos.x;
+        float dz = enemy.position.z - playerPos.z;
+        float dist = sqrtf(dx * dx + dz * dz);
+
+        if (dist < closestDist)
+        {
+            closestDist = dist;
+            m_gloryKillTargetEnemy = &enemy;
+        }
+    }
+
+    // Fキーが押されたか検出
     static bool fKeyPressed = false;
     bool fKeyDown = (GetAsyncKeyState('F') & 0x8000) != 0;
 
     if (fKeyDown && !fKeyPressed)
     {
         // Fキーが押された瞬間
-        DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
-
-        // 近くのstaggered敵を探す
-        Enemy* targetEnemy = nullptr;
-        float closestDist = m_gloryKillRange;
-
-        for (auto& enemy : m_enemySystem->GetEnemies())
-        {
-            if (!enemy.isAlive || enemy.isDying)
-                continue;
-
-            if (!enemy.isStaggered)
-                continue;
-
-            // 距離を計算
-            float dx = enemy.position.x - playerPos.x;
-            float dz = enemy.position.z - playerPos.z;
-            float dist = sqrtf(dx * dx + dz * dz);
-
-            if (dist < closestDist)
-            {
-                closestDist = dist;
-                targetEnemy = &enemy;
-            }
-        }
-
-        // 敵が見つかったらグローリーキル実行
-        if (targetEnemy != nullptr)
+        if (m_gloryKillTargetEnemy != nullptr)
         {
             // === グローリーキル実行！ ===
 
-            //  敵を即座に倒す
-            targetEnemy->isDying = true;
-            targetEnemy->animationTime = 0.0f;
-            targetEnemy->currentAnimation = "Death";
-            targetEnemy->corpseTimer = 3.0f;
+            m_gloryKillActive = true;
 
-            //  HP回復（最大HPを超えないように）
+            // === カメラをターゲット敵に向ける ===
+            m_gloryKillCameraActive = true;
+            m_gloryKillCameraLerpTime = 0.0f;
+
+            // カメラ位置：プレイヤーとターゲット敵の間、やや上から
+            DirectX::XMFLOAT3 playerPosition = m_player->GetPosition();
+            DirectX::XMFLOAT3 enemyPos = m_gloryKillTargetEnemy->position;
+
+            // プレイヤーから敵への方向ベクトル
+            float dx = enemyPos.x - playerPosition.x;
+            float dz = enemyPos.z - playerPosition.z;
+            float distance = sqrtf(dx * dx + dz * dz);
+
+            // 正規化
+            if (distance > 0.0f)
+            {
+                dx /= distance;
+                dz /= distance;
+            }
+
+            // カメラ位置：プレイヤーの少し後ろ、少し上
+            m_gloryKillCameraPos.x = playerPosition.x - dx * 1.0f;
+            m_gloryKillCameraPos.y = playerPosition.y - 0.3f;  // 少し上
+            m_gloryKillCameraPos.z = playerPosition.z - dz * 1.0f;
+
+            // カメラターゲット：敵の中心（胸の高さ）
+            m_gloryKillCameraTarget = enemyPos;
+            m_gloryKillCameraTarget.y += 1.0f;
+
+            // 被写界深度を有効化
+            m_gloryKillDOFActive = true;
+            m_gloryKillDOFIntensity = 0.0f;  // 徐々に強くする
+
+            // 敵を即座に倒す
+            m_gloryKillTargetEnemy->isDying = true;
+            m_gloryKillTargetEnemy->animationTime = 0.0f;
+            m_gloryKillTargetEnemy->currentAnimation = "Death";
+            m_gloryKillTargetEnemy->corpseTimer = 3.0f;
+
+            // HP回復（最大HPを超えないように）
             int currentHP = m_player->GetHealth();
             int maxHP = m_player->GetMaxHealth();
             int healAmount = 30;
             int newHP = min(currentHP + healAmount, maxHP);
             m_player->SetHealth(newHP);
 
-            // 3. スコア加算
+            // スコア換算
             m_score += 100;
 
-            //  デバッグログ
+            // 4. デバッグログ
             char buffer[256];
             sprintf_s(buffer, "[GLORY KILL] Enemy ID:%d killed! HP: %d→%d, Score: +100\n",
-                targetEnemy->id, currentHP, newHP);
+                m_gloryKillTargetEnemy->id, currentHP, newHP);
             OutputDebugStringA(buffer);
 
-            //  エフェクト
-            m_cameraShake = 0.3f;
-            m_cameraShakeTimer = 0.2f;
 
-            // 上方向へのベクトルを用意
+            // カメラシェイク（強め）
+            m_cameraShake = 1.5f;      // 0.3f → 0.5f（強く）
+            m_cameraShakeTimer = 0.5f;  // 0.2f → 0.3f（長く）
+
+            // 無敵時間（1秒）
+            m_gloryKillInvincibleTimer = 1.0f;
+
+            // スローモーション（0.5秒間、0.3倍速）
+            /*m_timeScale = 0.1f;*/
+            
+            // 血しぶきパーティクル（大量）
             DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
+            m_particleSystem->CreateBloodEffect(m_gloryKillTargetEnemy->position, upDir, 800);
 
-            // 既存の関数を使って30個の血しぶきを生成
-            m_particleSystem->CreateBloodEffect(targetEnemy->position, upDir, 500);
+            // グローリーキル腕アニメーション開始（横からこめかみへ）
+            m_gloryKillArmAnimActive = true;
+            m_gloryKillArmAnimTime = 0.0f;
+            m_gloryKillArmPos = DirectX::XMFLOAT3(2.0f, 0.3f, 0.3f);  // 初期位置（右側）
+            m_gloryKillArmRot = DirectX::XMFLOAT3(0.0f, DirectX::XM_PIDIV2, -0.2f);  // 初期回転（横向き）
+
+            // カメラタイマー（0.4秒）
+            m_slowMoTimer = 0.4f;
         }
     }
 
@@ -2774,6 +3027,9 @@ void Game::UpdatePlaying()
         if (m_slowMoTimer <= 0.0f)
         {
             m_timeScale = 1.0f;
+            m_gloryKillCameraActive = false;
+            m_gloryKillDOFActive = false;
+            m_gloryKillDOFIntensity = 0.0f;
         }
     }
 
@@ -2808,8 +3064,9 @@ void Game::UpdatePlaying()
         m_weaponSystem->IsReloading() ? "YES" : "NO");  // ← リロード状態を表示
     SetWindowTextA(m_window, debug);
 
-    //  === プレイヤー移動 + 壁の当たり判定
-    
+ 
+ if(!m_gloryKillCameraActive)   //  === プレイヤー移動 + 壁の当たり判定
+ {
     //  --- 移動前の位置を保存   ---
     DirectX::XMFLOAT3 oldPosition = m_player->GetPosition();
     //  プレイヤーの移動・回転
@@ -2820,7 +3077,7 @@ void Game::UpdatePlaying()
     const float playerRadius = 0.5f;
 
     //  X方向の移動をチェック
-    DirectX::XMFLOAT3 testPositionX = oldPosition; 
+    DirectX::XMFLOAT3 testPositionX = oldPosition;
     testPositionX.x = newPosition.x;
 
     //  --- 壁・箱との当たり判定チェック  X---
@@ -2839,6 +3096,7 @@ void Game::UpdatePlaying()
     }
 
     m_player->SetPosition(newPosition);
+}
 
     
     //  === 近接攻撃の入力処理   ===
@@ -3023,7 +3281,7 @@ void Game::UpdatePlaying()
     }
 
     //  === 射撃処理    ===
-    if (m_player->IsMouseCaptured())
+    if (!m_gloryKillCameraActive && m_player->IsMouseCaptured())
     {
         bool currentMouseState = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
 
@@ -3235,7 +3493,7 @@ void Game::UpdatePlaying()
 
                             // スローモーション
                             m_timeScale = 0.15f;
-                            m_slowMoTimer = 0.5f;
+                            m_slowMoTimer = 0.05f;
 
                             // カメラシェイク
                             m_cameraShake = 0.3f;
@@ -3267,9 +3525,9 @@ void Game::UpdatePlaying()
                                 hitEnemy->id, hitEnemy->health);
                             OutputDebugStringA(debugHP2);
 
-                            // ヒットストップ（軽め）
-                            m_timeScale = 0.1f;
-                            m_hitStopTimer = 0.03f;
+                            //// ヒットストップ（軽め）
+                            //m_timeScale = 0.1f;
+                            //m_hitStopTimer = 0.03f;
 
                             // カメラシェイク（軽め）
                             m_cameraShake = 0.05f;
@@ -3436,14 +3694,19 @@ void Game::UpdatePlaying()
 
     m_particleSystem->Update(deltaTime);
 
-    //  m_cameraPOs
-    //  【型】DirectX::XMFLOAT3
-    //  【意味】プレイヤーの現在位置
-    //  【用途】敵がプレイヤーに向かって動くため
-    m_enemySystem->Update(deltaTime, m_player->GetPosition());
+
+    //  グローリーキル中は敵の更新を停止
+    if (!m_gloryKillCameraActive)
+    {
+        //  m_cameraPOs
+        //  【型】DirectX::XMFLOAT3
+        //  【意味】プレイヤーの現在位置
+        //  【用途】敵がプレイヤーに向かって動くため
+        m_enemySystem->Update(deltaTime, m_player->GetPosition());
+    }
 
     //  === 敵の「移動・回転・アニメーション更新・死亡」をまとめて制御するループ   ===
-    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+    //DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
 
     for (auto& enemy : m_enemySystem->GetEnemies())
     {
@@ -3565,11 +3828,15 @@ void Game::UpdatePlaying()
         // 生きていて、かつ「死んでいない（isDying == false）」敵だけ攻撃してくる
         if (enemy.isAlive && !enemy.isDying && enemy.touchingPlayer)
         {
-            bool died = m_player->TakeDamage(10);
-
-            if (died)
+            if (m_gloryKillInvincibleTimer <= 0)
             {
-                m_gameState = GameState::GAMEOVER;
+                bool died = m_player->TakeDamage(10);
+
+                if (died)
+                {
+                    m_gameState = GameState::GAMEOVER;
+                }
+
             }
 
             break;
@@ -3662,12 +3929,55 @@ void Game::RenderDamageFlash()
 
     primitiveBatch->DrawQuad(v1, v2, v3, v4);
 
-    // 他の3辺も同様に...（省略）
 
     primitiveBatch->End();
 }
 
+void Game::RenderGloryKillFlash()
+{
+    return;
 
+    // グローリーキルフラッシュが無効なら何もしない
+    if (m_gloryKillFlashTimer <= 0.0f || m_gloryKillFlashAlpha <= 0.0f)
+        return;
+
+    auto context = m_d3dContext.Get();
+
+    // 2D描画用の設定
+    DirectX::XMMATRIX view = DirectX::XMMatrixIdentity();
+    DirectX::XMMATRIX projection = DirectX::XMMatrixOrthographicLH(
+        (float)m_outputWidth, (float)m_outputHeight, 0.1f, 10.0f);
+
+    m_effect->SetView(view);
+    m_effect->SetProjection(projection);
+    m_effect->SetWorld(DirectX::XMMatrixIdentity());
+    m_effect->SetVertexColorEnabled(true);
+
+    m_effect->Apply(context);
+    context->IASetInputLayout(m_inputLayout.Get());
+
+    // PrimitiveBatchを作成
+    auto primitiveBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
+    primitiveBatch->Begin();
+
+    // 白いフラッシュの色（透明度はm_gloryKillFlashAlpha）
+    DirectX::XMFLOAT4 flashColor(1.0f, 1.0f, 1.0f, m_gloryKillFlashAlpha * 0.01f);
+
+    // 画面のサイズ（中心からの距離）
+    float halfWidth = m_outputWidth * 0.5f;
+    float halfHeight = m_outputHeight * 0.5f;
+
+    // 画面全体を覆う四角形
+    DirectX::VertexPositionColor v1(DirectX::XMFLOAT3(-halfWidth, halfHeight, 1.0f), flashColor);   // 左上
+    DirectX::VertexPositionColor v2(DirectX::XMFLOAT3(halfWidth, halfHeight, 1.0f), flashColor);    // 右上
+    DirectX::VertexPositionColor v3(DirectX::XMFLOAT3(halfWidth, -halfHeight, 1.0f), flashColor);   // 右下
+    DirectX::VertexPositionColor v4(DirectX::XMFLOAT3(-halfWidth, -halfHeight, 1.0f), flashColor);  // 左下
+
+    // 四角形を描画
+    primitiveBatch->DrawQuad(v1, v2, v3, v4);
+
+    primitiveBatch->End();
+}
 
 void Game::RenderTitle()
 {
