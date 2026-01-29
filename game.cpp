@@ -2676,7 +2676,72 @@ void Game::RenderPlaying()
     // 最後にUIをすべて手前に描画する
     DrawUI();
 
-    
+    // グローリーキル中の背景ぼかし効果（ビネット）
+    if (m_gloryKillDOFActive)
+    {
+        // 2D描画用の設定
+        m_d3dContext->OMSetBlendState(m_states->AlphaBlend(), nullptr, 0xFFFFFFFF);
+        m_d3dContext->OMSetDepthStencilState(m_states->DepthNone(), 0);
+        m_d3dContext->RSSetState(m_states->CullNone());
+
+        // エフェクト設定（BasicEffect使用）
+        m_effect->SetWorld(DirectX::XMMatrixIdentity());
+
+        // 正投影行列（2D用）
+        float screenWidth = (float)m_outputWidth;
+        float screenHeight = (float)m_outputHeight;
+        DirectX::XMMATRIX orthoMatrix = DirectX::XMMatrixOrthographicOffCenterLH(
+            0.0f, screenWidth, screenHeight, 0.0f, 0.0f, 1.0f
+        );
+        m_effect->SetView(DirectX::XMMatrixIdentity());
+        m_effect->SetProjection(orthoMatrix);
+
+        m_effect->SetVertexColorEnabled(true);
+        m_effect->Apply(m_d3dContext.Get());
+        m_d3dContext->IASetInputLayout(m_inputLayout.Get());
+
+        // PrimitiveBatch作成
+        DirectX::PrimitiveBatch<DirectX::VertexPositionColor> batch(m_d3dContext.Get());
+        batch.Begin();
+
+        // ビネット効果：中央が透明、周辺が暗い
+        float intensity = m_gloryKillDOFIntensity * 0.7f;  // 最大70%の暗さ
+        DirectX::XMFLOAT4 darkColor(0.0f, 0.0f, 0.0f, intensity);
+
+        // 上部の暗い領域
+        float topHeight = screenHeight * 0.2f;
+        DirectX::VertexPositionColor v1(DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f), darkColor);
+        DirectX::VertexPositionColor v2(DirectX::XMFLOAT3(screenWidth, 0.0f, 0.0f), darkColor);
+        DirectX::VertexPositionColor v3(DirectX::XMFLOAT3(screenWidth, topHeight, 0.0f), darkColor);
+        DirectX::VertexPositionColor v4(DirectX::XMFLOAT3(0.0f, topHeight, 0.0f), darkColor);
+        batch.DrawQuad(v1, v2, v3, v4);
+
+        // 下部の暗い領域
+        float bottomTop = screenHeight * 0.8f;
+        DirectX::VertexPositionColor v5(DirectX::XMFLOAT3(0.0f, bottomTop, 0.0f), darkColor);
+        DirectX::VertexPositionColor v6(DirectX::XMFLOAT3(screenWidth, bottomTop, 0.0f), darkColor);
+        DirectX::VertexPositionColor v7(DirectX::XMFLOAT3(screenWidth, screenHeight, 0.0f), darkColor);
+        DirectX::VertexPositionColor v8(DirectX::XMFLOAT3(0.0f, screenHeight, 0.0f), darkColor);
+        batch.DrawQuad(v5, v6, v7, v8);
+
+        // 左側の暗い領域
+        float leftWidth = screenWidth * 0.25f;
+        DirectX::VertexPositionColor v9(DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f), darkColor);
+        DirectX::VertexPositionColor v10(DirectX::XMFLOAT3(leftWidth, 0.0f, 0.0f), darkColor);
+        DirectX::VertexPositionColor v11(DirectX::XMFLOAT3(leftWidth, screenHeight, 0.0f), darkColor);
+        DirectX::VertexPositionColor v12(DirectX::XMFLOAT3(0.0f, screenHeight, 0.0f), darkColor);
+        batch.DrawQuad(v9, v10, v11, v12);
+
+        // 右側の暗い領域
+        float rightLeft = screenWidth * 0.75f;
+        DirectX::VertexPositionColor v13(DirectX::XMFLOAT3(rightLeft, 0.0f, 0.0f), darkColor);
+        DirectX::VertexPositionColor v14(DirectX::XMFLOAT3(screenWidth, 0.0f, 0.0f), darkColor);
+        DirectX::VertexPositionColor v15(DirectX::XMFLOAT3(screenWidth, screenHeight, 0.0f), darkColor);
+        DirectX::VertexPositionColor v16(DirectX::XMFLOAT3(rightLeft, screenHeight, 0.0f), darkColor);
+        batch.DrawQuad(v13, v14, v15, v16);
+
+        batch.End();
+    }
 
     // ダメージエフェクトを一番上に重ねる
     if (m_player->IsDamaged())
