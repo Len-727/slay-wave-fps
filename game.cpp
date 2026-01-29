@@ -2982,6 +2982,13 @@ void Game::UpdatePlaying()
             int newHP = min(currentHP + healAmount, maxHP);
             m_player->SetHealth(newHP);
 
+            //  wavemanagerに加算
+            int waveBonus = m_waveManager->OnEnemyKilled();
+
+            //  ポイント加算
+            int totalPoints = 200 + waveBonus;  //  グローリーキル = 200points
+            m_player->AddPoints(totalPoints);
+
             // スコア換算
             m_score += 100;
 
