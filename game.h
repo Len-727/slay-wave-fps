@@ -133,7 +133,7 @@ private:
     void DrawWeapon();
     void DrawWeaponSpawns();
     void DrawParticles();
-    void DrawEnemies();
+    void DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix);
     void DrawUI();
    
 
@@ -268,9 +268,35 @@ private:
     std::unique_ptr<DirectX::GeometricPrimitive> m_gloryKillArm;   // 腕（円柱）
     std::unique_ptr<DirectX::GeometricPrimitive> m_gloryKillKnife; // ナイフ（円錐）
 
+    // === ガウシアンブラー用（ポストプロセス） ===
+    // オフスクリーンレンダーターゲット
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> m_offscreenTexture;
+    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_offscreenRTV;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_offscreenSRV;
+
+    // ブラーシェーダー
+    Microsoft::WRL::ComPtr<ID3D11VertexShader> m_fullscreenVS;
+    Microsoft::WRL::ComPtr<ID3D11PixelShader> m_blurPS;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_blurConstantBuffer;
+    Microsoft::WRL::ComPtr<ID3D11SamplerState> m_linearSampler;
+
+    // ブラーパラメータ構造体
+    struct BlurParams
+    {
+        DirectX::XMFLOAT2 texelSize;
+        float blurStrength;
+        float focalDepth;
+    };
+
     //  描画会深度(ぼかし用)
     bool m_gloryKillDOFActive; //  描写会深度有効
     float m_gloryKillDOFIntensity;  //  ぼかし強度
+    float m_gloryKillFocalDepth;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> m_depthTexture;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_depthSRV;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> m_offscreenDepthTexture;
+    Microsoft::WRL::ComPtr<ID3D11DepthStencilView> m_offscreenDepthStencilView;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_offscreenDepthSRV;
 
     //  カメラシェイク
     float m_cameraShake;        //  カメラの揺れ強度
@@ -365,4 +391,10 @@ private:
     void AddEnemyPhysicsBody(Enemy& enemy);
     void UpdateEnemyPhysicsBody(Enemy& enemy);
     void RemoveEnemyPhysicsBody(int enemyID);
+
+    // === ポストプロセス用ヘルパー関数 ===
+    void CreateBlurResources();        // ブラー用リソース作成
+    void DrawFullscreenQuad();         // フルスクリーン四角形描画
+    ID3D11VertexShader* LoadVertexShader(const wchar_t* filename);
+    ID3D11PixelShader* LoadPixelShader(const wchar_t* filename);
 };

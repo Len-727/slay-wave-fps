@@ -47,7 +47,7 @@ public:
 	~MapSystem() = default;	//	デストラクタ(自動でメモリを解放)
 
 	// Initialize - 初期化
-	bool Initialize(ID3D11DeviceContext* device);
+	bool Initialize(ID3D11DeviceContext* context, ID3D11Device* device);
 
 	// Draw - マップ全体を描画
 	void Draw(ID3D11DeviceContext* context,
@@ -83,4 +83,7 @@ private:
 
 	//	m_cylinder	- Cylinder プリミティブ(円柱)
 	std::unique_ptr<GeometricPrimitive> m_cylinder;
+
+
+	std::unique_ptr<DirectX::CommonStates> m_states;
 };

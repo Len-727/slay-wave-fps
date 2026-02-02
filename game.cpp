@@ -1,6 +1,7 @@
 // Game.cpp - 実装（基盤部分）
 #include "Game.h"
 #include <string>
+#include <d3dcompiler.h>
 //#include <stdexcept>
 //#include <algorithm>
 
@@ -19,6 +20,7 @@
 #pragma comment(lib, "BulletCollision.lib")
 #pragma comment(lib, "LinearMath.lib")
 
+#pragma comment(lib, "d3dcompiler.lib")
 
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
@@ -655,6 +657,11 @@ void Game::CreateResources()
             &swapChainDesc, m_swapChain.GetAddressOf());
         if (FAILED(hr))
             throw std::runtime_error("CreateSwapChain failed");
+
+        // === ガウシアンブラー用リソース作成 ===
+        CreateBlurResources();
+
+        OutputDebugStringA("[GAME] All resources created successfully\n");
     }
 
     // レンダーターゲット作成
@@ -667,16 +674,52 @@ void Game::CreateResources()
     if (FAILED(hr)) throw std::runtime_error("CreateRenderTargetView failed");
 
     // 深度バッファ作成
-    CD3D11_TEXTURE2D_DESC depthStencilDesc(DXGI_FORMAT_D24_UNORM_S8_UINT,
-        backBufferWidth, backBufferHeight, 1, 1, D3D11_BIND_DEPTH_STENCIL);
+    CD3D11_TEXTURE2D_DESC depthStencilDesc(
+        DXGI_FORMAT_R24G8_TYPELESS,  // ★ D24_UNORM_S8_UINT → TYPELESSに変更
+        backBufferWidth,
+        backBufferHeight,
+        1,  // 配列サイズ
+        1,  // ミップレベル
+        D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE  // ★ SRVフラグ追加
+    );
 
-    ComPtr<ID3D11Texture2D> depthStencil;
-    hr = m_d3dDevice->CreateTexture2D(&depthStencilDesc, nullptr, depthStencil.GetAddressOf());
+    hr = m_d3dDevice->CreateTexture2D(
+        &depthStencilDesc,
+        nullptr,
+        m_depthTexture.ReleaseAndGetAddressOf()  // ★ メンバー変数に保存
+    );
     if (FAILED(hr)) throw std::runtime_error("CreateTexture2D failed");
 
-    hr = m_d3dDevice->CreateDepthStencilView(depthStencil.Get(), nullptr,
-        m_depthStencilView.GetAddressOf());
+    // 深度ステンシルビュー（DSV）の作成
+    CD3D11_DEPTH_STENCIL_VIEW_DESC depthStencilViewDesc(
+        D3D11_DSV_DIMENSION_TEXTURE2D,
+        DXGI_FORMAT_D24_UNORM_S8_UINT  // DSV用のフォーマット
+    );
+
+    hr = m_d3dDevice->CreateDepthStencilView(
+        m_depthTexture.Get(),
+        &depthStencilViewDesc,
+        m_depthStencilView.ReleaseAndGetAddressOf()
+    );
     if (FAILED(hr)) throw std::runtime_error("CreateDepthStencilView failed");
+
+    // 深度シェーダーリソースビュー（SRV）の作成
+    CD3D11_SHADER_RESOURCE_VIEW_DESC depthSRVDesc(
+        D3D11_SRV_DIMENSION_TEXTURE2D,
+        DXGI_FORMAT_R24_UNORM_X8_TYPELESS  // SRV用のフォーマット
+    );
+
+    hr = m_d3dDevice->CreateShaderResourceView(
+        m_depthTexture.Get(),
+        &depthSRVDesc,
+        m_depthSRV.ReleaseAndGetAddressOf()
+    );
+    if (FAILED(hr)) throw std::runtime_error("CreateShaderResourceView (Depth) failed");
+
+    // デバッグログ
+    char debugDepth[256];
+    sprintf_s(debugDepth, "[DEPTH] SRV created: %p\n", m_depthSRV.Get());
+    OutputDebugStringA(debugDepth);
 }
 
 void Game::CreateRenderResources()
@@ -875,7 +918,7 @@ void Game::CreateRenderResources()
 
     //  === MapSystem   初期化 ===
     m_mapSystem = std::make_unique<MapSystem>();
-    if (!m_mapSystem->Initialize(m_d3dContext.Get()))
+    if (!m_mapSystem->Initialize(m_d3dContext.Get(), m_d3dDevice.Get()))
     {
         OutputDebugStringA("Game::CreateRenderResources - Failed to initialize MapSystem\n");
     }
@@ -1585,7 +1628,7 @@ void Game::DrawHitboxes()
 }
 
 
-void Game::DrawEnemies()
+void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix)
 {
     static int frameCount = 0;
     frameCount++;
@@ -1600,38 +1643,8 @@ void Game::DrawEnemies()
         OutputDebugStringA(debugMsg);
     }
 
-    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
-    DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
-
-    //  --- カメラシェイクを適用  ---
-    DirectX::XMFLOAT3 shakeOffset(0.0f, 0.0f, 0.0f);
-    if (m_cameraShakeTimer > 0.0f)
-    {
-        shakeOffset.x = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
-        shakeOffset.y = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
-        shakeOffset.z = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
-    }
-
-    DirectX::XMVECTOR cameraPosition = DirectX::XMVectorSet(
-        playerPos.x + shakeOffset.x,
-        playerPos.y + shakeOffset.y,
-        playerPos.z + shakeOffset.z,
-        0.0f
-    );
-
-    DirectX::XMVECTOR cameraTarget = DirectX::XMVectorSet(
-        playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
-        playerPos.y - sinf(playerRot.x),
-        playerPos.z + cosf(playerRot.y) * cosf(playerRot.x),
-        0.0f
-    );
-    DirectX::XMVECTOR upVector = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(cameraPosition, cameraTarget, upVector);
-
-    float aspectRatio = (float)m_outputWidth / (float)m_outputHeight;
-    DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
-        DirectX::XMConvertToRadians(70.0f), aspectRatio, 0.1f, 1000.0f
-    );
+    //  深度書き込みを強制的に有効化
+    m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 
     DirectX::XMFLOAT3 lightDir = { 1.0f, -1.0f, 1.0f };
 
@@ -2481,34 +2494,49 @@ void Game::Render()
 // =================================================================
 void Game::RenderPlaying()
 {
-    //  === ビュー・プロジェクション行列の計算   ===
-    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
-    DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+    // デバッグログ
+    char debugRender[256];
+    sprintf_s(debugRender, "[RENDER] DOFActive=%d, Intensity=%.2f, OffscreenRTV=%p\n",
+        m_gloryKillDOFActive, m_gloryKillDOFIntensity, m_offscreenRTV.Get());
+    OutputDebugStringA(debugRender);
 
-    DirectX::XMVECTOR cameraPosition;
-    DirectX::XMVECTOR cameraTarget;
-
-    //  グローリーキルカメラ
-    if (m_gloryKillCameraActive)
+    if (m_gloryKillDOFActive && m_offscreenRTV)
     {
-        //  カメラシェイクは無効か
-        cameraPosition = DirectX::XMVectorSet(
-            m_gloryKillCameraPos.x,
-            m_gloryKillCameraPos.y,
-            m_gloryKillCameraPos.z,
-            0.0f
+        // ============================================================
+        // === グローリーキル中：ブラー処理 ===
+        // ============================================================
+
+        // オフスクリーンに通常描画
+        ID3D11RenderTargetView* offscreenRTV = m_offscreenRTV.Get();
+        m_d3dContext->OMSetRenderTargets(1, &offscreenRTV, m_offscreenDepthStencilView.Get());  // ★ 変更
+
+        // オフスクリーンをクリア
+        DirectX::XMVECTORF32 clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+        m_d3dContext->ClearRenderTargetView(m_offscreenRTV.Get(), clearColor);
+        m_d3dContext->ClearDepthStencilView(
+            m_offscreenDepthStencilView.Get(),  // ★ 変更
+            D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
+            1.0f,
+            0
         );
 
-        cameraTarget = DirectX::XMVectorSet(
-            m_gloryKillCameraTarget.x,
-            m_gloryKillCameraTarget.y,
-            m_gloryKillCameraTarget.z,
-            0.0f
-        );
-    }
-    else
-    {
-        //  カメラシェイク適用
+        //  深度テストと深度書き込みを有効化
+        m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
+
+        //  ビューポート設定
+        D3D11_VIEWPORT viewport = {};
+        viewport.TopLeftX = 0.0f;
+        viewport.TopLeftY = 0.0f;
+        viewport.Width = static_cast<float>(m_outputWidth);
+        viewport.Height = static_cast<float>(m_outputHeight);
+        viewport.MinDepth = 0.0f;
+        viewport.MaxDepth = 1.0f;
+        m_d3dContext->RSSetViewports(1, &viewport);
+
+        // カメラ設定
+        DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+        DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+
         DirectX::XMFLOAT3 shakeOffset(0.0f, 0.0f, 0.0f);
         if (m_cameraShakeTimer > 0.0f)
         {
@@ -2517,22 +2545,30 @@ void Game::RenderPlaying()
             shakeOffset.z = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
         }
 
-        // カメラ位置にシェイクを加える
-        cameraPosition = DirectX::XMVectorSet(
-            playerPos.x + shakeOffset.x,
-            playerPos.y + shakeOffset.y,
-            playerPos.z + shakeOffset.z,
-            0.0f
-        );
+        DirectX::XMVECTOR cameraPosition;
+        DirectX::XMVECTOR cameraTarget;
 
-        cameraTarget = DirectX::XMVectorSet(
-            playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
-            playerPos.y - sinf(playerRot.x),
-            playerPos.z + cosf(playerRot.y) * cosf(playerRot.x),
-            0.0f
-        );
+        if (m_gloryKillCameraActive)
+        {
+            cameraPosition = DirectX::XMLoadFloat3(&m_gloryKillCameraPos);
+            cameraTarget = DirectX::XMLoadFloat3(&m_gloryKillCameraTarget);
+        }
+        else
+        {
+            cameraPosition = DirectX::XMVectorSet(
+                playerPos.x + shakeOffset.x,
+                playerPos.y + shakeOffset.y,
+                playerPos.z + shakeOffset.z,
+                0.0f
+            );
 
-    }
+            cameraTarget = DirectX::XMVectorSet(
+                playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
+                playerPos.y - sinf(playerRot.x),
+                playerPos.z + cosf(playerRot.y) * cosf(playerRot.x),
+                0.0f
+            );
+        }
 
         DirectX::XMVECTOR upVector = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
         DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(cameraPosition, cameraTarget, upVector);
@@ -2541,220 +2577,259 @@ void Game::RenderPlaying()
         DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
             DirectX::XMConvertToRadians(70.0f), aspectRatio, 0.1f, 1000.0f
         );
-    
+        //  深度テストと深度書き込みを有効化
+        m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 
-        //  === マップ描画   ===
+        // マップ描画
+        if (m_mapSystem)
+        {
+            m_mapSystem->Draw(m_d3dContext.Get(), viewMatrix, projectionMatrix);
+        }
+        //  深度テストと深度書き込みを有効化
+        m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
+
+        // 武器スポーンのテクスチャ描画
+        if (m_weaponSpawnSystem)
+        {
+            m_weaponSpawnSystem->DrawWallTextures(m_d3dContext.Get(), viewMatrix, projectionMatrix);
+        }
+        //  深度テストと深度書き込みを有効化
+        m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
+
+        // 3D描画（優先順位順）
+        DrawParticles();
+        //  深度テストと深度書き込みを有効化
+        m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
+
+        DrawEnemies(viewMatrix, projectionMatrix);
+        //  深度テストと深度書き込みを有効化
+        m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
+
+        DrawBillboard();
+        DrawWeapon();
+        DrawWeaponSpawns();
+
+        // グローリーキル腕・ナイフ描画
+        if (m_gloryKillArmAnimActive && m_gloryKillArm && m_gloryKillKnife)
+        {
+            DirectX::XMFLOAT3 camPos, camTarget;
+            DirectX::XMStoreFloat3(&camPos, cameraPosition);
+            DirectX::XMStoreFloat3(&camTarget, cameraTarget);
+
+            DirectX::XMVECTOR forward = DirectX::XMVectorSubtract(cameraTarget, cameraPosition);
+            forward = DirectX::XMVector3Normalize(forward);
+
+            DirectX::XMVECTOR worldUp = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+            DirectX::XMVECTOR right = DirectX::XMVector3Cross(worldUp, forward);
+            right = DirectX::XMVector3Normalize(right);
+            DirectX::XMVECTOR up = DirectX::XMVector3Cross(forward, right);
+
+            DirectX::XMVECTOR armWorldPos = cameraPosition;
+            armWorldPos += forward * 0.8f;
+            armWorldPos += right * m_gloryKillArmPos.x * 0.4f;
+            armWorldPos += up * m_gloryKillArmPos.y;
+
+            float cameraYaw = atan2f(
+                DirectX::XMVectorGetX(forward),
+                DirectX::XMVectorGetZ(forward)
+            );
+
+            DirectX::XMMATRIX armWorld = DirectX::XMMatrixIdentity();
+            armWorld *= DirectX::XMMatrixRotationZ(DirectX::XM_PIDIV2);
+            armWorld *= DirectX::XMMatrixRotationY(cameraYaw);
+            armWorld *= DirectX::XMMatrixTranslationFromVector(armWorldPos);
+
+            DirectX::XMVECTOR skinColor = DirectX::XMVectorSet(0.8f, 0.6f, 0.5f, 1.0f);
+            m_gloryKillArm->Draw(armWorld, viewMatrix, projectionMatrix, skinColor);
+
+            DirectX::XMVECTOR knifeLocalOffset = DirectX::XMVectorSet(0.0f, 0.0f, 0.35f, 0.0f);
+
+            DirectX::XMMATRIX knifeWorld = DirectX::XMMatrixIdentity();
+            knifeWorld *= DirectX::XMMatrixRotationZ(DirectX::XM_PIDIV2);
+            knifeWorld *= DirectX::XMMatrixRotationX(-DirectX::XM_PIDIV2);
+            knifeWorld *= DirectX::XMMatrixTranslationFromVector(knifeLocalOffset);
+            knifeWorld *= DirectX::XMMatrixRotationY(cameraYaw);
+            knifeWorld *= DirectX::XMMatrixTranslationFromVector(armWorldPos);
+
+            m_gloryKillKnife->Draw(knifeWorld, viewMatrix, projectionMatrix, DirectX::Colors::Silver);
+        }
+
+        // UI描画（オフスクリーンへ）
+        DrawUI();
+
+        //  最終画面にブラーを適用して描画
+        ID3D11RenderTargetView* finalRTV = m_renderTargetView.Get();
+        m_d3dContext->OMSetRenderTargets(1, &finalRTV, nullptr);
+
+        // 最終画面をクリア
+        m_d3dContext->ClearRenderTargetView(m_renderTargetView.Get(), clearColor);
+
+        // ブラーパラメータを設定
+        BlurParams params;
+        params.texelSize = DirectX::XMFLOAT2(1.0f / m_outputWidth, 1.0f / m_outputHeight);
+        params.blurStrength = m_gloryKillDOFIntensity * 5.0f;
+        params.focalDepth = m_gloryKillFocalDepth;  // ★ padding → focalDepthに変更
+
+        D3D11_MAPPED_SUBRESOURCE mappedResource;
+        m_d3dContext->Map(m_blurConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+        memcpy(mappedResource.pData, &params, sizeof(BlurParams));
+        m_d3dContext->Unmap(m_blurConstantBuffer.Get(), 0);
+
+        // シェーダーリソースとサンプラーを設定(深度テクスチャ追加）
+        ID3D11ShaderResourceView* srvs[2] = {
+        m_offscreenSRV.Get(),      // t0: カラー
+        m_offscreenDepthSRV.Get()  // t1: 深度 
+        };
+        m_d3dContext->PSSetShaderResources(0, 2, srvs);
+
+        ID3D11SamplerState* sampler = m_linearSampler.Get();
+        m_d3dContext->PSSetSamplers(0, 1, &sampler);
+
+        ID3D11Buffer* cb = m_blurConstantBuffer.Get();
+        m_d3dContext->PSSetConstantBuffers(0, 1, &cb);
+
+        // レンダーステート設定
+        m_d3dContext->OMSetBlendState(m_states->Opaque(), nullptr, 0xFFFFFFFF);
+        m_d3dContext->OMSetDepthStencilState(m_states->DepthNone(), 0);
+        m_d3dContext->RSSetState(m_states->CullNone());
+
+        // フルスクリーン四角形を描画（ブラー適用）
+        DrawFullscreenQuad();
+
+        // リソースをクリア（深度も含める）
+        ID3D11ShaderResourceView* nullSRVs[2] = { nullptr, nullptr };
+        m_d3dContext->PSSetShaderResources(0, 2, nullSRVs);
+    }
+    else
+    {
+        // ============================================================
+        // === 通常時：ブラーなし ===
+        // ============================================================
+
+        Clear();
+
+        // カメラ設定
+        DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+        DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+
+        DirectX::XMFLOAT3 shakeOffset(0.0f, 0.0f, 0.0f);
+        if (m_cameraShakeTimer > 0.0f)
+        {
+            shakeOffset.x = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
+            shakeOffset.y = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
+            shakeOffset.z = ((float)rand() / RAND_MAX - 0.5f) * m_cameraShake;
+        }
+
+        DirectX::XMVECTOR cameraPosition;
+        DirectX::XMVECTOR cameraTarget;
+
+        if (m_gloryKillCameraActive)
+        {
+            cameraPosition = DirectX::XMLoadFloat3(&m_gloryKillCameraPos);
+            cameraTarget = DirectX::XMLoadFloat3(&m_gloryKillCameraTarget);
+        }
+        else
+        {
+            cameraPosition = DirectX::XMVectorSet(
+                playerPos.x + shakeOffset.x,
+                playerPos.y + shakeOffset.y,
+                playerPos.z + shakeOffset.z,
+                0.0f
+            );
+
+            cameraTarget = DirectX::XMVectorSet(
+                playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
+                playerPos.y - sinf(playerRot.x),
+                playerPos.z + cosf(playerRot.y) * cosf(playerRot.x),
+                0.0f
+            );
+        }
+
+        DirectX::XMVECTOR upVector = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(cameraPosition, cameraTarget, upVector);
+
+        float aspectRatio = (float)m_outputWidth / (float)m_outputHeight;
+        DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
+            DirectX::XMConvertToRadians(70.0f), aspectRatio, 0.1f, 1000.0f
+        );
+
+        // マップ描画
         if (m_mapSystem)
         {
             m_mapSystem->Draw(m_d3dContext.Get(), viewMatrix, projectionMatrix);
         }
 
-
-        //  === 壁武器テクスチャ描画  ===
+        // 武器スポーンのテクスチャ描画
         if (m_weaponSpawnSystem)
         {
             m_weaponSpawnSystem->DrawWallTextures(m_d3dContext.Get(), viewMatrix, projectionMatrix);
         }
-    
 
-    // 最初に3D空間のものをすべて描画する
-    DrawParticles();
-    //DrawGrid();
-    DrawEnemies();
-    DrawBillboard();
-    DrawWeapon();
-    DrawWeaponSpawns();
+        // 3D描画（優先順位順）
+        DrawParticles();
+        DrawEnemies(viewMatrix, projectionMatrix);
+        DrawBillboard();
+        DrawWeapon();
+        DrawWeaponSpawns();
 
-
-    // === グローリーキル腕・ナイフ描画 ===
-    if (m_gloryKillArmAnimActive && m_gloryKillArm && m_gloryKillKnife)
-    {
-        // 【重要】現在のカメラの位置とターゲットを使う
-        DirectX::XMFLOAT3 camPos, camTarget;
-        DirectX::XMStoreFloat3(&camPos, cameraPosition);
-        DirectX::XMStoreFloat3(&camTarget, cameraTarget);
-
-        // カメラの向きベクトルを計算
-        DirectX::XMVECTOR forward = DirectX::XMVectorSubtract(cameraTarget, cameraPosition);
-        forward = DirectX::XMVector3Normalize(forward);
-
-        // カメラの右ベクトルを計算
-        DirectX::XMVECTOR worldUp = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-        DirectX::XMVECTOR right = DirectX::XMVector3Cross(worldUp, forward);
-        right = DirectX::XMVector3Normalize(right);
-
-        // カメラの上ベクトルを再計算
-        DirectX::XMVECTOR up = DirectX::XMVector3Cross(forward, right);
-
-        // 腕の位置（カメラの前、画面内に固定）
-        DirectX::XMVECTOR armWorldPos = cameraPosition;
-        armWorldPos += forward * 0.8f;  // カメラの前
-        armWorldPos += right * m_gloryKillArmPos.x * 0.4f;    // 右（アニメーション）
-        armWorldPos += up * m_gloryKillArmPos.y;    // 上下
-
-        // カメラの向きから回転を計算
-        float cameraYaw = atan2f(
-            DirectX::XMVectorGetX(forward),
-            DirectX::XMVectorGetZ(forward)
-        );
-
-        // 腕のワールド行列（横向き、カメラに対して垂直）
-        DirectX::XMMATRIX armWorld = DirectX::XMMatrixIdentity();
-        // まず横向きに回転（90度）
-        armWorld *= DirectX::XMMatrixRotationZ(DirectX::XM_PIDIV2);  // Z軸で90度回転（横向き）
-        // カメラの向きに合わせる
-        armWorld *= DirectX::XMMatrixRotationY(cameraYaw);
-        // 位置を設定
-        armWorld *= DirectX::XMMatrixTranslationFromVector(armWorldPos);
-
-        // 腕を描画（肌色に近い色）
-        DirectX::XMVECTOR skinColor = DirectX::XMVectorSet(0.8f, 0.6f, 0.5f, 1.0f);
-        m_gloryKillArm->Draw(armWorld, viewMatrix, projectionMatrix, skinColor);
-
-        // ナイフの位置（腕の先端、左側）
-        DirectX::XMVECTOR knifeLocalOffset = DirectX::XMVectorSet(0.0f, 0.0f, 0.35f, 0.0f);  // 腕の先端
-
-        // ナイフのワールド行列
-        DirectX::XMMATRIX knifeWorld = DirectX::XMMatrixIdentity();
-        // ナイフを横向きに
-        knifeWorld *= DirectX::XMMatrixRotationZ(DirectX::XM_PIDIV2);  // 横向き
-        knifeWorld *= DirectX::XMMatrixRotationX(-DirectX::XM_PIDIV2);  // 先端を前に
-        // 腕のローカル座標でオフセット
-        knifeWorld *= DirectX::XMMatrixTranslationFromVector(knifeLocalOffset);
-        // 腕と同じ回転
-        knifeWorld *= DirectX::XMMatrixRotationY(cameraYaw);
-        // 腕と同じ位置
-        knifeWorld *= DirectX::XMMatrixTranslationFromVector(armWorldPos);
-
-        // ナイフを描画（銀色）
-        m_gloryKillKnife->Draw(knifeWorld, viewMatrix, projectionMatrix, DirectX::Colors::Silver);
-    }
-
-
-    //  === Effekseerの描画　===
-    //if (m_effekseerManager != nullptr && m_effekseerRenderer != nullptr)
-    //{
-    //    //  変換用変数を用意
-    //    Effekseer::Matrix44 efkView;
-    //    Effekseer::Matrix44 efkProj;
-
-    //    //  DirectXの行列をEffekseer用の変数にコピーする
-    //    //  (reinterpret_castを使って「中身は同じ4x4の数字だよ」と伝えてコピーする)
-    //    DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&efkView), viewMatrix);
-    //    DirectX::XMStoreFloat4x4(reinterpret_cast<DirectX::XMFLOAT4X4*>(&efkProj), projectionMatrix);
-
-    //    //  変数にしたのを渡す
-    //    m_effekseerRenderer->SetCameraMatrix(efkView);
-    //    m_effekseerRenderer->SetProjectionMatrix(efkProj);
-
-    //    m_effekseerRenderer->BeginRendering();
-    //    m_effekseerManager->Draw();
-    //    m_effekseerRenderer->EndRendering();
-    //}
-
-    if (m_shadow)
-    {
-        DirectX::XMFLOAT3 lightDirection(0.5f, -1.0f, 0.5f);
-        float groundY = 0.0f;
-
-        const auto& enemies = m_enemySystem->GetEnemies();
-        for (const auto& enemy : enemies)
+        // グローリーキル腕・ナイフ描画
+        if (m_gloryKillArmAnimActive && m_gloryKillArm && m_gloryKillKnife)
         {
-            if (!enemy.isAlive) continue;
+            DirectX::XMFLOAT3 camPos, camTarget;
+            DirectX::XMStoreFloat3(&camPos, cameraPosition);
+            DirectX::XMStoreFloat3(&camTarget, cameraTarget);
 
-            m_shadow->RenderShadow(
-                m_d3dContext.Get(),
-                enemy.position,          // 敵の位置
-                1.5f,                    // 影のサイズ
-                viewMatrix,
-                projectionMatrix,
-                lightDirection,
-                groundY
+            DirectX::XMVECTOR forward = DirectX::XMVectorSubtract(cameraTarget, cameraPosition);
+            forward = DirectX::XMVector3Normalize(forward);
+
+            DirectX::XMVECTOR worldUp = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+            DirectX::XMVECTOR right = DirectX::XMVector3Cross(worldUp, forward);
+            right = DirectX::XMVector3Normalize(right);
+            DirectX::XMVECTOR up = DirectX::XMVector3Cross(forward, right);
+
+            DirectX::XMVECTOR armWorldPos = cameraPosition;
+            armWorldPos += forward * 0.8f;
+            armWorldPos += right * m_gloryKillArmPos.x * 0.4f;
+            armWorldPos += up * m_gloryKillArmPos.y;
+
+            float cameraYaw = atan2f(
+                DirectX::XMVectorGetX(forward),
+                DirectX::XMVectorGetZ(forward)
             );
+
+            DirectX::XMMATRIX armWorld = DirectX::XMMatrixIdentity();
+            armWorld *= DirectX::XMMatrixRotationZ(DirectX::XM_PIDIV2);
+            armWorld *= DirectX::XMMatrixRotationY(cameraYaw);
+            armWorld *= DirectX::XMMatrixTranslationFromVector(armWorldPos);
+
+            DirectX::XMVECTOR skinColor = DirectX::XMVectorSet(0.8f, 0.6f, 0.5f, 1.0f);
+            m_gloryKillArm->Draw(armWorld, viewMatrix, projectionMatrix, skinColor);
+
+            DirectX::XMVECTOR knifeLocalOffset = DirectX::XMVectorSet(0.0f, 0.0f, 0.35f, 0.0f);
+
+            DirectX::XMMATRIX knifeWorld = DirectX::XMMatrixIdentity();
+            knifeWorld *= DirectX::XMMatrixRotationZ(DirectX::XM_PIDIV2);
+            knifeWorld *= DirectX::XMMatrixRotationX(-DirectX::XM_PIDIV2);
+            knifeWorld *= DirectX::XMMatrixTranslationFromVector(knifeLocalOffset);
+            knifeWorld *= DirectX::XMMatrixRotationY(cameraYaw);
+            knifeWorld *= DirectX::XMMatrixTranslationFromVector(armWorldPos);
+
+            m_gloryKillKnife->Draw(knifeWorld, viewMatrix, projectionMatrix, DirectX::Colors::Silver);
         }
-    }
-    // 最後にUIをすべて手前に描画する
-    DrawUI();
 
-    // グローリーキル中の背景ぼかし効果（ビネット）
-    if (m_gloryKillDOFActive)
-    {
-        // 2D描画用の設定
-        m_d3dContext->OMSetBlendState(m_states->AlphaBlend(), nullptr, 0xFFFFFFFF);
-        m_d3dContext->OMSetDepthStencilState(m_states->DepthNone(), 0);
-        m_d3dContext->RSSetState(m_states->CullNone());
-
-        // エフェクト設定（BasicEffect使用）
-        m_effect->SetWorld(DirectX::XMMatrixIdentity());
-
-        // 正投影行列（2D用）
-        float screenWidth = (float)m_outputWidth;
-        float screenHeight = (float)m_outputHeight;
-        DirectX::XMMATRIX orthoMatrix = DirectX::XMMatrixOrthographicOffCenterLH(
-            0.0f, screenWidth, screenHeight, 0.0f, 0.0f, 1.0f
-        );
-        m_effect->SetView(DirectX::XMMatrixIdentity());
-        m_effect->SetProjection(orthoMatrix);
-
-        m_effect->SetVertexColorEnabled(true);
-        m_effect->Apply(m_d3dContext.Get());
-        m_d3dContext->IASetInputLayout(m_inputLayout.Get());
-
-        // PrimitiveBatch作成
-        DirectX::PrimitiveBatch<DirectX::VertexPositionColor> batch(m_d3dContext.Get());
-        batch.Begin();
-
-        // ビネット効果：中央が透明、周辺が暗い
-        float intensity = m_gloryKillDOFIntensity * 0.7f;  // 最大70%の暗さ
-        DirectX::XMFLOAT4 darkColor(0.0f, 0.0f, 0.0f, intensity);
-
-        // 上部の暗い領域
-        float topHeight = screenHeight * 0.2f;
-        DirectX::VertexPositionColor v1(DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f), darkColor);
-        DirectX::VertexPositionColor v2(DirectX::XMFLOAT3(screenWidth, 0.0f, 0.0f), darkColor);
-        DirectX::VertexPositionColor v3(DirectX::XMFLOAT3(screenWidth, topHeight, 0.0f), darkColor);
-        DirectX::VertexPositionColor v4(DirectX::XMFLOAT3(0.0f, topHeight, 0.0f), darkColor);
-        batch.DrawQuad(v1, v2, v3, v4);
-
-        // 下部の暗い領域
-        float bottomTop = screenHeight * 0.8f;
-        DirectX::VertexPositionColor v5(DirectX::XMFLOAT3(0.0f, bottomTop, 0.0f), darkColor);
-        DirectX::VertexPositionColor v6(DirectX::XMFLOAT3(screenWidth, bottomTop, 0.0f), darkColor);
-        DirectX::VertexPositionColor v7(DirectX::XMFLOAT3(screenWidth, screenHeight, 0.0f), darkColor);
-        DirectX::VertexPositionColor v8(DirectX::XMFLOAT3(0.0f, screenHeight, 0.0f), darkColor);
-        batch.DrawQuad(v5, v6, v7, v8);
-
-        // 左側の暗い領域
-        float leftWidth = screenWidth * 0.25f;
-        DirectX::VertexPositionColor v9(DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f), darkColor);
-        DirectX::VertexPositionColor v10(DirectX::XMFLOAT3(leftWidth, 0.0f, 0.0f), darkColor);
-        DirectX::VertexPositionColor v11(DirectX::XMFLOAT3(leftWidth, screenHeight, 0.0f), darkColor);
-        DirectX::VertexPositionColor v12(DirectX::XMFLOAT3(0.0f, screenHeight, 0.0f), darkColor);
-        batch.DrawQuad(v9, v10, v11, v12);
-
-        // 右側の暗い領域
-        float rightLeft = screenWidth * 0.75f;
-        DirectX::VertexPositionColor v13(DirectX::XMFLOAT3(rightLeft, 0.0f, 0.0f), darkColor);
-        DirectX::VertexPositionColor v14(DirectX::XMFLOAT3(screenWidth, 0.0f, 0.0f), darkColor);
-        DirectX::VertexPositionColor v15(DirectX::XMFLOAT3(screenWidth, screenHeight, 0.0f), darkColor);
-        DirectX::VertexPositionColor v16(DirectX::XMFLOAT3(rightLeft, screenHeight, 0.0f), darkColor);
-        batch.DrawQuad(v13, v14, v15, v16);
-
-        batch.End();
+        // UI描画
+        DrawUI();
     }
 
-    // ダメージエフェクトを一番上に重ねる
+    // ダメージエフェクト（ブラーの上に重ねる）
     if (m_player->IsDamaged())
     {
         RenderDamageFlash();
     }
 
-    //  グローリーキルの画面フラッシュ
-    //RenderGloryKillFlash();
-
-    // === デバッグ描画 ===
-    DrawHitboxes();      // 当たり判定可視化
-    DrawDebugUI();       // ImGUIウィンドウ
+    // デバッグ描画
+    DrawHitboxes();
+    DrawDebugUI();
 }
 
 // 【UI】すべてのUIを描画する
@@ -2896,6 +2971,19 @@ void Game::UpdatePlaying()
                 m_gloryKillDOFIntensity = 1.0f;
         }
     }
+    else
+    {
+        // カメラが無効化されたらDOFも無効化
+        if (m_gloryKillDOFActive)
+        {
+            m_gloryKillDOFActive = false;
+            m_gloryKillDOFIntensity = 0.0f;
+
+            char debugDOF[128];
+            sprintf_s(debugDOF, "[DOF] Deactivated! Camera ended.\n");
+            OutputDebugStringA(debugDOF);
+        }
+    }
 
     // グローリーキル腕アニメーション更新（横からこめかみへ）
     if (m_gloryKillArmAnimActive)
@@ -3000,6 +3088,10 @@ void Game::UpdatePlaying()
             // === グローリーキル実行！ ===
 
             m_gloryKillActive = true;
+            // デバッグログ追加
+            char debugGK[256];
+            sprintf_s(debugGK, "[GLORY KILL] Executed! Target ID=%d, DOF will activate next frame\n", m_gloryKillTargetID);
+            OutputDebugStringA(debugGK);
 
             // === カメラをターゲット敵に向ける ===
             m_gloryKillCameraActive = true;
@@ -3033,6 +3125,30 @@ void Game::UpdatePlaying()
             // 被写界深度を有効化
             m_gloryKillDOFActive = true;
             m_gloryKillDOFIntensity = 0.0f;  // 徐々に強くする
+            // デバッグログ追加
+            char debugDOF[256];
+            sprintf_s(debugDOF, "[GLORY KILL] DOF Activated! Active=%d, Intensity=%.2f, FocalDepth=%.2f\n",
+                m_gloryKillDOFActive, m_gloryKillDOFIntensity, m_gloryKillFocalDepth);
+            OutputDebugStringA(debugDOF);
+
+
+            //  終点距離を計算(プレイヤーから敵までの距離)
+            DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+            DirectX::XMVECTOR playerVec = DirectX::XMLoadFloat3(&playerPos);
+            DirectX::XMVECTOR enemyVec = DirectX::XMLoadFloat3(&m_gloryKillTargetEnemy->position);
+            DirectX::XMVECTOR distVec = DirectX::XMVectorSubtract(enemyVec, playerVec);
+            float enemyDistance = DirectX::XMVectorGetX(DirectX::XMVector3Length(distVec));
+            m_gloryKillFocalDepth = enemyDistance;
+
+            // デバッグログ（焦点距離も表示）
+            char debugFocal[256];
+            sprintf_s(debugFocal, "[DOF] Focal depth set to: %.2f meters\n", m_gloryKillFocalDepth);
+            OutputDebugStringA(debugFocal);
+
+            char cdebugDOF[256];
+            sprintf_s(cdebugDOF, "[GLORY KILL] DOF Activated! Active=%d, Intensity=%.2f, Offscreen=%p\n",
+                m_gloryKillDOFActive, m_gloryKillDOFIntensity, m_offscreenRTV.Get());
+            OutputDebugStringA(cdebugDOF);
 
             // 敵を即座に倒す
             m_gloryKillTargetEnemy->isDying = true;
@@ -3100,8 +3216,6 @@ void Game::UpdatePlaying()
         {
             m_timeScale = 1.0f;
             m_gloryKillCameraActive = false;
-            m_gloryKillDOFActive = false;
-            m_gloryKillDOFIntensity = 0.0f;
         }
     }
 
@@ -4390,4 +4504,196 @@ void Game::PerformMeleeAttack()
         m_cameraShakeTimer = 0.1f;
     }
 
+}
+
+// =================================================================
+// CreateBlurResources - ガウシアンブラー用のリソースを作成
+// =================================================================
+void Game::CreateBlurResources()
+{
+    // === オフスクリーンレンダーターゲット作成 ===
+    D3D11_TEXTURE2D_DESC texDesc = {};
+    texDesc.Width = m_outputWidth;
+    texDesc.Height = m_outputHeight;
+    texDesc.MipLevels = 1;
+    texDesc.ArraySize = 1;
+    texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    texDesc.SampleDesc.Count = 1;
+    texDesc.SampleDesc.Quality = 0;
+    texDesc.Usage = D3D11_USAGE_DEFAULT;
+    texDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+    texDesc.CPUAccessFlags = 0;
+    texDesc.MiscFlags = 0;
+
+    HRESULT hr = m_d3dDevice->CreateTexture2D(&texDesc, nullptr, m_offscreenTexture.GetAddressOf());
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create offscreen texture");
+
+    hr = m_d3dDevice->CreateRenderTargetView(m_offscreenTexture.Get(), nullptr, m_offscreenRTV.GetAddressOf());
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create offscreen RTV");
+
+    hr = m_d3dDevice->CreateShaderResourceView(m_offscreenTexture.Get(), nullptr, m_offscreenSRV.GetAddressOf());
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create offscreen SRV");
+
+    // === 定数バッファ作成 ===
+    D3D11_BUFFER_DESC cbDesc = {};
+    cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+    cbDesc.ByteWidth = sizeof(BlurParams);
+    cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+    hr = m_d3dDevice->CreateBuffer(&cbDesc, nullptr, m_blurConstantBuffer.GetAddressOf());
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create blur constant buffer");
+
+    // === サンプラー作成 ===
+    D3D11_SAMPLER_DESC samplerDesc = {};
+    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.MaxAnisotropy = 1;
+    samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    samplerDesc.MinLOD = 0;
+    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+    hr = m_d3dDevice->CreateSamplerState(&samplerDesc, m_linearSampler.GetAddressOf());
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create sampler state");
+
+    // オフスクリーン用深度バッファ作成
+    CD3D11_TEXTURE2D_DESC offscreenDepthDesc(
+        DXGI_FORMAT_R24G8_TYPELESS,
+        m_outputWidth,
+        m_outputHeight,
+        1,
+        1,
+        D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE
+    );
+
+    hr = m_d3dDevice->CreateTexture2D(
+        &offscreenDepthDesc,
+        nullptr,
+        m_offscreenDepthTexture.ReleaseAndGetAddressOf()
+    );
+    if (FAILED(hr)) throw std::runtime_error("Failed to create offscreen depth texture");
+
+    // オフスクリーン用深度ステンシルビュー作成
+    CD3D11_DEPTH_STENCIL_VIEW_DESC offscreenDSVDesc(
+        D3D11_DSV_DIMENSION_TEXTURE2D,
+        DXGI_FORMAT_D24_UNORM_S8_UINT
+    );
+
+    hr = m_d3dDevice->CreateDepthStencilView(
+        m_offscreenDepthTexture.Get(),
+        &offscreenDSVDesc,
+        m_offscreenDepthStencilView.ReleaseAndGetAddressOf()
+    );
+    if (FAILED(hr)) throw std::runtime_error("Failed to create offscreen DSV");
+
+    // オフスクリーン用深度SRV作成
+    CD3D11_SHADER_RESOURCE_VIEW_DESC offscreenDepthSRVDesc(
+        D3D11_SRV_DIMENSION_TEXTURE2D,
+        DXGI_FORMAT_R24_UNORM_X8_TYPELESS
+    );
+
+    hr = m_d3dDevice->CreateShaderResourceView(
+        m_offscreenDepthTexture.Get(),
+        &offscreenDepthSRVDesc,
+        m_offscreenDepthSRV.ReleaseAndGetAddressOf()
+    );
+    if (FAILED(hr)) throw std::runtime_error("Failed to create offscreen depth SRV");
+
+    char debugOffscreenDepth[256];
+    sprintf_s(debugOffscreenDepth, "[OFFSCREEN DEPTH] Created: %p\n", m_offscreenDepthSRV.Get());
+    OutputDebugStringA(debugOffscreenDepth);
+
+    // === シェーダー読み込み ===
+    m_fullscreenVS = LoadVertexShader(L"FullscreenVS.cso");
+    m_blurPS = LoadPixelShader(L"GaussianBlur.cso");
+
+    OutputDebugStringA("[BLUR] Blur resources created successfully\n");
+}
+
+// =================================================================
+// LoadVertexShader - 頂点シェーダーをコンパイル＆読み込み
+// =================================================================
+ID3D11VertexShader* Game::LoadVertexShader(const wchar_t* filename)
+{
+    Microsoft::WRL::ComPtr<ID3DBlob> shaderBlob;
+
+    // Load compiled shader (.cso file)
+    HRESULT hr = D3DReadFileToBlob(filename, shaderBlob.GetAddressOf());
+
+    if (FAILED(hr))
+    {
+        char errorMsg[256];
+        sprintf_s(errorMsg, "Failed to load vertex shader: %ls\n", filename);
+        OutputDebugStringA(errorMsg);
+        throw std::runtime_error("Failed to load vertex shader");
+    }
+
+    ID3D11VertexShader* shader = nullptr;
+    hr = m_d3dDevice->CreateVertexShader(
+        shaderBlob->GetBufferPointer(),
+        shaderBlob->GetBufferSize(),
+        nullptr,
+        &shader
+    );
+
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create vertex shader");
+
+    return shader;
+}
+// =================================================================
+// LoadPixelShader - ピクセルシェーダーをコンパイル＆読み込み
+// =================================================================
+ID3D11PixelShader* Game::LoadPixelShader(const wchar_t* filename)
+{
+    Microsoft::WRL::ComPtr<ID3DBlob> shaderBlob;
+
+    // Load compiled shader (.cso file)
+    HRESULT hr = D3DReadFileToBlob(filename, shaderBlob.GetAddressOf());
+
+    if (FAILED(hr))
+    {
+        char errorMsg[256];
+        sprintf_s(errorMsg, "Failed to load pixel shader: %ls\n", filename);
+        OutputDebugStringA(errorMsg);
+        throw std::runtime_error("Failed to load pixel shader");
+    }
+
+    ID3D11PixelShader* shader = nullptr;
+    hr = m_d3dDevice->CreatePixelShader(
+        shaderBlob->GetBufferPointer(),
+        shaderBlob->GetBufferSize(),
+        nullptr,
+        &shader
+    );
+
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create pixel shader");
+
+    return shader;
+}
+
+void Game::DrawFullscreenQuad()
+{
+    // 頂点バッファ不要（頂点シェーダーで自動生成）
+    m_d3dContext->IASetInputLayout(nullptr);
+    m_d3dContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    // 頂点シェーダーとピクセルシェーダーを設定
+    m_d3dContext->VSSetShader(m_fullscreenVS.Get(), nullptr, 0);
+    m_d3dContext->PSSetShader(m_blurPS.Get(), nullptr, 0);
+
+    // 3頂点で画面全体を覆う三角形を描画
+    m_d3dContext->Draw(3, 0);
+
+    // シェーダーをクリア
+    m_d3dContext->VSSetShader(nullptr, nullptr, 0);
+    m_d3dContext->PSSetShader(nullptr, nullptr, 0);
 }

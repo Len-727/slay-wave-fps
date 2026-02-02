@@ -127,6 +127,8 @@ public:
 
 private:
 
+	std::unique_ptr<DirectX::CommonStates> m_states;
+
 	std::vector<Node> m_nodes;	//	全ノードリスト
 	int m_rootNodeIndex = 0;	//	ルートノードのインデックス
 

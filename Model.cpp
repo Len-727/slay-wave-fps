@@ -84,6 +84,7 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 	//	BasicEffectを"ライティング用に設定"
 	m_effect = std::make_unique<DirectX::SkinnedEffect>(device);	//	DirectXTKの基本シェーダ(描画効果)を作成
 	m_effect->SetWeightsPerVertex(4);
+	m_states = std::make_unique<DirectX::CommonStates>(device);
 
 	//	---	初期ボーン行列を設定
 	DirectX::XMMATRIX id = DirectX::XMMatrixIdentity();
@@ -481,8 +482,19 @@ void Model::Draw(ID3D11DeviceContext* context,
 
 	//	===	エフェクト適用	===
 	m_effect->Apply(context);
+	// デバッグログ追加
+	OutputDebugStringA("[MODEL] Draw called\n");
 
-
+	// 深度書き込みを強制有効化
+	if (m_states)
+	{
+		context->OMSetDepthStencilState(m_states->DepthDefault(), 0);
+		OutputDebugStringA("[MODEL] Depth state set\n");
+	}
+	else
+	{
+		OutputDebugStringA("[MODEL] ERROR: m_states is null!\n");
+	}
 	//	===	入力レイアウトを設定	===
 	context->IASetInputLayout(m_inputLayout.Get());	//	頂点データはこの並び(InputLayout)で読む
 	//	これから送る頂点/indexを三角形リストとして解釈
@@ -1340,8 +1352,22 @@ float animationTime)
 
 		//	---	エフェクト適用	---
 		m_effect->Apply(context);
+		
+		// デバッグログ追加
+		char debugDraw[256];
+		sprintf_s(debugDraw, "[MODEL] DrawInstanced called, instances=%zu\n", instances.size());
+		OutputDebugStringA(debugDraw);
 
-
+		// 深度書き込みを強制有効化
+		if (m_states)
+		{
+			context->OMSetDepthStencilState(m_states->DepthDefault(), 0);
+			OutputDebugStringA("[MODEL] Depth state set\n");
+		}
+		else
+		{
+			OutputDebugStringA("[MODEL] ERROR: m_states is null!\n");
+		}
 		//	---	各メッシュを描画	---
 		for (const auto& mesh : m_meshes)
 		{

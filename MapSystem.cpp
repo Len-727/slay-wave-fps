@@ -9,7 +9,7 @@ MapSystem::MapSystem()
 }
 
 //	===	初期化	===
-bool MapSystem::Initialize(ID3D11DeviceContext* context)
+bool MapSystem::Initialize(ID3D11DeviceContext* context, ID3D11Device* device)
 {
 	//	===	Box	===
 	m_box = GeometricPrimitive::CreateBox(
@@ -26,6 +26,8 @@ bool MapSystem::Initialize(ID3D11DeviceContext* context)
 		32,		//	分割数
 		true	//	右手座標系
 	);
+
+	m_states = std::make_unique<DirectX::CommonStates>(device);
 
 	OutputDebugStringA("MapSystem::Initialize - Success\n");
 
@@ -69,10 +71,12 @@ void MapSystem::Draw(ID3D11DeviceContext* context, XMMATRIX view, XMMATRIX proje
 			
 			//	Box プリミティブで描画
 			m_box->Draw(world, view, projection, color);
+			context->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 			break;
 
 		case MapObjectType::CYLINDER:	//	柱
 			m_cylinder->Draw(world, view, projection, color);
+			context->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 			break;
 
 

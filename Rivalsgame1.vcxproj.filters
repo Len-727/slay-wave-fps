@@ -388,6 +388,12 @@
     <FxCompile Include="BlurPS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
+    <FxCompile Include="GaussianBlur.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="FullscreenVS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="FireParticlePS_Standalone.hlsl">
