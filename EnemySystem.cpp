@@ -290,28 +290,28 @@ void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 		enemy.type = EnemyType::NORMAL;
 		enemy.health = 100;
 		enemy.maxHealth = 100;
-		enemy.color = DirectX::XMFLOAT4(0.8f, 0.2f, 0.2f, 1.0f);
+		enemy.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 	else if (typeRoll < 85)
 	{
 		enemy.type = EnemyType::RUNNER;
 		enemy.health = 50;
 		enemy.maxHealth = 50;
-		enemy.color = DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);
+		enemy.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 	else if (typeRoll < 99)
 	{
 		enemy.type = EnemyType::TANK;
 		enemy.health = 300;
 		enemy.maxHealth = 300;
-		enemy.color = DirectX::XMFLOAT4(0.2f, 0.2f, 0.8f, 1.0f);
+		enemy.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 	else
 	{
 		enemy.type = EnemyType::MIDBOSS;
 		enemy.health = 5000;
 		enemy.maxHealth = 5000;
-		enemy.color = DirectX::XMFLOAT4(1.0f, 0.8f, 0.8f, 1.0f);
+		enemy.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 
 	// === d‚È‚ç‚È‚¢ˆÊ’u‚ð¶¬ ===

@@ -9,6 +9,8 @@
 #include <VertexTypes.h> // DirectXTKの標準頂点型定義
 #include <functional>
 #include <algorithm>
+#include <WICTextureLoader.h>
+#include <functional>  // std::function用
 
 #include "InstanceData.h"
 
@@ -352,6 +354,14 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 
 		//	メッシュを保存
 		m_meshes.push_back(std::move(mesh));
+
+		//// デバッグ：メッシュごとの頂点ボーン情報
+		//char meshDebug[256];
+		//sprintf_s(meshDebug, "Mesh %d: %zu vertices, first vertex bone[0]=%d, weight=%.2f\n",
+		//	i, mesh.vertices.size(),
+		//	mesh.vertices[0].boneIndices[0],
+		//	mesh.vertices[0].boneWeights[0]);
+		//OutputDebugStringA(meshDebug);
 	}
 
 
@@ -371,11 +381,11 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 
 	//DebugDumpSkeleton();
 
-	//	デバッグ出力
-	/*char debug[256];
+	//デバッグ出力
+	char debug[256];
 	sprintf_s(debug, "Model::LoadFromFIle = Success: %s (%zu meshes)\n",
 		filename.c_str(), m_meshes.size());
-	OutputDebugStringA(debug);*/
+	OutputDebugStringA(debug);
 
 	//	===	元のオフセット行列を保存	===
 	m_originalOffsetMatrices.clear();
@@ -383,6 +393,157 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 	for (const auto& bone : m_bones)
 	{
 		m_originalOffsetMatrices.push_back(bone.offsetMatrix);
+	}
+
+	// =============================================================
+	//  埋め込みテクスチャ（Embedded Texture）を読み込む
+	//  MixamoのFBX BinaryはPBRワークフローを使うことが多く、
+	//  DIFFUSE ではなく BASE_COLOR 等にテクスチャが登録されている
+	// =============================================================
+	if (scene->mNumMaterials > 0)
+	{
+		// --- 試すテクスチャタイプの一覧---
+		// Mixamoは BASE_COLOR を使うことが多い
+		// 従来のモデルは DIFFUSE を使う
+		aiTextureType textureTypes[] = {
+			aiTextureType_DIFFUSE,
+			aiTextureType_BASE_COLOR,
+			aiTextureType_UNKNOWN,
+		};
+
+		bool textureLoaded = false;
+
+		// --- 全マテリアルを走査 ---
+		for (unsigned int matIdx = 0; matIdx < scene->mNumMaterials && !textureLoaded; matIdx++)
+		{
+			aiMaterial* material = scene->mMaterials[matIdx];
+
+			// デバッグ：マテリアル名を出力
+			aiString matName;
+			material->Get(AI_MATKEY_NAME, matName);
+			char debugMat[512];
+			sprintf_s(debugMat, "[TEXTURE] Checking material[%d]: %s\n", matIdx, matName.C_Str());
+			OutputDebugStringA(debugMat);
+
+			// --- 各テクスチャタイプを順番に試す ---
+			for (int t = 0; t < _countof(textureTypes) && !textureLoaded; t++)
+			{
+				aiString texturePath;
+
+				if (material->GetTexture(textureTypes[t], 0, &texturePath) == AI_SUCCESS)
+				{
+					const char* path = texturePath.C_Str();
+
+					char debugTex[512];
+					sprintf_s(debugTex, "[TEXTURE] Found texture (type=%d): %s\n", textureTypes[t], path);
+					OutputDebugStringA(debugTex);
+
+					// --- 埋め込みテクスチャを取得 ---
+					const aiTexture* embeddedTex = scene->GetEmbeddedTexture(path);
+
+					if (embeddedTex)
+					{
+						OutputDebugStringA("[TEXTURE] Embedded texture found!\n");
+
+						if (embeddedTex->mHeight == 0)
+						{
+							// 圧縮形式（PNG/JPG）のバイナリデータ
+							HRESULT hr = DirectX::CreateWICTextureFromMemory(
+								device,
+								reinterpret_cast<const uint8_t*>(embeddedTex->pcData),
+								embeddedTex->mWidth,
+								nullptr,
+								m_diffuseTexture.ReleaseAndGetAddressOf()
+							);
+
+							if (SUCCEEDED(hr))
+							{
+								m_effect->SetTexture(m_diffuseTexture.Get());
+								OutputDebugStringA("[TEXTURE] Embedded texture loaded successfully!\n");
+								textureLoaded = true;
+							}
+							else
+							{
+								char errMsg[256];
+								sprintf_s(errMsg, "[TEXTURE] Failed (HR: 0x%08X)\n", hr);
+								OutputDebugStringA(errMsg);
+							}
+						}
+					}
+					else
+					{
+						// 外部ファイルとして試す
+						std::string texFile = path;
+						std::wstring wTexFile(texFile.begin(), texFile.end());
+
+						HRESULT hr = DirectX::CreateWICTextureFromFile(
+							device, wTexFile.c_str(), nullptr,
+							m_diffuseTexture.ReleaseAndGetAddressOf());
+
+						if (FAILED(hr))
+						{
+							// モデルと同じフォルダも試す
+							std::string modelDir = filename.substr(0, filename.find_last_of("/\\") + 1);
+							std::string fullPath = modelDir + texFile;
+							std::wstring wFullPath(fullPath.begin(), fullPath.end());
+							hr = DirectX::CreateWICTextureFromFile(
+								device, wFullPath.c_str(), nullptr,
+								m_diffuseTexture.ReleaseAndGetAddressOf());
+						}
+
+						if (SUCCEEDED(hr))
+						{
+							m_effect->SetTexture(m_diffuseTexture.Get());
+							OutputDebugStringA("[TEXTURE] External texture loaded!\n");
+							textureLoaded = true;
+						}
+					}
+				}
+			}
+		}
+
+		if (!textureLoaded)
+		{
+			OutputDebugStringA("[TEXTURE] No texture found in any material/type combination\n");
+
+			// === 最終手段：scene->mTextures[] を直接チェック ===
+			// マテリアルに登録されてなくても、FBX内に埋め込まれてる場合がある
+			if (scene->mNumTextures > 0)
+			{
+				char debugEmb[256];
+				sprintf_s(debugEmb, "[TEXTURE] Found %d embedded textures in scene, trying first one...\n",
+					scene->mNumTextures);
+				OutputDebugStringA(debugEmb);
+
+				const aiTexture* embeddedTex = scene->mTextures[0];
+				if (embeddedTex && embeddedTex->mHeight == 0)
+				{
+					HRESULT hr = DirectX::CreateWICTextureFromMemory(
+						device,
+						reinterpret_cast<const uint8_t*>(embeddedTex->pcData),
+						embeddedTex->mWidth,
+						nullptr,
+						m_diffuseTexture.ReleaseAndGetAddressOf()
+					);
+
+					if (SUCCEEDED(hr))
+					{
+						m_effect->SetTexture(m_diffuseTexture.Get());
+						OutputDebugStringA("[TEXTURE] Direct embedded texture loaded!\n");
+					}
+					else
+					{
+						char errMsg[256];
+						sprintf_s(errMsg, "[TEXTURE] Direct embedded load failed (HR: 0x%08X)\n", hr);
+						OutputDebugStringA(errMsg);
+					}
+				}
+			}
+			else
+			{
+				OutputDebugStringA("[TEXTURE] No embedded textures in scene at all\n");
+			}
+		}
 	}
 
 	return true;
@@ -1393,4 +1554,99 @@ void Model::SetBoneScale(const std::string& boneName, float scale)
 {
 	//	指定されたボーン名をキーにして、スケール値を保存
 	m_boneScales[boneName] = scale;
+}
+
+void Model::SetTexture(ID3D11ShaderResourceView* texture)
+{
+	m_diffuseTexture = texture;
+
+	// SkinnedEffectにテクスチャを設定
+	if (m_effect && texture)
+	{
+		m_effect->SetTexture(texture);
+	}
+}
+
+// ボーン名を出力
+void Model::PrintBoneNames() const
+{
+	OutputDebugStringA("=== Bone Names ===\n");
+	for (size_t i = 0; i < m_bones.size(); i++)
+	{
+		char buffer[256];
+		sprintf_s(buffer, "  [%zu] %s\n", i, m_bones[i].name.c_str());
+		OutputDebugStringA(buffer);
+	}
+	OutputDebugStringA("==================\n");
+}
+
+void Model::DrawWithBoneScale(ID3D11DeviceContext* context,
+	XMMATRIX world,
+	XMMATRIX view,
+	XMMATRIX projection,
+	XMVECTOR color)
+{
+	// ボーン行列を準備（すべてIdentity = 元のDrawと同じ）
+	DirectX::XMMATRIX finalBones[DirectX::SkinnedEffect::MaxBones];
+	for (int i = 0; i < DirectX::SkinnedEffect::MaxBones; i++)
+	{
+		finalBones[i] = DirectX::XMMatrixIdentity();
+	}
+
+	// スケール0のボーンだけ特別処理（非表示にする）
+	for (size_t i = 0; i < m_bones.size() && i < DirectX::SkinnedEffect::MaxBones; i++)
+	{
+		std::string shortName = GetShortName(m_bones[i].name);
+		if (m_boneScales.find(shortName) != m_boneScales.end())
+		{
+			float s = m_boneScales[shortName];
+			if (s == 0.0f)
+			{
+				// スケール0 → 頂点を見えなくする
+				finalBones[i] = DirectX::XMMatrixScaling(0.0f, 0.0f, 0.0f);
+			}
+		}
+	}
+
+	m_effect->SetBoneTransforms(finalBones, DirectX::SkinnedEffect::MaxBones);
+
+	// === 以下は元のDrawと同じ ===
+	m_effect->SetWorld(world);
+	m_effect->SetView(view);
+	m_effect->SetProjection(projection);
+	m_effect->SetDiffuseColor(color);
+	m_effect->EnableDefaultLighting();
+	m_effect->SetAmbientLightColor(XMVectorSet(0.3f, 0.3f, 0.3f, 1.0f));
+
+	m_effect->Apply(context);
+
+	if (m_states)
+	{
+		context->OMSetDepthStencilState(m_states->DepthDefault(), 0);
+	}
+
+	context->IASetInputLayout(m_inputLayout.Get());
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	for (const auto& mesh : m_meshes)
+	{
+		UINT stride = sizeof(ModelVertex);
+		UINT offset = 0;
+		context->IASetVertexBuffers(0, 1, mesh.vertexBuffer.GetAddressOf(), &stride, &offset);
+		context->IASetIndexBuffer(mesh.indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+		context->DrawIndexed(static_cast<UINT>(mesh.indices.size()), 0, 0);
+	}
+}
+
+void Model::SetBoneScaleByPrefix(const std::string& prefix, float scale)
+{
+	for (const auto& bone : m_bones)
+	{
+		std::string shortName = GetShortName(bone.name);
+		// プレフィックスで始まるボーンを全て設定
+		if (shortName.rfind(prefix, 0) == 0)  // starts_with
+		{
+			m_boneScales[shortName] = scale;
+		}
+	}
 }

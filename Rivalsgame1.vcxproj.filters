@@ -394,6 +394,15 @@
     <FxCompile Include="FullscreenVS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
+    <FxCompile Include="BurnFlagPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="MenuPostProcessPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="TitleBackgroundPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="FireParticlePS_Standalone.hlsl">

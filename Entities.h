@@ -130,7 +130,7 @@ inline EnemyTypeConfig GetEnemyConfig(EnemyType type)
 		config.headRadius = 0.28f;
 		config.health = 100;
 		config.speedMultiplier = 1.0f;
-		config.color = DirectX::XMFLOAT4(0.8f, 0.2f, 0.2f, 1.0f);  // ê‘
+		config.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);  // ê‘
 		break;
 
 	case EnemyType::RUNNER:
@@ -140,7 +140,7 @@ inline EnemyTypeConfig GetEnemyConfig(EnemyType type)
 		config.headRadius = 0.20f;
 		config.health = 50;
 		config.speedMultiplier = 2.0f;
-		config.color = DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);  // ñæÇÈÇ¢ê‘
+		config.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);  // ñæÇÈÇ¢ê‘
 		break;
 
 	case EnemyType::TANK:
@@ -150,7 +150,7 @@ inline EnemyTypeConfig GetEnemyConfig(EnemyType type)
 		config.headRadius = 0.7f;
 		config.health = 300;
 		config.speedMultiplier = 0.5f;
-		config.color = DirectX::XMFLOAT4(0.2f, 0.2f, 0.8f, 1.0f);  // ê¬
+		config.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);  // ê¬
 		break;
 	}
 
@@ -196,7 +196,7 @@ struct Enemy {
 	Enemy()
 		: position(0, 0, 0)
 		, velocity(0, 0, 0)
-		, color(1, 0, 0, 1)
+		, color(1, 1, 1, 1)
 		, type(EnemyType::NORMAL)
 		, isAlive(false)
 		, moveTimer(0.0f)

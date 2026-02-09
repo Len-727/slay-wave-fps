@@ -111,6 +111,13 @@ private:
     std::unique_ptr<Model> m_rifleModel;    //  ライフルモデル
     std::unique_ptr<Model> m_sniperModel;   //  スナイパーモデル
 
+    //  --- グローリーキル用手とナイフのモデル
+    std::unique_ptr<Model> m_gloryKillArmModel;
+    std::unique_ptr<Model> m_gloryKillKnifeModel;
+
+    //  --- テクスチャ   ---
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_armDiffuseTexture;
+
 
     //  === 影   ===
     std::unique_ptr<Shadow> m_shadow;
@@ -133,7 +140,8 @@ private:
     void DrawWeapon();
     void DrawWeaponSpawns();
     void DrawParticles();
-    void DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix);
+    void DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix, bool skipGloryKillTarget = false);
+    void DrawSingleEnemy(const Enemy& enemy, DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix);
     void DrawUI();
    
 
@@ -159,6 +167,8 @@ private:
         float enemyRotationY,
         EnemyType enemyType
     );
+
+    void UpdateGloryKillAnimation(float deltaTime);
 
     void PerformMeleeAttack();  //  近接攻撃を実行
 
@@ -263,6 +273,25 @@ private:
     float m_gloryKillArmAnimTime;        // アニメーション時間（0.0～1.0）
     DirectX::XMFLOAT3 m_gloryKillArmPos; // 腕の位置
     DirectX::XMFLOAT3 m_gloryKillArmRot; // 腕の回転
+
+    // === グローリーキルモデル調整用（デバッグ） ===
+    bool m_debugShowGloryKillArm = false;
+
+    float m_gloryKillArmScale = 0.010f;      // スケール
+    DirectX::XMFLOAT3 m_gloryKillArmOffset = { 0.48f, -0.238f, 0.217f };  // 前方, 上下, 左右
+
+    // ベース回転（モデルを正しい向きに補正）
+    DirectX::XMFLOAT3 m_gloryKillArmBaseRot = { 0.392f, 1.472f, 0.0f };
+    // アニメーション回転（グローリーキル動作で変化）
+    DirectX::XMFLOAT3 m_gloryKillArmAnimRot = { 0.0f, 0.0f, 0.0f };
+
+    float m_gloryKillKnifeScale = 0.01f;
+    DirectX::XMFLOAT3 m_gloryKillKnifeOffset = { 0.265f, 0.099f, -0.041f };
+    DirectX::XMFLOAT3 m_gloryKillKnifeBaseRot = { -0.196f, -0.098f, -0.229f };
+    DirectX::XMFLOAT3 m_gloryKillKnifeAnimRot = { 0.0f, -0.098f, -0.196f };
+
+    // グローリーキルアニメーション時間設定
+    static constexpr float GLORY_KILL_ANIM_DURATION = 1.2f;  // 全体の時間（秒）
 
     // グローリーキル腕・ナイフモデル（プリミティブ）
     std::unique_ptr<DirectX::GeometricPrimitive> m_gloryKillArm;   // 腕（円柱）

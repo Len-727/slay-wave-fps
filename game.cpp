@@ -2,6 +2,7 @@
 #include "Game.h"
 #include <string>
 #include <d3dcompiler.h>
+#include <WICTextureLoader.h>
 //#include <stdexcept>
 //#include <algorithm>
 
@@ -771,6 +772,9 @@ void Game::CreateRenderResources()
 
     m_spriteBatch = std::make_unique<DirectX::SpriteBatch>(m_d3dContext.Get());
 
+    
+
+
   /*  m_testModel = std::make_unique<Model>();*/
 
     ////  プレイヤーモデルファイルを読み込む
@@ -785,7 +789,7 @@ void Game::CreateRenderResources()
 
     //  === 敵NORMALモデル   ===
     m_enemyModel = std::make_unique<Model>();
-    if (!m_enemyModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Y_Bot/Y_Bot.fbx"))
+    if (!m_enemyModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Normal/Normal.fbx"))
     {
         OutputDebugStringA("Failed to load enemy model!\n");
         //throw std::runtime_error("Failed to load enemy model");
@@ -817,6 +821,45 @@ void Game::CreateRenderResources()
         OutputDebugStringA("Tank model loaded successfully!\n");
     }
 
+    //  アームモデル
+    m_gloryKillArmModel = std::make_unique<Model>();
+    if (!m_gloryKillArmModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/GloryKill/fps_armsKnife.fbx"))
+    {
+        OutputDebugStringA("Failed to load FPS arms model!\n");
+    }
+    else
+    {
+        OutputDebugStringA("FPS arms model loaded!\n");
+
+        m_gloryKillArmModel->PrintBoneNames();
+
+        
+
+        // テクスチャを読み込んで適用
+        HRESULT hr = DirectX::CreateWICTextureFromFile(
+            m_d3dDevice.Get(),
+            L"Assets/Models/GloryKill/Textures/arm1Color.png",
+            nullptr,
+            m_armDiffuseTexture.ReleaseAndGetAddressOf()
+        );
+        if (SUCCEEDED(hr))
+        {
+            m_gloryKillArmModel->SetTexture(m_armDiffuseTexture.Get());
+            OutputDebugStringA("Arm texture loaded!\n");
+        }
+        else
+        {
+            OutputDebugStringA("Failed to load arm texture!\n");
+        }
+    }
+
+    m_gloryKillKnifeModel = std::make_unique<Model>();
+    if (!m_gloryKillKnifeModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/GloryKill/Knife.fbx"))
+    {
+        OutputDebugStringA("Failed to load knife model!\n");
+    }
+    
+
     //  ====================================
     //  === NORMALモデルのアニメーション   ===
     //  ====================================
@@ -824,31 +867,31 @@ void Game::CreateRenderResources()
         OutputDebugStringA("=== Loading Y_Bot animations  ===\n");
 
         //  --- 歩行アニメーション   ---
-        if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Walk.fbx", "Walk"))
+        if (!m_enemyModel->LoadAnimation("Assets/Models/Normal/Normal_Walk.fbx", "Walk"))
         {
             OutputDebugStringA("Failed to load Walk animation\n");
         }
 
         //  --- 待機アニメーション   ---
-        if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Idle.fbx", "Idle"))
+        if (!m_enemyModel->LoadAnimation("Assets/Models/Normal/Normal_Idle.fbx", "Idle"))
         {
             OutputDebugStringA("Failed to load Idle animation\n");
         }
 
         //  --- 走りアニメーション   ---
-        if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Run.fbx", "Run"))
+        if (!m_enemyModel->LoadAnimation("Assets/Models/Normal/Normal_Run.fbx", "Run"))
         {
             OutputDebugStringA("Failed to load Run animation\n");
         }
 
         //  --- 攻撃アニメーション   ---
-        if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Attack.fbx", "Attack"))
+        if (!m_enemyModel->LoadAnimation("Assets/Models/Normal/Normal_Attack.fbx", "Attack"))
         {
             OutputDebugStringA("Failed to load Attack animation");
         }
 
         //  --- 死亡アニメーション   ---
-        if (!m_enemyModel->LoadAnimation("Assets/Models/Y_Bot/Zombie_Death.fbx", "Death"))
+        if (!m_enemyModel->LoadAnimation("Assets/Models/Normal/Normal_Death.fbx", "Death"))
         {
             OutputDebugStringA("Failed to load Death Animation");
         }
@@ -1058,6 +1101,45 @@ void Game::DrawDebugUI()
             DirectX::XMConvertToDegrees(playerRot.x),
             DirectX::XMConvertToDegrees(playerRot.y));
         ImGui::Separator();
+
+        if (ImGui::CollapsingHeader("Glory Kill Model"))
+        {
+            ImGui::Checkbox("Always Show Arm (Debug)", &m_debugShowGloryKillArm);
+            ImGui::Separator();
+
+            ImGui::Text("=== ARM ===");
+            ImGui::SliderFloat("Arm Scale", &m_gloryKillArmScale, 0.001f, 0.1f);
+            ImGui::SliderFloat("Arm Forward", &m_gloryKillArmOffset.x, 0.0f, 2.0f);
+            ImGui::SliderFloat("Arm Up/Down", &m_gloryKillArmOffset.y, -1.0f, 1.0f);
+            ImGui::SliderFloat("Arm Left/Right", &m_gloryKillArmOffset.z, -1.0f, 1.0f);
+
+            ImGui::Text("--- Base Rotation (Fix Model) ---");
+            ImGui::SliderFloat("Arm BaseRotX", &m_gloryKillArmBaseRot.x, -3.14f, 3.14f);
+            ImGui::SliderFloat("Arm BaseRotY", &m_gloryKillArmBaseRot.y, -3.14f, 3.14f);
+            ImGui::SliderFloat("Arm BaseRotZ", &m_gloryKillArmBaseRot.z, -3.14f, 3.14f);
+
+            ImGui::Text("--- Anim Rotation (For Motion) ---");
+            ImGui::SliderFloat("Arm AnimRotX", &m_gloryKillArmAnimRot.x, -3.14f, 3.14f);
+            ImGui::SliderFloat("Arm AnimRotY", &m_gloryKillArmAnimRot.y, -3.14f, 3.14f);
+            ImGui::SliderFloat("Arm AnimRotZ", &m_gloryKillArmAnimRot.z, -3.14f, 3.14f);
+
+            ImGui::Separator();
+            ImGui::Text("=== KNIFE ===");
+            ImGui::SliderFloat("Knife Scale", &m_gloryKillKnifeScale, 0.001f, 0.1f);
+            ImGui::SliderFloat("Knife Forward", &m_gloryKillKnifeOffset.x, -0.5f, 0.5f);
+            ImGui::SliderFloat("Knife Up/Down", &m_gloryKillKnifeOffset.y, -0.5f, 0.5f);
+            ImGui::SliderFloat("Knife Left/Right", &m_gloryKillKnifeOffset.z, -0.5f, 0.5f);
+
+            ImGui::Text("--- Base Rotation ---");
+            ImGui::SliderFloat("Knife BaseRotX", &m_gloryKillKnifeBaseRot.x, -3.14f, 3.14f);
+            ImGui::SliderFloat("Knife BaseRotY", &m_gloryKillKnifeBaseRot.y, -3.14f, 3.14f);
+            ImGui::SliderFloat("Knife BaseRotZ", &m_gloryKillKnifeBaseRot.z, -3.14f, 3.14f);
+
+            ImGui::Text("--- Anim Rotation ---");
+            ImGui::SliderFloat("Knife AnimRotX", &m_gloryKillKnifeAnimRot.x, -3.14f, 3.14f);
+            ImGui::SliderFloat("Knife AnimRotY", &m_gloryKillKnifeAnimRot.y, -3.14f, 3.14f);
+            ImGui::SliderFloat("Knife AnimRotZ", &m_gloryKillKnifeAnimRot.z, -3.14f, 3.14f);
+        }
 
         // 表示トグル
         ImGui::Text("Visual Debug:");
@@ -1628,7 +1710,7 @@ void Game::DrawHitboxes()
 }
 
 
-void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix)
+void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix, bool skipGloryKillTarget)
 {
     static int frameCount = 0;
     frameCount++;
@@ -1685,6 +1767,9 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
     for (const auto& enemy : m_enemySystem->GetEnemies())
     {
         if (!enemy.isAlive && !enemy.isDying)
+            continue;
+
+        if (skipGloryKillTarget && m_gloryKillTargetEnemy && enemy.id == m_gloryKillTargetEnemy->id)
             continue;
 
         // ワールド行列を計算
@@ -2129,6 +2214,65 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
 
 
     primitiveBatch->End();
+}
+
+void Game::DrawSingleEnemy(const Enemy& enemy, DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix)
+{
+    if (!enemy.isAlive && !enemy.isDying)
+        return;
+
+    // ワールド行列を計算
+    DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(0.01f, 0.01f, 0.01f);
+    DirectX::XMMATRIX rotation = DirectX::XMMatrixRotationY(enemy.rotationY);
+    DirectX::XMMATRIX translation = DirectX::XMMatrixTranslation(
+        enemy.position.x,
+        enemy.position.y,
+        enemy.position.z
+    );
+    DirectX::XMMATRIX world = scale * rotation * translation;
+
+    // 適切なモデルを選択
+    Model* model = nullptr;
+    switch (enemy.type)
+    {
+    case EnemyType::NORMAL:
+        model = m_enemyModel.get();
+        break;
+    case EnemyType::RUNNER:
+        model = m_runnerModel.get();
+        break;
+    case EnemyType::TANK:
+        model = m_tankModel.get();
+        break;
+    }
+
+    if (!model) return;
+
+    // 深度テストを有効化
+    m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
+
+    // アニメーション描画
+    std::string animName = enemy.currentAnimation;
+    if (enemy.headDestroyed)
+    {
+        model->SetBoneScaleByPrefix("Head", 0.0f);
+    }
+
+    model->DrawAnimated(
+        m_d3dContext.Get(),
+        world,
+        viewMatrix,
+        projectionMatrix,
+        DirectX::XMLoadFloat4(&enemy.color),  // XMFLOAT4 → XMVECTOR
+        animName,
+        enemy.animationTime
+    );
+
+    // 頭のスケールをリセット
+    if (enemy.headDestroyed)
+    {
+        model->SetBoneScaleByPrefix("Head", 1.0f);
+    }
 }
 
 //  回転対応版：レイとOBB（回転する箱）の交差判定
@@ -2601,7 +2745,7 @@ void Game::RenderPlaying()
         //  深度テストと深度書き込みを有効化
         m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 
-        DrawEnemies(viewMatrix, projectionMatrix);
+        DrawEnemies(viewMatrix, projectionMatrix, true);// trueでターゲット敵をスキップ
         //  深度テストと深度書き込みを有効化
         m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 
@@ -2609,13 +2753,9 @@ void Game::RenderPlaying()
         DrawWeapon();
         DrawWeaponSpawns();
 
-        // グローリーキル腕・ナイフ描画
-        if (m_gloryKillArmAnimActive && m_gloryKillArm && m_gloryKillKnife)
+        // グローリーキル腕・ナイフ描画（FBXモデル版）
+        if ((m_gloryKillArmAnimActive || m_debugShowGloryKillArm) && m_gloryKillArmModel)
         {
-            DirectX::XMFLOAT3 camPos, camTarget;
-            DirectX::XMStoreFloat3(&camPos, cameraPosition);
-            DirectX::XMStoreFloat3(&camTarget, cameraTarget);
-
             DirectX::XMVECTOR forward = DirectX::XMVectorSubtract(cameraTarget, cameraPosition);
             forward = DirectX::XMVector3Normalize(forward);
 
@@ -2624,36 +2764,110 @@ void Game::RenderPlaying()
             right = DirectX::XMVector3Normalize(right);
             DirectX::XMVECTOR up = DirectX::XMVector3Cross(forward, right);
 
+            // === アームの位置計算（調整変数使用） ===
             DirectX::XMVECTOR armWorldPos = cameraPosition;
-            armWorldPos += forward * 0.8f;
-            armWorldPos += right * m_gloryKillArmPos.x * 0.4f;
-            armWorldPos += up * m_gloryKillArmPos.y;
+            armWorldPos += forward * m_gloryKillArmOffset.x;  // 前方
+            armWorldPos += up * m_gloryKillArmOffset.y;       // 上下
+            armWorldPos += right * m_gloryKillArmOffset.z;    // 左右
 
             float cameraYaw = atan2f(
                 DirectX::XMVectorGetX(forward),
                 DirectX::XMVectorGetZ(forward)
             );
 
-            DirectX::XMMATRIX armWorld = DirectX::XMMatrixIdentity();
-            armWorld *= DirectX::XMMatrixRotationZ(DirectX::XM_PIDIV2);
-            armWorld *= DirectX::XMMatrixRotationY(cameraYaw);
-            armWorld *= DirectX::XMMatrixTranslationFromVector(armWorldPos);
+            // === アームのワールド行列 ===
+            DirectX::XMMATRIX armScale = DirectX::XMMatrixScaling(
+                m_gloryKillArmScale, m_gloryKillArmScale, m_gloryKillArmScale);
 
-            DirectX::XMVECTOR skinColor = DirectX::XMVectorSet(0.8f, 0.6f, 0.5f, 1.0f);
-            m_gloryKillArm->Draw(armWorld, viewMatrix, projectionMatrix, skinColor);
+            // ベース回転（モデルを正しい向きに補正）
+            DirectX::XMMATRIX baseRotX = DirectX::XMMatrixRotationX(m_gloryKillArmBaseRot.x);
+            DirectX::XMMATRIX baseRotY = DirectX::XMMatrixRotationY(m_gloryKillArmBaseRot.y);
+            DirectX::XMMATRIX baseRotZ = DirectX::XMMatrixRotationZ(m_gloryKillArmBaseRot.z);
+            DirectX::XMMATRIX baseRot = baseRotX * baseRotY * baseRotZ;
 
-            DirectX::XMVECTOR knifeLocalOffset = DirectX::XMVectorSet(0.0f, 0.0f, 0.35f, 0.0f);
+            // アニメーション回転（グローリーキルの動き）
+            DirectX::XMMATRIX animRotX = DirectX::XMMatrixRotationX(m_gloryKillArmAnimRot.x);
+            DirectX::XMMATRIX animRotY = DirectX::XMMatrixRotationY(m_gloryKillArmAnimRot.y);
+            DirectX::XMMATRIX animRotZ = DirectX::XMMatrixRotationZ(m_gloryKillArmAnimRot.z);
+            DirectX::XMMATRIX animRot = animRotX * animRotY * animRotZ;
 
-            DirectX::XMMATRIX knifeWorld = DirectX::XMMatrixIdentity();
-            knifeWorld *= DirectX::XMMatrixRotationZ(DirectX::XM_PIDIV2);
-            knifeWorld *= DirectX::XMMatrixRotationX(-DirectX::XM_PIDIV2);
-            knifeWorld *= DirectX::XMMatrixTranslationFromVector(knifeLocalOffset);
-            knifeWorld *= DirectX::XMMatrixRotationY(cameraYaw);
-            knifeWorld *= DirectX::XMMatrixTranslationFromVector(armWorldPos);
+            // カメラ追従回転
+            DirectX::XMMATRIX cameraRot = DirectX::XMMatrixRotationY(cameraYaw);
+            DirectX::XMMATRIX armTrans = DirectX::XMMatrixTranslationFromVector(armWorldPos);
 
-            m_gloryKillKnife->Draw(knifeWorld, viewMatrix, projectionMatrix, DirectX::Colors::Silver);
+            // 合成：スケール → ベース補正 → アニメーション → カメラ追従 → 移動
+            DirectX::XMMATRIX armWorld = armScale * baseRot * animRot * cameraRot * armTrans;
+
+            m_gloryKillArmModel->SetBoneScaleByPrefix("L_", 0.0f);
+
+            m_d3dContext->RSSetState(m_states->CullNone());
+            
+            m_gloryKillArmModel->DrawWithBoneScale(
+                m_d3dContext.Get(),
+                armWorld,
+                viewMatrix,
+                projectionMatrix,
+                DirectX::Colors::White
+            );
+
+
+            // ============================================
+            // === ナイフ描画 ===
+            // ============================================
+            if (m_gloryKillKnifeModel)
+            {
+                // オフセットベクトルを作成（ローカル空間）
+                DirectX::XMVECTOR offset = DirectX::XMVectorSet(
+                    m_gloryKillKnifeOffset.z,   // X = Left/Right
+                    m_gloryKillKnifeOffset.y,   // Y = Up/Down  
+                    m_gloryKillKnifeOffset.x,   // Z = Forward
+                    0.0f
+                );
+
+                // アニメーション回転 + カメラ回転でオフセットを変換
+                DirectX::XMMATRIX offsetRotation = animRot * cameraRot;
+                DirectX::XMVECTOR rotatedOffset = DirectX::XMVector3TransformNormal(offset, offsetRotation);
+
+                // 腕の位置に変換後のオフセットを加える
+                DirectX::XMVECTOR knifeWorldPos = DirectX::XMVectorAdd(armWorldPos, rotatedOffset);
+                // ナイフのスケール
+                DirectX::XMMATRIX knifeScale = DirectX::XMMatrixScaling(
+                    m_gloryKillKnifeScale, m_gloryKillKnifeScale, m_gloryKillKnifeScale);
+
+                // ナイフのベース回転
+                DirectX::XMMATRIX knifeBaseRotX = DirectX::XMMatrixRotationX(m_gloryKillKnifeBaseRot.x);
+                DirectX::XMMATRIX knifeBaseRotY = DirectX::XMMatrixRotationY(m_gloryKillKnifeBaseRot.y);
+                DirectX::XMMATRIX knifeBaseRotZ = DirectX::XMMatrixRotationZ(m_gloryKillKnifeBaseRot.z);
+                DirectX::XMMATRIX knifeBaseRot = knifeBaseRotX * knifeBaseRotY * knifeBaseRotZ;
+
+                // ナイフのアニメーション回転
+                DirectX::XMMATRIX knifeAnimRotX = DirectX::XMMatrixRotationX(m_gloryKillKnifeAnimRot.x);
+                DirectX::XMMATRIX knifeAnimRotY = DirectX::XMMatrixRotationY(m_gloryKillKnifeAnimRot.y);
+                DirectX::XMMATRIX knifeAnimRotZ = DirectX::XMMatrixRotationZ(m_gloryKillKnifeAnimRot.z);
+                DirectX::XMMATRIX knifeAnimRot = knifeAnimRotX * knifeAnimRotY * knifeAnimRotZ;
+
+                // ナイフの移動行列
+                DirectX::XMMATRIX knifeTrans = DirectX::XMMatrixTranslationFromVector(knifeWorldPos);
+
+                // 合成
+                DirectX::XMMATRIX knifeWorld = knifeScale * knifeBaseRot * knifeAnimRot * cameraRot * knifeTrans;
+
+                m_gloryKillKnifeModel->Draw(
+                    m_d3dContext.Get(),
+                    knifeWorld,
+                    viewMatrix,
+                    projectionMatrix,
+                    DirectX::Colors::White
+                );
+            }
+
+            // === グローリーキルターゲットの敵を最後に描画（腕の後ろに表示） ===
+            if (m_gloryKillTargetEnemy)
+            {
+                DrawSingleEnemy(*m_gloryKillTargetEnemy, viewMatrix, projectionMatrix);
+            }
+            
         }
-
         // UI描画（オフスクリーンへ）
         DrawUI();
 
@@ -2772,13 +2986,9 @@ void Game::RenderPlaying()
         DrawWeapon();
         DrawWeaponSpawns();
 
-        // グローリーキル腕・ナイフ描画
-        if (m_gloryKillArmAnimActive && m_gloryKillArm && m_gloryKillKnife)
+        // グローリーキル腕・ナイフ描画（FBXモデル版）
+        if ((m_gloryKillArmAnimActive || m_debugShowGloryKillArm) && m_gloryKillArmModel)
         {
-            DirectX::XMFLOAT3 camPos, camTarget;
-            DirectX::XMStoreFloat3(&camPos, cameraPosition);
-            DirectX::XMStoreFloat3(&camTarget, cameraTarget);
-
             DirectX::XMVECTOR forward = DirectX::XMVectorSubtract(cameraTarget, cameraPosition);
             forward = DirectX::XMVector3Normalize(forward);
 
@@ -2787,34 +2997,108 @@ void Game::RenderPlaying()
             right = DirectX::XMVector3Normalize(right);
             DirectX::XMVECTOR up = DirectX::XMVector3Cross(forward, right);
 
+            // === アームの位置計算（調整変数使用） ===
             DirectX::XMVECTOR armWorldPos = cameraPosition;
-            armWorldPos += forward * 0.8f;
-            armWorldPos += right * m_gloryKillArmPos.x * 0.4f;
-            armWorldPos += up * m_gloryKillArmPos.y;
+            armWorldPos += forward * m_gloryKillArmOffset.x;  // 前方
+            armWorldPos += up * m_gloryKillArmOffset.y;       // 上下
+            armWorldPos += right * m_gloryKillArmOffset.z;    // 左右
 
             float cameraYaw = atan2f(
                 DirectX::XMVectorGetX(forward),
                 DirectX::XMVectorGetZ(forward)
             );
 
-            DirectX::XMMATRIX armWorld = DirectX::XMMatrixIdentity();
-            armWorld *= DirectX::XMMatrixRotationZ(DirectX::XM_PIDIV2);
-            armWorld *= DirectX::XMMatrixRotationY(cameraYaw);
-            armWorld *= DirectX::XMMatrixTranslationFromVector(armWorldPos);
+            // === アームのワールド行列 ===
+            DirectX::XMMATRIX armScale = DirectX::XMMatrixScaling(
+                m_gloryKillArmScale, m_gloryKillArmScale, m_gloryKillArmScale);
 
-            DirectX::XMVECTOR skinColor = DirectX::XMVectorSet(0.8f, 0.6f, 0.5f, 1.0f);
-            m_gloryKillArm->Draw(armWorld, viewMatrix, projectionMatrix, skinColor);
+            // ベース回転（モデルを正しい向きに補正）
+            DirectX::XMMATRIX baseRotX = DirectX::XMMatrixRotationX(m_gloryKillArmBaseRot.x);
+            DirectX::XMMATRIX baseRotY = DirectX::XMMatrixRotationY(m_gloryKillArmBaseRot.y);
+            DirectX::XMMATRIX baseRotZ = DirectX::XMMatrixRotationZ(m_gloryKillArmBaseRot.z);
+            DirectX::XMMATRIX baseRot = baseRotX * baseRotY * baseRotZ;
 
-            DirectX::XMVECTOR knifeLocalOffset = DirectX::XMVectorSet(0.0f, 0.0f, 0.35f, 0.0f);
+            // アニメーション回転（グローリーキルの動き）
+            DirectX::XMMATRIX animRotX = DirectX::XMMatrixRotationX(m_gloryKillArmAnimRot.x);
+            DirectX::XMMATRIX animRotY = DirectX::XMMatrixRotationY(m_gloryKillArmAnimRot.y);
+            DirectX::XMMATRIX animRotZ = DirectX::XMMatrixRotationZ(m_gloryKillArmAnimRot.z);
+            DirectX::XMMATRIX animRot = animRotX * animRotY * animRotZ;
 
-            DirectX::XMMATRIX knifeWorld = DirectX::XMMatrixIdentity();
-            knifeWorld *= DirectX::XMMatrixRotationZ(DirectX::XM_PIDIV2);
-            knifeWorld *= DirectX::XMMatrixRotationX(-DirectX::XM_PIDIV2);
-            knifeWorld *= DirectX::XMMatrixTranslationFromVector(knifeLocalOffset);
-            knifeWorld *= DirectX::XMMatrixRotationY(cameraYaw);
-            knifeWorld *= DirectX::XMMatrixTranslationFromVector(armWorldPos);
+            // カメラ追従回転
+            DirectX::XMMATRIX cameraRot = DirectX::XMMatrixRotationY(cameraYaw);
+            DirectX::XMMATRIX armTrans = DirectX::XMMatrixTranslationFromVector(armWorldPos);
 
-            m_gloryKillKnife->Draw(knifeWorld, viewMatrix, projectionMatrix, DirectX::Colors::Silver);
+            // 合成：スケール → ベース補正 → アニメーション → カメラ追従 → 移動
+            DirectX::XMMATRIX armWorld = armScale * baseRot * animRot * cameraRot * armTrans;
+
+            m_gloryKillArmModel->SetBoneScaleByPrefix("L_", 0.0f);
+
+            m_d3dContext->RSSetState(m_states->CullNone());
+
+            m_gloryKillArmModel->DrawWithBoneScale(
+                m_d3dContext.Get(),
+                armWorld,
+                viewMatrix,
+                projectionMatrix,
+                DirectX::Colors::White
+            );
+
+            // ============================================
+            // === ナイフ描画 ===
+            // ============================================
+            if (m_gloryKillKnifeModel)
+            {
+                // オフセットベクトルを作成（ローカル空間）
+                DirectX::XMVECTOR offset = DirectX::XMVectorSet(
+                    m_gloryKillKnifeOffset.z,   // X = Left/Right
+                    m_gloryKillKnifeOffset.y,   // Y = Up/Down  
+                    m_gloryKillKnifeOffset.x,   // Z = Forward
+                    0.0f
+                );
+
+                // アニメーション回転 + カメラ回転でオフセットを変換
+                DirectX::XMMATRIX offsetRotation = animRot * cameraRot;
+                DirectX::XMVECTOR rotatedOffset = DirectX::XMVector3TransformNormal(offset, offsetRotation);
+
+                // 腕の位置に変換後のオフセットを加える
+                DirectX::XMVECTOR knifeWorldPos = DirectX::XMVectorAdd(armWorldPos, rotatedOffset);
+
+                // ナイフのスケール
+                DirectX::XMMATRIX knifeScale = DirectX::XMMatrixScaling(
+                    m_gloryKillKnifeScale, m_gloryKillKnifeScale, m_gloryKillKnifeScale);
+
+                // ナイフのベース回転
+                DirectX::XMMATRIX knifeBaseRotX = DirectX::XMMatrixRotationX(m_gloryKillKnifeBaseRot.x);
+                DirectX::XMMATRIX knifeBaseRotY = DirectX::XMMatrixRotationY(m_gloryKillKnifeBaseRot.y);
+                DirectX::XMMATRIX knifeBaseRotZ = DirectX::XMMatrixRotationZ(m_gloryKillKnifeBaseRot.z);
+                DirectX::XMMATRIX knifeBaseRot = knifeBaseRotX * knifeBaseRotY * knifeBaseRotZ;
+
+                // ナイフのアニメーション回転
+                DirectX::XMMATRIX knifeAnimRotX = DirectX::XMMatrixRotationX(m_gloryKillKnifeAnimRot.x);
+                DirectX::XMMATRIX knifeAnimRotY = DirectX::XMMatrixRotationY(m_gloryKillKnifeAnimRot.y);
+                DirectX::XMMATRIX knifeAnimRotZ = DirectX::XMMatrixRotationZ(m_gloryKillKnifeAnimRot.z);
+                DirectX::XMMATRIX knifeAnimRot = knifeAnimRotX * knifeAnimRotY * knifeAnimRotZ;
+
+                // ナイフの移動行列
+                DirectX::XMMATRIX knifeTrans = DirectX::XMMatrixTranslationFromVector(knifeWorldPos);
+
+                // 合成
+                DirectX::XMMATRIX knifeWorld = knifeScale * knifeBaseRot * knifeAnimRot * cameraRot * knifeTrans;
+
+                m_gloryKillKnifeModel->Draw(
+                    m_d3dContext.Get(),
+                    knifeWorld,
+                    viewMatrix,
+                    projectionMatrix,
+                    DirectX::Colors::White
+                );
+            }
+
+            if (m_gloryKillTargetEnemy)
+            {
+                DrawSingleEnemy(*m_gloryKillTargetEnemy, viewMatrix, projectionMatrix);
+            }
+            
         }
 
         // UI描画
@@ -2903,6 +3187,8 @@ void Game::UpdatePlaying()
 
     float deltaTime = m_deltaTime * m_timeScale;
     m_accumulatedAnimTime += deltaTime * 0.5f;
+
+    UpdateGloryKillAnimation(deltaTime);
 
     // === 敵に物理ボディを追加（まだ追加されてない敵のみ）===
     static bool enemiesInitialized = false;
@@ -3094,12 +3380,23 @@ void Game::UpdatePlaying()
             OutputDebugStringA(debugGK);
 
             // === カメラをターゲット敵に向ける ===
-            m_gloryKillCameraActive = true;
+            m_gloryKillCameraActive = false;
             m_gloryKillCameraLerpTime = 0.0f;
 
             // カメラ位置：プレイヤーとターゲット敵の間、やや上から
             DirectX::XMFLOAT3 playerPosition = m_player->GetPosition();
             DirectX::XMFLOAT3 enemyPos = m_gloryKillTargetEnemy->position;
+
+            // === 敵をプレイヤーの目の前に移動 ===
+            DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+            float forwardX = sinf(playerRot.y);
+            float forwardZ = cosf(playerRot.y);
+
+            // プレイヤーの前方 0.8m の位置に敵を配置
+            float targetDistance = 0.8f;  // この値を小さくするとより近くなる
+            m_gloryKillTargetEnemy->position.x = playerPosition.x + forwardX * targetDistance;
+            m_gloryKillTargetEnemy->position.z = playerPosition.z + forwardZ * targetDistance;
+            m_gloryKillTargetEnemy->position.y = playerPosition.y - 1.7f;
 
             // プレイヤーから敵への方向ベクトル
             float dx = enemyPos.x - playerPosition.x;
@@ -3114,9 +3411,9 @@ void Game::UpdatePlaying()
             }
 
             // カメラ位置：プレイヤーの少し後ろ、少し上
-            m_gloryKillCameraPos.x = playerPosition.x - dx * 1.0f;
-            m_gloryKillCameraPos.y = playerPosition.y - 0.3f;  // 少し上
-            m_gloryKillCameraPos.z = playerPosition.z - dz * 1.0f;
+            m_gloryKillCameraPos.x = playerPosition.x - dx;
+            m_gloryKillCameraPos.y = playerPosition.y;  // 少し上
+            m_gloryKillCameraPos.z = playerPosition.z - dz;
 
             // カメラターゲット：敵の中心（胸の高さ）
             m_gloryKillCameraTarget = enemyPos;
@@ -4380,6 +4677,88 @@ void Game::UpdatePhysics(float deltaTime)
     }
 }
 
+void Game::UpdateGloryKillAnimation(float deltaTime)
+{
+    if (!m_gloryKillArmAnimActive)
+        return;
+
+    // アニメーション時間を進める
+    m_gloryKillArmAnimTime += deltaTime / GLORY_KILL_ANIM_DURATION;
+
+    if (m_gloryKillArmAnimTime >= 1.0f)
+    {
+        // アニメーション終了
+        m_gloryKillArmAnimActive = false;
+        m_gloryKillArmAnimTime = 0.0f;
+        m_gloryKillArmAnimRot = { 0.0f, 0.0f, 0.0f };
+        m_gloryKillKnifeAnimRot = { 0.0f, 0.0f, 0.0f };
+        return;
+    }
+
+    float t = m_gloryKillArmAnimTime;
+
+    // === フェーズ分け ===
+    // Phase 1: 構え (0.0 ~ 0.2) - 腕を右に引いて横向きに
+    // Phase 2: 溜め (0.2 ~ 0.35) - 止まる
+    // Phase 3: 突き刺し (0.35 ~ 0.5) - 素早く左へ突く
+    // Phase 4: 停止 (0.5 ~ 0.75) - 刺さった状態
+    // Phase 5: 引き抜き (0.75 ~ 1.0) - 戻す
+
+    float armRotY = 0.0f;   // 腕の横方向回転
+    float armRotZ = 0.0f;   // 腕の傾き
+    float knifeRotX = 0.0f; // ナイフの角度
+
+    if (t < 0.2f)
+    {
+        // Phase 1: 構え - 腕を右に引く
+        float phase = t / 0.2f;  // 0→1
+        phase = phase * phase;   // イージング（加速）
+
+        armRotY = phase * 0.8f;  // 右に引く
+        armRotZ = phase * 0.3f;  // 少し傾ける
+        knifeRotX = phase * (-0.5f); // ナイフを横向きに
+    }
+    else if (t < 0.35f)
+    {
+        // Phase 2: 溜め - 止まる（緊張感）
+        armRotY = 0.8f;
+        armRotZ = 0.3f;
+        knifeRotX = -0.5f;
+    }
+    else if (t < 0.5f)
+    {
+        // Phase 3: 突き刺し！ - 素早く左へ
+        float phase = (t - 0.35f) / 0.15f;  // 0→1
+        phase = 1.0f - (1.0f - phase) * (1.0f - phase);  // イージング（減速）
+
+        armRotY = 0.8f - phase * 1.6f;  // 右から左へ振る（0.8 → -0.8）
+        armRotZ = 0.3f - phase * 0.5f;  // 傾きを戻しながら
+        knifeRotX = -0.5f + phase * 0.3f;
+    }
+    else if (t < 0.75f)
+    {
+        // Phase 4: 停止 - 刺さった状態で止まる
+        armRotY = -0.8f;
+        armRotZ = -0.2f;
+        knifeRotX = -0.2f;
+    }
+    else
+    {
+        // Phase 5: 引き抜き - 元に戻す
+        float phase = (t - 0.75f) / 0.25f;  // 0→1
+        phase = phase * phase;  // イージング
+
+        armRotY = -0.8f * (1.0f - phase);
+        armRotZ = -0.2f * (1.0f - phase);
+        knifeRotX = -0.2f * (1.0f - phase);
+    }
+
+    // AnimRot に適用
+    m_gloryKillArmAnimRot.y = armRotY;
+    m_gloryKillArmAnimRot.z = armRotZ;
+    m_gloryKillKnifeAnimRot.x = knifeRotX;
+}
+
 void Game::PerformMeleeAttack()
 {
     using namespace DirectX;
@@ -4415,6 +4794,10 @@ void Game::PerformMeleeAttack()
         {
             //  グローリーキル
             OutputDebugStringA("[GLORY KILL] GLORY KILL EXECUTED!\n");
+
+            //  アニメーション開始
+            m_gloryKillArmAnimActive = true;
+            m_gloryKillArmAnimTime = 0.0f;
 
             //  即死させる
             hitEnemy->health = 0;

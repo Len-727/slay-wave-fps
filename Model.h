@@ -105,6 +105,13 @@ public:
 		const std::string& animationName,
 		float animationTime);
 
+	// ボーンスケール適用付き描画（アニメーションなし）
+	void DrawWithBoneScale(ID3D11DeviceContext* context,
+		DirectX::XMMATRIX world,
+		DirectX::XMMATRIX view,
+		DirectX::XMMATRIX projection,
+		DirectX::XMVECTOR color);
+
 	//	インスタンシング描画
 	void DrawInstanced(
 		ID3D11DeviceContext* context,
@@ -124,6 +131,16 @@ public:
 
 	//	特定のボーンのスケールを変更する
 	void SetBoneScale(const std::string& boneName, float scale);
+
+	void SetBoneScaleByPrefix(const std::string& prefix, float scale);
+
+	void PrintBoneNames() const;
+
+	//	テクスチャを設定
+	void SetTexture(ID3D11ShaderResourceView* texture);
+
+	
+
 
 private:
 
@@ -185,5 +202,7 @@ private:
 	//void DebugDumpSkeleton();
 
 	std::string GetShortName(const std::string& fullName);
+
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_diffuseTexture;
 };
 
