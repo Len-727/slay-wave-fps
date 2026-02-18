@@ -196,10 +196,10 @@ float3 embers(float2 uv, float t)
     float3 result = float3(0, 0, 0);
 
     // 色パレット
-    float3 redOrange = float3(1.0, 0.3, 0.02);
-    float3 yellowOrange = float3(1.0, 0.65, 0.1);
-    float3 brightYellow = float3(1.0, 0.85, 0.3);
-    float3 deepRed = float3(0.9, 0.15, 0.0);
+    float3 redOrange = float3(1.0, 0.1, 0.02);
+    float3 yellowOrange = float3(1.0, 0.2, 0.05);
+    float3 brightYellow = float3(1.0, 0.35, 0.1);
+    float3 deepRed = float3(0.7, 0.02, 0.0);
 
     // 大粒（近景）: ゆっくり上昇、明るい
     result += emberLayer(uv, t,
@@ -298,9 +298,9 @@ float4 main(PS_INPUT input) : SV_TARGET
     float metalNoise = fbm(warpedUV * 8.0 + 5.0);
     float darkPattern = warpedFbm(warpedUV * 1.5, t * 0.5);
     
-    float3 base = float3(0.035, 0.02, 0.015);
-    base += float3(0.025, 0.015, 0.008) * metalNoise;
-    base += float3(0.02, 0.008, 0.003) * darkPattern;
+    float3 base = float3(0.05, 0.01, 0.01);
+    base += float3(0.03, 0.008, 0.005) * metalNoise;
+    base += float3(0.025, 0.005, 0.003) * darkPattern;
     
     // ========================================
     // 2) 溶岩の亀裂（2レイヤー＝太い＋細い）
@@ -313,9 +313,9 @@ float4 main(PS_INPUT input) : SV_TARGET
     float pulse = magmaPulse(warpedUV, t);
     
     // 溶岩の色（暗い赤 → 眩しいオレンジ黄色）
-    float3 lavaDark = float3(0.7, 0.1, 0.0);
-    float3 lavaMid = float3(1.0, 0.4, 0.05);
-    float3 lavaBright = float3(1.0, 0.8, 0.3);
+    float3 lavaDark = float3(0.5, 0.02, 0.02);
+    float3 lavaMid = float3(0.85, 0.08, 0.03);
+    float3 lavaBright = float3(1.0, 0.2, 0.1);
     
     float lavaIntensity = 0.7 + pulse * 0.5;
     float3 lavaColor = lerp(lavaDark, lavaMid, pulse);
@@ -325,7 +325,7 @@ float4 main(PS_INPUT input) : SV_TARGET
     
     // 亀裂周辺のにじみ（ブルーム風）
     float bloom = lavaCracks(warpedUV * 0.95 + 0.025, t, 3.0);
-    base += float3(0.2, 0.05, 0.0) * bloom * pulse * 0.4;
+    base += float3(0.25, 0.02, 0.02) * bloom * pulse * 0.4;
     
     // ========================================
     // 3) 炎柱（下から立ち上がる激しい炎）
@@ -333,8 +333,8 @@ float4 main(PS_INPUT input) : SV_TARGET
     float columns = fireColumns(warpedUV, t);
     
     float3 fireColor = lerp(
-        float3(0.8, 0.2, 0.0),
-        float3(1.0, 0.7, 0.2),
+        float3(0.6, 0.03, 0.0),
+        float3(1.0, 0.15, 0.05),
         1.0 - warpedUV.y
     );
     base += fireColor * columns * 0.8;
@@ -347,13 +347,13 @@ float4 main(PS_INPUT input) : SV_TARGET
     float heatPulse = sin(t * 1.0) * 0.15 + 0.85;
     bottomHeat *= (0.6 + heatNoise * 0.4) * heatPulse;
     
-    float3 heatColor = float3(0.35, 0.08, 0.01);
+    float3 heatColor = float3(0.4, 0.03, 0.02);
     base += heatColor * bottomHeat;
     
     // 最下部の溶岩プール
     float lavaPool = smoothstep(1.0, 0.85, uv.y);
     float poolNoise = fbm(float2(uv.x * 4.0 + t * 0.3, t * 0.15));
-    base += float3(0.4, 0.12, 0.02) * lavaPool * poolNoise;
+    base += float3(0.5, 0.05, 0.03) * lavaPool * poolNoise;
     
     // ========================================
     // 5) 煙＋灰（上部）
@@ -363,8 +363,8 @@ float4 main(PS_INPUT input) : SV_TARGET
     float combinedSmoke = (smoke + smoke2) * 0.5;
     
     float smokeMask = smoothstep(0.5, 0.0, uv.y);
-    float3 smokeColor = float3(0.05, 0.035, 0.025);
-    smokeColor += float3(0.05, 0.02, 0.005) * combinedSmoke;
+    float3 smokeColor = float3(0.06, 0.015, 0.015);
+    smokeColor += float3(0.05, 0.01, 0.008) * combinedSmoke;
     base += smokeColor * combinedSmoke * smokeMask * 0.6;
     
     // ========================================
@@ -378,7 +378,7 @@ float4 main(PS_INPUT input) : SV_TARGET
     // ========================================
     float flash = hash21(float2(floor(t * 0.8), 42.0));
     flash = pow(max(flash - 0.92, 0.0) * 12.5, 2.0);
-    base += float3(0.15, 0.05, 0.01) * flash;
+    base += float3(0.2, 0.02, 0.02) * flash;
     
     // ========================================
     // 8) ビネット（下部は除外して炉の光を保つ）
@@ -392,9 +392,9 @@ float4 main(PS_INPUT input) : SV_TARGET
     // ========================================
     // 9) 色調補正（DOOM Eternal風の攻撃的な暖色）
     // ========================================
-    base.r *= 1.2;
-    base.g *= 0.85;
-    base.b *= 0.6;
+    base.r *= 1.3;
+    base.g *= 0.55;
+    base.b *= 0.45;
     
     // コントラストをガツンと上げる
     base = pow(base, float3(1.1, 1.15, 1.2));

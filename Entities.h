@@ -124,39 +124,74 @@ inline EnemyTypeConfig GetEnemyConfig(EnemyType type)
 	switch (type)
 	{
 	case EnemyType::NORMAL:
-		config.bodyWidth = 0.50f;
-		config.bodyHeight = 1.13f;
-		config.headHeight = 1.41f;
-		config.headRadius = 0.28f;
+		config.bodyWidth = 0.74f;
+		config.bodyHeight = 1.67f;
+		config.headHeight = 1.59f;
+		config.headRadius = 0.37f;
 		config.health = 100;
 		config.speedMultiplier = 1.0f;
 		config.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);  // 赤
 		break;
 
 	case EnemyType::RUNNER:
-		config.bodyWidth = 0.40f;
-		config.bodyHeight = 1.32f;
+		config.bodyWidth = 0.45f;
+		config.bodyHeight = 1.37f;
 		config.headHeight = 1.47f;
-		config.headRadius = 0.20f;
+		config.headRadius = 0.25f;
 		config.health = 50;
 		config.speedMultiplier = 2.0f;
 		config.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);  // 明るい赤
 		break;
 
 	case EnemyType::TANK:
-		config.bodyWidth = 0.7f;
-		config.bodyHeight = 2.0f;
-		config.headHeight = 2.3f;
-		config.headRadius = 0.7f;
+		config.bodyWidth = 0.70f;
+		config.bodyHeight = 1.84f;
+		config.headHeight = 2.30f;
+		config.headRadius = 0.70f;
 		config.health = 300;
 		config.speedMultiplier = 0.5f;
 		config.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);  // 青
+		break;
+
+	case EnemyType::MIDBOSS:
+		config.bodyWidth = 1.00f;
+		config.bodyHeight = 1.94f;
+		config.headHeight = 1.68f;
+		config.headRadius = 0.44f;
+		config.health = 5000;
+		config.speedMultiplier = 0.4f; // ゆっくり
+		config.color = DirectX::XMFLOAT4(1.0f, 0.3f, 0.3f, 1.0f);
+		break;
+
+	case EnemyType::BOSS:
+		config.bodyWidth = 2.45f;
+		config.bodyHeight = 2.87f;
+		config.headHeight = 2.48f;
+		config.headRadius = 1.11f;
+		config.health = 15000;
+		config.speedMultiplier = 0.3f;  // 遅いけど硬い
+		config.color = DirectX::XMFLOAT4(0.8f, 0.1f, 0.1f, 1.0f);
 		break;
 	}
 
 	return config;
 }
 
+
+// === ボス攻撃状態 ===
+enum class BossAttackPhase {
+	IDLE,           // 通常行動（プレイヤーに接近）
+	JUMP_WINDUP,    // ジャンプ溜め（地面から飛び上がる前）
+	JUMP_AIR,       // 空中（上昇→落下）
+	JUMP_SLAM,      // 着地叩きつけ（範囲ダメージ発生）
+	SLAM_RECOVERY,  // 叩きつけ後の硬直
+	SLASH_WINDUP,   // 殴り上げ溜め
+	SLASH_FIRE,     // 斬撃3本発射
+	SLASH_RECOVERY, // 斬撃後の硬直
+	ROAR_WINDUP,    // 咆哮溜め（MIDBOSSビーム）
+	ROAR_FIRE,      // ビーム発射中
+	ROAR_RECOVERY,  // 咆哮後の硬直
+};
 
 
 //	敵
@@ -172,9 +207,12 @@ struct Enemy {
 	int health;
 	int maxHealth;
 	bool touchingPlayer;
+	bool wasTouchingPlayer = false;	//	前フレームの接触状態
+	bool attackJustLanded = false;	//	攻撃が当たった瞬間だけtrue
 	bool isDying = false;		//	死亡アニメーション再生中か?
 	float corpseTimer = 0.0f;	//	死体が消えるまでのタイマー
 	bool isRagdoll = false;
+	bool isExploded = false;    // 爆散済み（モデル非表示、Gibのみ）
 
 	//	ヘッドショット用
 	bool headDestroyed = false;			//	頭が吹き飛んだか？
@@ -192,6 +230,18 @@ struct Enemy {
 	bool isStaggered;	//	よろめき状態(HP30%以下)
 	float staggerFlashTimer;	//	点滅用タイマー
 
+	//	パリィ・スタンシステム
+	float stunValue = 0.0f;	//	現在のスタン蓄積値
+	float maxStunValue = 100.0f;	//	スタン値がこれに達するとスタが～
+
+	// === ボスAI用 ===
+	BossAttackPhase bossPhase = BossAttackPhase::IDLE;
+	float bossPhaseTimer = 0.0f;        // 現在フェーズの経過時間
+	float bossAttackCooldown = 0.0f;    // 次の攻撃までのクールダウン
+	int   bossAttackCount = 0;          // 攻撃回数（パターン切替用）
+	float bossJumpHeight = 0.0f;        // ジャンプ中のY位置
+	DirectX::XMFLOAT3 bossTargetPos = { 0,0,0 }; // 攻撃時のターゲット位置
+	bool bossBeamParriable = false;
 
 	Enemy()
 		: position(0, 0, 0)
@@ -211,11 +261,33 @@ struct Enemy {
 		, headPosition(0, 0, 0)
 		, bloodDirection(0, 1, 0)
 		, isRagdoll(false)
+		, isExploded(false)
 		, isStaggered(false)
 		, staggerFlashTimer(0.0f)
+		, stunValue(0.0f)
+		, maxStunValue(100.0f)
+		, bossPhase(BossAttackPhase::IDLE)
+		, bossPhaseTimer(0.0f)
+		, bossAttackCooldown(3.0f)
+		, bossAttackCount(0)
+		, bossJumpHeight(0.0f)
+		, bossTargetPos{ 0, 0, 0 }
 	{
 
 	}
+};
+
+// === ボス斬撃プロジェクタイル ===
+struct BossProjectile {
+	DirectX::XMFLOAT3 position;     // 現在位置
+	DirectX::XMFLOAT3 direction;    // 飛ぶ方向（正規化済み）
+	float speed = 15.0f;            // 移動速度
+	float lifetime = 3.0f;          // 残り寿命
+	float damage = 30.0f;           // ダメージ
+	bool  isParriable = false;      // true=緑（パリィ可）, false=赤（ガードのみ）
+	bool  isActive = true;          // 生きてるか
+	int   ownerID = -1;             // 発射した敵のID
+	int   effectHandle = -1;
 };
 
 //	パーティクル

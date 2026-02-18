@@ -644,13 +644,13 @@ void Model::Draw(ID3D11DeviceContext* context,
 	//	===	エフェクト適用	===
 	m_effect->Apply(context);
 	// デバッグログ追加
-	OutputDebugStringA("[MODEL] Draw called\n");
+	//OutputDebugStringA("[MODEL] Draw called\n");
 
 	// 深度書き込みを強制有効化
 	if (m_states)
 	{
 		context->OMSetDepthStencilState(m_states->DepthDefault(), 0);
-		OutputDebugStringA("[MODEL] Depth state set\n");
+		//OutputDebugStringA("[MODEL] Depth state set\n");
 	}
 	else
 	{
@@ -1515,19 +1515,19 @@ float animationTime)
 		m_effect->Apply(context);
 		
 		// デバッグログ追加
-		char debugDraw[256];
+		/*char debugDraw[256];
 		sprintf_s(debugDraw, "[MODEL] DrawInstanced called, instances=%zu\n", instances.size());
-		OutputDebugStringA(debugDraw);
+		OutputDebugStringA(debugDraw);*/
 
 		// 深度書き込みを強制有効化
 		if (m_states)
 		{
 			context->OMSetDepthStencilState(m_states->DepthDefault(), 0);
-			OutputDebugStringA("[MODEL] Depth state set\n");
+			//OutputDebugStringA("[MODEL] Depth state set\n");
 		}
 		else
 		{
-			OutputDebugStringA("[MODEL] ERROR: m_states is null!\n");
+			//OutputDebugStringA("[MODEL] ERROR: m_states is null!\n");
 		}
 		//	---	各メッシュを描画	---
 		for (const auto& mesh : m_meshes)

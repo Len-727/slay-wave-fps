@@ -1055,7 +1055,7 @@ void TitleScene::RenderMenu(
         RECT srcRect = { 0, 0, 1, 1 };
 
         // 暗い赤のビネット（画面全体）
-        DirectX::XMVECTORF32 bgColor = { 0.04f, 0.02f, 0.01f, m_menuAlpha * 0.85f };
+        DirectX::XMVECTORF32 bgColor = { 0.06f, 0.01f, 0.01f, m_menuAlpha * 0.85f };
         m_spriteBatch->Draw(
             m_whiteTexture.Get(),
             DirectX::XMFLOAT2(0, 0),
@@ -1067,7 +1067,7 @@ void TitleScene::RenderMenu(
         );
 
         // 上部に濃い赤（血の溜まり）
-        DirectX::XMVECTORF32 topBloodColor = { 0.1f, 0.04f, 0.01f, m_menuAlpha * 0.6f };
+        DirectX::XMVECTORF32 topBloodColor = { 0.15f, 0.02f, 0.02f, m_menuAlpha * 0.6f };
         m_spriteBatch->Draw(
             m_whiteTexture.Get(),
             DirectX::XMFLOAT2(0, 0),
@@ -1098,7 +1098,7 @@ void TitleScene::RenderMenu(
 
         // 赤い影（後ろにずらして描画）
         float titlePulse = sinf(m_menuGlowTime * 2.0f) * 0.5f + 0.5f;
-        DirectX::XMVECTORF32 titleShadow = { 0.4f, 0.12f, 0.0f, m_menuAlpha * 0.5f };
+        DirectX::XMVECTORF32 titleShadow = { 0.5f, 0.02f, 0.02f, m_menuAlpha * 0.5f };
         m_menuFont->DrawString(
             m_spriteBatch.get(), title,
             DirectX::XMFLOAT2(titleX + 3.0f, titleY + 3.0f),
@@ -1106,9 +1106,9 @@ void TitleScene::RenderMenu(
         );
 
         // メインタイトル（鮮血の赤、脈動）
-        float tR = 0.8f + titlePulse * 0.2f;
-        float tG = 0.35f + titlePulse * 0.25f;
-        float tB = 0.05f + titlePulse * 0.1f;
+        float tR = 0.75f + titlePulse * 0.25f;
+        float tG = 0.04f + titlePulse * 0.06f;
+        float tB = 0.02f + titlePulse * 0.03f;
         DirectX::XMVECTORF32 titleColor = { tR, tG, tB, m_menuAlpha };
         m_menuFont->DrawString(
             m_spriteBatch.get(), title,
@@ -1153,7 +1153,7 @@ void TitleScene::RenderMenu(
 
             // === 背後の血の滲み（大きめに暗い赤で描画）===
             float bleedSize = 1.05f + pulse * 0.03f;
-            DirectX::XMVECTORF32 bleedColor = { 0.4f, 0.15f, 0.0f, m_menuAlpha * 0.6f };
+            DirectX::XMVECTORF32 bleedColor = { 0.5f, 0.03f, 0.02f, m_menuAlpha * 0.6f };
 
             m_menuFont->DrawString(
                 m_spriteBatch.get(),
@@ -1166,9 +1166,9 @@ void TitleScene::RenderMenu(
             );
 
             // === メインの文字（鮮血の赤）===
-            float r = 0.9f + pulse * 0.1f;
-            float g = 0.4f + pulse * 0.3f;
-            float b = 0.05f + pulse * 0.1f;
+            float r = 0.85f + pulse * 0.15f;
+            float g = 0.06f + pulse * 0.08f;
+            float b = 0.02f + pulse * 0.03f;
             DirectX::XMVECTORF32 mainColor = { r, g, b, m_menuAlpha };
 
             m_menuFont->DrawString(
@@ -1179,7 +1179,7 @@ void TitleScene::RenderMenu(
             );
 
             // === 左側に血のマーカー（>>>ではなく赤い棒）===
-            DirectX::XMVECTORF32 markerColor = { 1.0f, 0.5f, 0.1f, m_menuAlpha * (0.5f + pulse * 0.5f) };
+            DirectX::XMVECTORF32 markerColor = { 1.0f, 0.1f, 0.05f, m_menuAlpha * (0.5f + pulse * 0.5f) };
 
             // 左側の血の線（複数の "|" で太い線に見せる）
             float barX = posX - 50.0f;
@@ -1202,7 +1202,7 @@ void TitleScene::RenderMenu(
             // 非選択：乾いた血の色（暗い赤褐色）
             // ============================================
             DirectX::XMVECTORF32 driedBloodColor = {
-                0.35f, 0.18f, 0.08f, m_menuAlpha * 0.7f
+            0.35f, 0.06f, 0.04f, m_menuAlpha * 0.7f
             };
 
             m_menuFont->DrawString(
@@ -1216,12 +1216,12 @@ void TitleScene::RenderMenu(
 
     // === 画面下部に「PRESS ENTER」の点滅テキスト ===
     float blinkAlpha = (sinf(m_menuGlowTime * 3.0f) + 1.0f) / 2.0f;
-    DirectX::XMVECTORF32 hintColor = { 0.5f, 0.25f, 0.08f, m_menuAlpha * blinkAlpha * 0.6f };
+    DirectX::XMVECTORF32 hintColor = { 0.5f, 0.08f, 0.05f, m_menuAlpha * blinkAlpha * 0.6f };
 
     const wchar_t* hint = L"- PRESS ENTER -";
     DirectX::XMVECTOR hintSize = m_menuFont->MeasureString(hint);
-    float hintX = centerX - DirectX::XMVectorGetX(hintSize) / 2.0f;
-    float hintY = m_screenHeight * 0.85f;
+    float hintX = m_screenWidth - DirectX::XMVectorGetX(hintSize) * 0.6f - 30.0f;
+    float hintY = m_screenHeight * 0.92f;
 
     m_menuFont->DrawString(
         m_spriteBatch.get(),
@@ -1367,7 +1367,7 @@ void TitleScene::RenderBloodDrips()
         if (drip.y > 0.0f && drip.y < (float)m_screenHeight)
         {
             float tipSize = drip.width * 1.8f;
-            DirectX::XMVECTORF32 tipColor = { rBase + 0.15f, gBase + 0.08f, 0.02f, drip.alpha * m_menuAlpha * 0.8f };
+            DirectX::XMVECTORF32 tipColor = { rBase + 0.2f, gBase * 0.5f, 0.02f, drip.alpha * m_menuAlpha * 0.8f };
 
             m_spriteBatch->Draw(
                 m_whiteTexture.Get(),

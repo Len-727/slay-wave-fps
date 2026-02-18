@@ -23,6 +23,9 @@ public:
 	// y‚È‚ºpublic‚©zGameƒNƒ‰ƒX‚©‚çu¡“G‚ğo‚¹Iv‚Æ–½—ß‚·‚é‚½‚ß
 	void SpawnEnemy(DirectX::XMFLOAT3 playerPos);
 
+    void SpawnMidBoss(DirectX::XMFLOAT3 playerPos);
+    void SpawnBoss(DirectX::XMFLOAT3 playerPos);
+
 	// ClearDeadEnemies - €‚ñ‚¾“G‚ğ”z—ñ‚©‚çíœ
 	// y–ğŠ„zisAlive == false‚Ì“G‚ğm_enemies‚©‚çÁ‚·
 	// y——Rz€‚ñ‚¾“G‚ğc‚·‚Æƒƒ‚ƒŠ‚Ì–³‘Ê•ˆ—‚ªd‚­‚È‚é
@@ -108,6 +111,8 @@ private:
 	//        deltaTime: Œo‰ßŠÔ
 	// y‚È‚ºprivate‚©zŠO•”‚©‚ç’¼ÚŒÄ‚Ô•K—v‚ª‚È‚¢“à•”ˆ—
 	void UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float deltaTime);
+
+    void UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float deltaTime);
 
 	std::vector<Enemy> m_enemies;	//	ƒ}ƒbƒv‚É‚¢‚é‚·‚×‚Ä‚Ì“G‚ğŠi”[
 	int m_maxEnemies;				//	“¯‚É‘¶İ‚Å‚«‚é“G‚ÌÅ‘å”

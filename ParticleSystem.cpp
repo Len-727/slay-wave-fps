@@ -99,6 +99,22 @@ void ParticleSystem::CreateMuzzleFlash(DirectX::XMFLOAT3 muzzlePosition,
     DirectX::XMFLOAT3 cameraRotation,
     WeaponType weaponType)
 {
+
+    // カメラの前方向
+    float fwdX = sinf(cameraRotation.y) * cosf(cameraRotation.x);
+    float fwdY = -sinf(cameraRotation.x);
+    float fwdZ = cosf(cameraRotation.y) * cosf(cameraRotation.x);
+
+    // カメラの右方向
+    float rgtX = cosf(cameraRotation.y);
+    float rgtY = 0.0f;
+    float rgtZ = -sinf(cameraRotation.y);
+
+    // カメラの上方向（外積）
+    float upX = rgtY * fwdZ - rgtZ * fwdY;
+    float upY = rgtZ * fwdX - rgtX * fwdZ;
+    float upZ = rgtX * fwdY - rgtY * fwdX;
+
     // === 武器ごとのマズルフラッシュ設定 ===
     int sparkCount = 8;
     int gasCount = 4;
@@ -157,12 +173,14 @@ void ParticleSystem::CreateMuzzleFlash(DirectX::XMFLOAT3 muzzlePosition,
         Particle particle;
         particle.position = muzzlePosition;
 
-        float spreadAngle = ((float)rand() / RAND_MAX - 0.5f) * 0.3f;
+        // spread をカメラの右方向と上方向にかける
+        float spreadH = ((float)rand() / RAND_MAX - 0.5f) * 0.3f; // 横方向
+        float spreadV = ((float)rand() / RAND_MAX - 0.5f) * 0.3f; // 縦方向
         float speed = sparkSpeed + (float)rand() / RAND_MAX * 5.0f;
 
-        particle.velocity.x = sinf(cameraRotation.y + spreadAngle) * speed;
-        particle.velocity.y = -sinf(cameraRotation.x) * speed;
-        particle.velocity.z = cosf(cameraRotation.y + spreadAngle) * speed;
+        particle.velocity.x = (fwdX + rgtX * spreadH + upX * spreadV) * speed;
+        particle.velocity.y = (fwdY + rgtY * spreadH + upY * spreadV) * speed;
+        particle.velocity.z = (fwdZ + rgtZ * spreadH + upZ * spreadV) * speed;
 
         particle.size = sparkSize;
         particle.color = sparkColor;
@@ -179,13 +197,14 @@ void ParticleSystem::CreateMuzzleFlash(DirectX::XMFLOAT3 muzzlePosition,
         Particle particle;
         particle.position = muzzlePosition;
 
-        float spreadAngle = ((float)rand() / RAND_MAX - 0.5f) * 0.5f;
-        float speed = gasSpeed + (float)rand() / RAND_MAX * 8.0f;
+        // spread をカメラの右方向と上方向にかける
+        float spreadH = ((float)rand() / RAND_MAX - 0.5f) * 0.3f; // 横方向
+        float spreadV = ((float)rand() / RAND_MAX - 0.5f) * 0.3f; // 縦方向
+        float speed = sparkSpeed + (float)rand() / RAND_MAX * 5.0f;
 
-        particle.velocity.x = sinf(cameraRotation.y + spreadAngle) * speed;
-        particle.velocity.y = -sinf(cameraRotation.x) * speed +
-            ((float)rand() / RAND_MAX) * 5.0f;
-        particle.velocity.z = cosf(cameraRotation.y + spreadAngle) * speed;
+        particle.velocity.x = (fwdX + rgtX * spreadH + upX * spreadV) * speed;
+        particle.velocity.y = (fwdY + rgtY * spreadH + upY * spreadV) * speed;
+        particle.velocity.z = (fwdZ + rgtZ * spreadH + upZ * spreadV) * speed;
 
         particle.color = gasColor;
 

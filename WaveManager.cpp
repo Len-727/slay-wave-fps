@@ -8,7 +8,7 @@
 //	コンストラクタ
 //	【役割】ウェーブ1、敵10体、準備時間3秒でスタート
 WaveManager::WaveManager() :
-	m_currentWave(1),
+	m_currentWave(3),
 	m_enemiesKilledThisWave(0),
 	m_totalEnemiesThisWave(10),		//	Wave1は10体
 	m_betweenWaves(true),
@@ -29,23 +29,43 @@ void WaveManager::Update(float deltaTime, DirectX::XMFLOAT3 playerPos, EnemySyst
 
 		if (m_waveStartTimer <= 0)
 		{
-			//	新ウェーブ開始
 			m_betweenWaves = false;
 			m_enemiesKilledThisWave = 0;
 
-			//	=== 新機能: GetEnemyCountForWave を使う ===
 			m_totalEnemiesThisWave = GetEnemyCountForWave(m_currentWave);
 
-			//	デバッグログ
+			// MIDBOSS = 3の倍数（ただし10の倍数は除く）
+			bool isMidBossWave = (m_currentWave % 3 == 0) && (m_currentWave % 10 != 0);
+			// BOSS = 10の倍数
+			bool isBossWave = (m_currentWave % 5 == 0);
+
+			if (isMidBossWave)
+			{
+				m_totalEnemiesThisWave += 1;
+			}
+			if (isBossWave)
+			{
+				m_totalEnemiesThisWave += 1;
+			}
+
 			char buffer[128];
-			sprintf_s(buffer, "[WAVE] Wave %d started! Total enemies: %d\n",
-				m_currentWave, m_totalEnemiesThisWave);
+			sprintf_s(buffer, "[WAVE] Wave %d started! Total enemies: %d %s%s\n",
+				m_currentWave, m_totalEnemiesThisWave,
+				isMidBossWave ? "(MIDBOSS!)" : "",
+				isBossWave ? "(BOSS!!)" : "");
 			OutputDebugStringA(buffer);
 
-			//	難易度に応じたHP倍率を適用（将来的に使用）
 			float hpMultiplier = GetDifficultyMultiplier();
 
-			//	初期スポーン: 最初は 3～5体だけ
+			if (isMidBossWave)
+			{
+				enemySystem->SpawnMidBoss(playerPos);
+			}
+			if (isBossWave)
+			{
+				enemySystem->SpawnBoss(playerPos);
+			}
+
 			int initialSpawn = std::min(5, m_totalEnemiesThisWave);
 
 			for (int i = 0; i < initialSpawn; i++)

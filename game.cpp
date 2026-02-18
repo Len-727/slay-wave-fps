@@ -53,6 +53,7 @@ Game::Game() noexcept :
     m_enemySystem(std::make_unique<EnemySystem>()),
     m_particleSystem(std::make_unique<ParticleSystem>()),
     m_waveManager(std::make_unique<WaveManager>()),
+    m_styleRank(std::make_unique<StyleRankSystem>()),
     m_player(std::make_unique<Player>()),
     m_uiSystem(std::make_unique<UISystem>(1280, 720)),
     m_shadow(nullptr),
@@ -78,6 +79,8 @@ Game::Game() noexcept :
     m_normalConfigDebug(GetEnemyConfig(EnemyType::NORMAL)),
     m_runnerConfigDebug(GetEnemyConfig(EnemyType::RUNNER)),
     m_tankConfigDebug(GetEnemyConfig(EnemyType::TANK)),
+    m_midbossConfigDebug(GetEnemyConfig(EnemyType::MIDBOSS)),
+    m_bossConfigDebug(GetEnemyConfig(EnemyType::BOSS)),
     m_deltaTime(0.0f),
     m_accumulatedAnimTime(0.0f),
     m_gloryKillTargetID(-1),
@@ -214,7 +217,7 @@ Game::RaycastResult Game::RaycastPhysics(
         start.x, start.y, start.z,
         direction.x, direction.y, direction.z,
         maxDistance);
-    OutputDebugStringA(debugBuffer);
+    //OutputDebugStringA(debugBuffer);
 
     //  方向を正規化
     float length = sqrtf(
@@ -275,13 +278,13 @@ Game::RaycastResult Game::RaycastPhysics(
             // === デバッグ: UserPointerから取得したIDを出力 ===
             char debugID[256];
             sprintf_s(debugID, "[DEBUG] UserPointer EnemyID: %d\n", enemyID);
-            OutputDebugStringA(debugID);
+           // OutputDebugStringA(debugID);
 
             // === デバッグ: 現在の敵リストを出力 ===
             const auto& enemies = m_enemySystem->GetEnemies();
             char debugCount[256];
             sprintf_s(debugCount, "[DEBUG] Total enemies in system: %zu\n", enemies.size());
-            OutputDebugStringA(debugCount);
+            //OutputDebugStringA(debugCount);
 
             // IDから敵を検索
             bool found = false;
@@ -292,7 +295,7 @@ Game::RaycastResult Game::RaycastPhysics(
                 sprintf_s(debugEnemy, "[DEBUG] Checking enemy ID:%d, isAlive:%d, position:(%.2f, %.2f, %.2f)\n",
                     enemy.id, enemy.isAlive ? 1 : 0,
                     enemy.position.x, enemy.position.y, enemy.position.z);
-                OutputDebugStringA(debugEnemy);
+                //OutputDebugStringA(debugEnemy);
 
                 if (enemy.id == enemyID && enemy.isAlive)
                 {
@@ -306,7 +309,7 @@ Game::RaycastResult Game::RaycastPhysics(
                         enemyID,
                         result.hitPoint.x, result.hitPoint.y, result.hitPoint.z,
                         enemy.position.x, enemy.position.y, enemy.position.z);
-                    OutputDebugStringA(buffer);
+                    //OutputDebugStringA(buffer);
                     break;
                 }
             }
@@ -316,7 +319,7 @@ Game::RaycastResult Game::RaycastPhysics(
                 // IDが見つからない = 死んだ敵か壁
                 char buffer[256];
                 sprintf_s(buffer, "[BULLET] Hit dead enemy or wall (ID:%d) - Enemy not found or not alive\n", enemyID);
-                OutputDebugStringA(buffer);
+                //OutputDebugStringA(buffer);
             }
         }
         else
@@ -326,12 +329,12 @@ Game::RaycastResult Game::RaycastPhysics(
             sprintf_s(buffer,
                 "[BULLET] Raycast HIT WALL at (%.2f, %.2f, %.2f)\n",
                 result.hitPoint.x, result.hitPoint.y, result.hitPoint.z);
-            OutputDebugStringA(buffer);
+            //OutputDebugStringA(buffer);
         }
     }
     else
     {
-        OutputDebugStringA("[BULLET] Raycast MISS\n");
+        //OutputDebugStringA("[BULLET] Raycast MISS\n");
     }
 
     return result;
@@ -339,8 +342,23 @@ Game::RaycastResult Game::RaycastPhysics(
 
 void Game::AddEnemyPhysicsBody(Enemy& enemy)
 {
-    //  カプセル形状を生成
-    EnemyTypeConfig config = GetEnemyConfig(enemy.type);
+    EnemyTypeConfig config;
+    if (m_useDebugHitboxes)
+    {
+        switch (enemy.type)
+        {
+        case EnemyType::NORMAL:  config = m_normalConfigDebug;  break;
+        case EnemyType::RUNNER:  config = m_runnerConfigDebug;  break;
+        case EnemyType::TANK:    config = m_tankConfigDebug;    break;
+        case EnemyType::MIDBOSS: config = m_midbossConfigDebug; break;
+        case EnemyType::BOSS:    config = m_bossConfigDebug;    break;
+        default: config = GetEnemyConfig(enemy.type); break;
+        }
+    }
+    else
+    {
+        config = GetEnemyConfig(enemy.type);
+    }
 
     float radius = config.bodyWidth / 2.0f;
     float totalHeight = config.bodyHeight;
@@ -395,7 +413,176 @@ void Game::AddEnemyPhysicsBody(Enemy& enemy)
     char buffer[256];
     sprintf_s(buffer, "[BULLET] Added body for enemy ID:%d at (%.2f, %.2f, %.2f)\n",
         enemy.id, enemy.position.x, enemy.position.y, enemy.position.z);
-    OutputDebugStringA(buffer);
+    //OutputDebugStringA(buffer);
+}
+
+// ??? SpawnGibs: 肉片をBullet物理で生成 ???
+void Game::SpawnGibs(DirectX::XMFLOAT3 position, int count, float power)
+{
+    // 肉片の色パターン（血の赤?暗い肉色）
+    DirectX::XMFLOAT4 gibColors[] = {
+        { 0.85f, 0.10f, 0.05f, 1.0f },  // 暗い赤
+        { 0.95f, 0.15f, 0.05f, 1.0f },  // 血の赤
+        { 0.75f, 0.05f, 0.05f, 1.0f },  // 深い赤
+        { 0.90f, 0.25f, 0.10f, 1.0f },  // 肉色
+        { 0.70f, 0.08f, 0.08f, 1.0f },  // ほぼ黒赤
+        { 1.00f, 0.20f, 0.10f, 1.0f },  // 明るい赤
+    };
+    int colorCount = 6;
+
+    for (int i = 0; i < count; i++)
+    {
+        // サイズ大きく（1.5?2倍に）
+        float size;
+        if (i < 3)
+            size = 0.25f + (float)rand() / RAND_MAX * 0.2f;    // 大パーツ（胴体片）
+        else if (i < 7)
+            size = 0.14f + (float)rand() / RAND_MAX * 0.12f;   // 中パーツ（手足）
+        else
+            size = 0.07f + (float)rand() / RAND_MAX * 0.08f;   // 小パーツ（肉片）
+
+        // Box形状
+        btCollisionShape* shape = new btBoxShape(btVector3(size, size, size));
+
+        // 初期位置（敵の位置からランダムオフセット）
+        float offsetX = ((float)rand() / RAND_MAX - 0.5f) * 0.5f;
+        float offsetY = 0.5f + (float)rand() / RAND_MAX * 1.0f;  // 体の高さ範囲
+        float offsetZ = ((float)rand() / RAND_MAX - 0.5f) * 0.5f;
+
+        btTransform transform;
+        transform.setIdentity();
+        transform.setOrigin(btVector3(
+            position.x + offsetX,
+            position.y + offsetY,
+            position.z + offsetZ
+        ));
+
+        // ランダム回転
+        btQuaternion rotation(
+            (float)rand() / RAND_MAX * 3.14f,
+            (float)rand() / RAND_MAX * 3.14f,
+            (float)rand() / RAND_MAX * 3.14f
+        );
+        transform.setRotation(rotation);
+
+        // 動的剛体（mass > 0）
+        btScalar mass = 0.5f + (float)rand() / RAND_MAX * 1.5f;
+        btVector3 localInertia(0, 0, 0);
+        shape->calculateLocalInertia(mass, localInertia);
+
+        btDefaultMotionState* motionState = new btDefaultMotionState(transform);
+        btRigidBody::btRigidBodyConstructionInfo rbInfo(mass, motionState, shape, localInertia);
+        rbInfo.m_restitution = 0.3f;    // 少し弾む
+        rbInfo.m_friction = 0.8f;       // 地面で止まる
+
+        btRigidBody* body = new btRigidBody(rbInfo);
+
+        // 爆発的な力を加える（放射状 + 上向き）
+        float angleXZ = ((float)rand() / RAND_MAX) * 6.28f;  // ランダム方向
+        float upForce = power * (0.6f + (float)rand() / RAND_MAX * 0.8f);
+        btVector3 impulse(
+            cosf(angleXZ) * power * (0.5f + (float)rand() / RAND_MAX),
+            upForce,
+            sinf(angleXZ) * power * (0.5f + (float)rand() / RAND_MAX)
+        );
+        body->applyCentralImpulse(impulse);
+
+        // ランダム回転力も加える（グルグル回る）
+        btVector3 torque(
+            ((float)rand() / RAND_MAX - 0.5f) * power * 2.0f,
+            ((float)rand() / RAND_MAX - 0.5f) * power * 2.0f,
+            ((float)rand() / RAND_MAX - 0.5f) * power * 2.0f
+        );
+        body->applyTorqueImpulse(torque);
+
+        m_dynamicsWorld->addRigidBody(body);
+
+        // Gibを保存
+        Gib gib;
+        gib.body = body;
+        gib.shape = shape;
+        gib.lifetime = 3.0f + (float)rand() / RAND_MAX * 2.0f;  // 3?5秒で消える
+        gib.size = size;
+        gib.color = gibColors[i % colorCount];
+        gib.hasLanded = false;
+        m_gibs.push_back(gib);
+    }
+}
+
+void Game::UpdateGibs(float deltaTime)
+{
+    for (auto it = m_gibs.begin(); it != m_gibs.end();)
+    {
+        it->lifetime -= deltaTime;
+
+        if (it->lifetime <= 0.0f)
+        {
+            // Bulletワールドから除去
+            m_dynamicsWorld->removeRigidBody(it->body);
+            delete it->body->getMotionState();
+            delete it->body;
+            delete it->shape;
+            it = m_gibs.erase(it);
+        }
+        else
+        {
+            // 着地検出：地面に近い＋速度が遅い＝着地
+            if (!it->hasLanded)
+            {
+                btTransform t;
+                it->body->getMotionState()->getWorldTransform(t);
+                float y = t.getOrigin().getY();
+                btVector3 vel = it->body->getLinearVelocity();
+                float speed = vel.length();
+
+                // 地面付近(y < 0.5) かつ 速度低い、または一度バウンドした
+                if (y < 0.5f && speed < 3.0f)
+                {
+                    it->hasLanded = true;
+
+                    // 着地点に血しぶき
+                    DirectX::XMFLOAT3 landPos = {
+                        t.getOrigin().getX(),
+                        t.getOrigin().getY(),
+                        t.getOrigin().getZ()
+                    };
+                    DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
+                    m_particleSystem->CreateBloodEffect(landPos, upDir, 30);
+                }
+            }
+
+            ++it;
+        }
+    }
+}
+
+// ??? DrawGibs: 肉片キューブをBullet位置で描画 ???
+void Game::DrawGibs(DirectX::XMMATRIX view, DirectX::XMMATRIX proj)
+{
+    for (const auto& gib : m_gibs)
+    {
+        // Bulletから位置と回転を取得
+        btTransform transform;
+        gib.body->getMotionState()->getWorldTransform(transform);
+        btVector3 pos = transform.getOrigin();
+        btQuaternion rot = transform.getRotation();
+
+        // ワールド行列を構築
+        DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(gib.size, gib.size, gib.size);
+        DirectX::XMMATRIX rotation = DirectX::XMMatrixRotationQuaternion(
+            DirectX::XMVectorSet(rot.x(), rot.y(), rot.z(), rot.w())
+        );
+        DirectX::XMMATRIX translation = DirectX::XMMatrixTranslation(pos.x(), pos.y(), pos.z());
+
+        DirectX::XMMATRIX world = scale * rotation * translation;
+
+        // フェードアウト（残り1秒から透明に）
+        DirectX::XMFLOAT4 color = gib.color;
+        if (gib.lifetime < 1.0f)
+            color.w = gib.lifetime;
+
+        m_cube->Draw(world, view, proj, DirectX::XMVECTORF32{ color.x, color.y, color.z, color.w });
+    }
 }
 
 void Game::UpdateEnemyPhysicsBody(Enemy& enemy)
@@ -403,7 +590,7 @@ void Game::UpdateEnemyPhysicsBody(Enemy& enemy)
     // === デバッグ: 物理ボディの検索 ===
     char debugSearch[256];
     sprintf_s(debugSearch, "[PHYSICS UPDATE] Searching for enemy ID:%d physics body\n", enemy.id);
-    OutputDebugStringA(debugSearch);
+    //OutputDebugStringA(debugSearch);
 
     auto it = m_enemyPhysicsBodies.find(enemy.id);
     if (it == m_enemyPhysicsBodies.end())
@@ -411,15 +598,15 @@ void Game::UpdateEnemyPhysicsBody(Enemy& enemy)
         // === デバッグ: 物理ボディが見つからない ===
         char debugNotFound[256];
         sprintf_s(debugNotFound, "[PHYSICS UPDATE] ? Physics body NOT FOUND for enemy ID:%d\n", enemy.id);
-        OutputDebugStringA(debugNotFound);
+        //OutputDebugStringA(debugNotFound);
 
         // === デバッグ: 登録されている物理ボディのIDを表示 ===
-        OutputDebugStringA("[PHYSICS UPDATE] Registered physics bodies:\n");
+        //OutputDebugStringA("[PHYSICS UPDATE] Registered physics bodies:\n");
         for (const auto& pair : m_enemyPhysicsBodies)
         {
             char debugRegistered[256];
             sprintf_s(debugRegistered, "  - Enemy ID:%d\n", pair.first);
-            OutputDebugStringA(debugRegistered);
+            //OutputDebugStringA(debugRegistered);
         }
         return;
     }
@@ -427,11 +614,28 @@ void Game::UpdateEnemyPhysicsBody(Enemy& enemy)
     // === デバッグ: 物理ボディが見つかった ===
     char debugFound[256];
     sprintf_s(debugFound, "[PHYSICS UPDATE] ? Found physics body for enemy ID:%d\n", enemy.id);
-    OutputDebugStringA(debugFound);
+    //OutputDebugStringA(debugFound);
 
     btRigidBody* body = it->second;
 
-    EnemyTypeConfig config = GetEnemyConfig(enemy.type);
+    EnemyTypeConfig config;
+    if (m_useDebugHitboxes)
+    {
+        switch (enemy.type)
+        {
+        case EnemyType::NORMAL:  config = m_normalConfigDebug;  break;
+        case EnemyType::RUNNER:  config = m_runnerConfigDebug;  break;
+        case EnemyType::TANK:    config = m_tankConfigDebug;    break;
+        case EnemyType::MIDBOSS: config = m_midbossConfigDebug; break;
+        case EnemyType::BOSS:    config = m_bossConfigDebug;    break;
+        default: config = GetEnemyConfig(enemy.type); break;
+        }
+    }
+    else
+    {
+        config = GetEnemyConfig(enemy.type);
+    }
+
     float totalHeight = config.bodyHeight;
 
     // === デバッグ: 更新前の位置 ===
@@ -442,13 +646,13 @@ void Game::UpdateEnemyPhysicsBody(Enemy& enemy)
     char debugOldPos[256];
     sprintf_s(debugOldPos, "[PHYSICS UPDATE] Old position: (%.2f, %.2f, %.2f)\n",
         oldPos.x(), oldPos.y(), oldPos.z());
-    OutputDebugStringA(debugOldPos);
+    //OutputDebugStringA(debugOldPos);
 
     // === デバッグ: 新しい位置 ===
     char debugNewPos[256];
     sprintf_s(debugNewPos, "[PHYSICS UPDATE] New position: (%.2f, %.2f, %.2f)\n",
         enemy.position.x, totalHeight / 2.0f, enemy.position.z);
-    OutputDebugStringA(debugNewPos);
+    //OutputDebugStringA(debugNewPos);
 
     btTransform transform;
     transform.setIdentity();
@@ -466,7 +670,7 @@ void Game::UpdateEnemyPhysicsBody(Enemy& enemy)
     }
 
     // === デバッグ: 更新完了 ===
-    OutputDebugStringA("[PHYSICS UPDATE] ? Physics body updated successfully\n\n");
+    //OutputDebugStringA("[PHYSICS UPDATE] ? Physics body updated successfully\n\n");
 }
 
 void Game::RemoveEnemyPhysicsBody(int enemyID)
@@ -507,7 +711,7 @@ void Game::Tick()
         float currentFPS = 1.0f / m_deltaTime;
         char debugBuffer[256];
         sprintf_s(debugBuffer, "[DEBUG] deltaTime: %.4f, FPS: %.1f\n", m_deltaTime, currentFPS);
-        OutputDebugStringA(debugBuffer);
+        //OutputDebugStringA(debugBuffer);
         debugTimer = 0.0f;
     }
 
@@ -772,8 +976,146 @@ void Game::CreateRenderResources()
 
     m_spriteBatch = std::make_unique<DirectX::SpriteBatch>(m_d3dContext.Get());
 
-    
 
+    //  ランクテクスチャ読み込み
+    {
+        const wchar_t* rankFiles[7] = {
+            L"Assets/Texture/Rank/rank_D.png",
+            L"Assets/Texture/Rank/rank_C.png",
+            L"Assets/Texture/Rank/rank_B.png",
+            L"Assets/Texture/Rank/rank_A.png",
+            L"Assets/Texture/Rank/rank_S.png",
+            L"Assets/Texture/Rank/rank_SS.png",
+            L"Assets/Texture/Rank/rank_SSS.png"
+        };
+
+        m_rankTexturesLoaded = true;
+
+        for (int i = 0; i < 7; i++)
+        {
+            HRESULT hr = DirectX::CreateWICTextureFromFile(
+                m_d3dDevice.Get(),
+                rankFiles[i],
+                nullptr,
+                m_rankTextures[i].ReleaseAndGetAddressOf()
+            );
+
+            char buf[256];
+            if (FAILED(hr))
+            {
+                sprintf_s(buf, "[RANK_TEX] FAILED index=%d\n", i);
+                OutputDebugStringA(buf);
+                m_rankTexturesLoaded = false;
+            }
+            else
+            {
+                sprintf_s(buf, "[RANK_TEX] Loaded index=%d OK\n", i);
+                OutputDebugStringA(buf);
+            }
+        }
+    }
+
+    {
+        const wchar_t* digitFiles[10] = {
+            L"Assets/Texture/Combo/combo_0.png",
+            L"Assets/Texture/Combo/combo_1.png",
+            L"Assets/Texture/Combo/combo_2.png",
+            L"Assets/Texture/Combo/combo_3.png",
+            L"Assets/Texture/Combo/combo_4.png",
+            L"Assets/Texture/Combo/combo_5.png",
+            L"Assets/Texture/Combo/combo_6.png",
+            L"Assets/Texture/Combo/combo_7.png",
+            L"Assets/Texture/Combo/combo_8.png",
+            L"Assets/Texture/Combo/combo_9.png"
+        };
+
+        m_comboTexturesLoaded = true;
+
+        for (int i = 0; i < 10; i++)
+        {
+            HRESULT hr = DirectX::CreateWICTextureFromFile(
+                m_d3dDevice.Get(),
+                digitFiles[i],
+                nullptr,
+                m_comboDigitTex[i].ReleaseAndGetAddressOf()
+            );
+            if (FAILED(hr))
+            {
+                char buf[256];
+                sprintf_s(buf, "[COMBO_TEX] FAILED digit=%d\n", i);
+                OutputDebugStringA(buf);
+                m_comboTexturesLoaded = false;
+            }
+        }
+
+        HRESULT hr = DirectX::CreateWICTextureFromFile(
+            m_d3dDevice.Get(),
+            L"Assets/Texture/Combo/combo_COMBO.png",
+            nullptr,
+            m_comboLabelTex.ReleaseAndGetAddressOf()
+        );
+        if (FAILED(hr))
+        {
+            OutputDebugStringA("[COMBO_TEX] FAILED COMBO label\n");
+            m_comboTexturesLoaded = false;
+        }
+
+        if (m_comboTexturesLoaded)
+            OutputDebugStringA("[COMBO_TEX] All 11 textures loaded OK\n");
+    }
+
+    // ==============================================
+    // シールドHUDテクスチャ読み込み
+    // ==============================================
+    {
+        m_shieldHudLoaded = true;
+
+        struct TexEntry {
+            const wchar_t* path;
+            Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>* target;
+            const char* name;
+        };
+
+        TexEntry hudTextures[] = {
+            { L"Assets/Texture/HUD/shield_frame.png",       &m_shieldHudFrame,      "shield_frame" },
+            { L"Assets/Texture/HUD/shield_fill_blue.png",   &m_shieldHudFillBlue,   "shield_fill_blue" },
+            { L"Assets/Texture/HUD/shield_fill_danger.png", &m_shieldHudFillDanger,  "shield_fill_danger" },
+            { L"Assets/Texture/HUD/shield_fill_guard.png",  &m_shieldHudFillGuard,   "shield_fill_guard" },
+            { L"Assets/Texture/HUD/shield_glow.png",        &m_shieldHudGlow,        "shield_glow" },
+            { L"Assets/Texture/HUD/shield_crack.png",       &m_shieldHudCrack,       "shield_crack" },
+            { L"Assets/Texture/HUD/shield_parry_flash.png", &m_shieldHudParryFlash,  "shield_parry_flash" },
+            { L"Assets/Texture/HUD/shield_icon.png",        &m_shieldHudIcon,        "shield_icon" },
+            { L"Assets/Texture/HUD/hp_frame.png",           &m_hpHudFrame,           "hp_frame" },
+            { L"Assets/Texture/HUD/hp_fill_green.png",      &m_hpHudFillGreen,       "hp_fill_green" },
+            { L"Assets/Texture/HUD/hp_fill_critical.png",   &m_hpHudFillCritical,    "hp_fill_critical" },
+        };
+
+        for (auto& tex : hudTextures)
+        {
+            HRESULT hr = DirectX::CreateWICTextureFromFile(
+                m_d3dDevice.Get(),
+                tex.path,
+                nullptr,
+                tex.target->ReleaseAndGetAddressOf()
+            );
+
+            char buf[256];
+            if (FAILED(hr))
+            {
+                sprintf_s(buf, "[HUD_TEX] FAILED: %s\n", tex.name);
+                OutputDebugStringA(buf);
+                m_shieldHudLoaded = false;
+            }
+            else
+            {
+                sprintf_s(buf, "[HUD_TEX] Loaded: %s OK\n", tex.name);
+                OutputDebugStringA(buf);
+            }
+        }
+
+        if (m_shieldHudLoaded)
+            OutputDebugStringA("[HUD_TEX] All HUD textures loaded OK!\n");
+    }
 
   /*  m_testModel = std::make_unique<Model>();*/
 
@@ -956,7 +1298,71 @@ void Game::CreateRenderResources()
         {
             OutputDebugStringA("Failed to load Tank Death animation\n");
         }
+
+    // ====================================================================
+    // MIDBOSS モデル読み込み
+    // ====================================================================
+        m_midBossModel = std::make_unique<Model>();
+        if (!m_midBossModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/MidBoss/midboss.fbx"))
+        {
+            OutputDebugStringA("[MODEL] MIDBOSS model load FAILED\n");
+        }
+        else
+        {
+            OutputDebugStringA("[MODEL] MIDBOSS model loaded OK\n");
+
+            if (!m_midBossModel->LoadAnimation("Assets/Models/MidBoss/midboss_walking.fbx", "Walk"))
+                OutputDebugStringA("[ANIM] MIDBOSS Walk FAILED\n");
+
+            if (!m_midBossModel->LoadAnimation("Assets/Models/MidBoss/midboss_attack.fbx", "Attack"))
+                OutputDebugStringA("[ANIM] MIDBOSS Attack FAILED\n");
+
+            if (!m_midBossModel->LoadAnimation("Assets/Models/MidBoss/midboss_Idle.fbx", "Idle"))
+                OutputDebugStringA("[ANIM] MIDBOSS Idle FAILED\n");
+
+            if (!m_midBossModel->LoadAnimation("Assets/Models/MidBoss/midboss_death.fbx", "Death"))
+                OutputDebugStringA("[ANIM] MIDBOSS Death FAILED\n");
+        }
     
+    }
+
+    // === BOSSモデル読み込み ===
+    m_bossModel = std::make_unique<Model>();
+    if (!m_bossModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Boss/boss.fbx")) {
+        OutputDebugStringA("[MODEL] BOSS model load FAILED\n");
+    }
+    else {
+        OutputDebugStringA("[MODEL] BOSS model loaded OK\n");
+        m_bossModel->LoadAnimation("Assets/Models/Boss/boss_walk.fbx", "Walk");
+        m_bossModel->LoadAnimation("Assets/Models/Boss/boss_attack_jump.fbx", "AttackJump");
+        m_bossModel->LoadAnimation("Assets/Models/Boss/boss_attack_roundingup.fbx", "AttackSlash");
+        m_bossModel->LoadAnimation("Assets/Models/Boss/boss_Idle.fbx", "Idle");
+        m_bossModel->LoadAnimation("Assets/Models/Boss/boss_death.fbx", "Death");
+    }
+
+    // === 盾モデル読み込み ===
+    m_shieldModel = std::make_unique<Model>();
+    if (!m_shieldModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Shield/02_Shield.fbx"))
+    {
+        OutputDebugStringA("[SHIELD] Failed to load shield model!\n");
+    }
+    else
+    {
+        OutputDebugStringA("[SHIELD] Shield model loaded successfully!\n");
+
+        // テクスチャ読み込み（BaseColor）
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> shieldTex;
+        HRESULT hr = DirectX::CreateWICTextureFromFile(
+            m_d3dDevice.Get(),
+            L"Assets/Models/Shield/Textury/02_Shield_BaseColor.png",
+            nullptr,
+            shieldTex.ReleaseAndGetAddressOf()
+        );
+        if (SUCCEEDED(hr))
+        {
+            m_shieldModel->SetTexture(shieldTex.Get());
+            OutputDebugStringA("[SHIELD] Texture loaded!\n");
+        }
     }
 
     //  === MapSystem   初期化 ===
@@ -971,6 +1377,12 @@ void Game::CreateRenderResources()
         OutputDebugStringA("Game::CreateRenderResources - MapSystem initialized successfully\n");
     }
 
+    m_furRenderer = std::make_unique<FurRenderer>();
+    m_furReady = m_furRenderer->Initialize(m_d3dDevice.Get());
+    if (!m_furReady)
+    {
+        OutputDebugStringA("[FUR] FurRenderer init FAILED\n");
+    }
 
     //  === WeaponSystem 初期化    2025/11/14  ===
     m_weaponSpawnSystem = std::make_unique<WeaponSpawnSystem>();
@@ -1001,36 +1413,77 @@ void Game::CreateRenderResources()
 
     //  === Effekseerの初期化   ===
     
-      /*描画管理クラス(レンダラー)の作成
-      第3引数は最大パーティクル数*/
-   /* m_effekseerRenderer = EffekseerRendererDX11::Renderer::Create(
+    // 描画管理クラス(レンダラー)の作成
+    m_effekseerRenderer = EffekseerRendererDX11::Renderer::Create(
         m_d3dDevice.Get(),
         m_d3dContext.Get(),
         8000
-    );*/
+    );
 
-    //  エッフェクト管理クラス
-    //m_effekseerManager = Effekseer::Manager::Create(8000);
+    // エッフェクト管理クラス
+    m_effekseerManager = Effekseer::Manager::Create(8000);
+    //  DirectXは左手座標なのでEffekseerに教える
+    m_effekseerManager->SetCoordinateSystem(Effekseer::CoordinateSystem::LH);
 
-    ////  描画設定の紐づけ
-    //m_effekseerManager->SetSpriteRenderer(m_effekseerRenderer->CreateSpriteRenderer());
-    //m_effekseerManager->SetRibbonRenderer(m_effekseerRenderer->CreateRibbonRenderer());
-    //m_effekseerManager->SetRingRenderer(m_effekseerRenderer->CreateRingRenderer());
-    //m_effekseerManager->SetTrackRenderer(m_effekseerRenderer->CreateTrackRenderer());
-    //m_effekseerManager->SetModelRenderer(m_effekseerRenderer->CreateModelRenderer());
+    // 描画設定の紐づけ
+    m_effekseerManager->SetSpriteRenderer(m_effekseerRenderer->CreateSpriteRenderer());
+    m_effekseerManager->SetRibbonRenderer(m_effekseerRenderer->CreateRibbonRenderer());
+    m_effekseerManager->SetRingRenderer(m_effekseerRenderer->CreateRingRenderer());
+    m_effekseerManager->SetTrackRenderer(m_effekseerRenderer->CreateTrackRenderer());
+    m_effekseerManager->SetModelRenderer(m_effekseerRenderer->CreateModelRenderer());
+    m_effekseerManager->SetTextureLoader(m_effekseerRenderer->CreateTextureLoader());
+    m_effekseerManager->SetModelLoader(m_effekseerRenderer->CreateModelLoader());
+    m_effekseerManager->SetMaterialLoader(m_effekseerRenderer->CreateMaterialLoader());
 
-    ////  エッフェクトファイルの読み込み
-    //// ※ パスは u"..." で囲んで UTF-16 文字列にする
-    //m_effectBlood = Effekseer::Effect::Create(m_effekseerManager, u"Assets//Effects/Laser01.efkefc");
+    // 盾トレイルエフェクトの読み込み
+    m_effectShieldTrail = Effekseer::Effect::Create(
+        m_effekseerManager, u"Assets/Effects/ShieldTrail.efkefc");
 
-    //if (m_effectBlood == nullptr)
-    //{
-    //    OutputDebugStringA("Failed to load Effekseer effect!\n");
-    //}
-    //else
-    //{
-    //    OutputDebugStringA("Effekseer initialized successfully!\n");
-    //}
+    if (m_effectShieldTrail == nullptr)
+    {
+        OutputDebugStringA("[EFFEKSEER] Failed to load ShieldTrail effect!\n");
+    }
+    else
+    {
+        OutputDebugStringA("[EFFEKSEER] ShieldTrail loaded successfully!\n");
+    }
+
+
+    // === ボスエフェクト読み込み ===
+    m_effectSlashRed = Effekseer::Effect::Create(
+        m_effekseerManager, u"Assets/Effects/SlashRed.efkefc");
+    if (m_effectSlashRed == nullptr)
+        OutputDebugStringA("[EFFECT] SlashRed.efkefc FAILED\n");
+    else
+        OutputDebugStringA("[EFFECT] SlashRed.efkefc loaded OK\n");
+
+    m_effectSlashGreen = Effekseer::Effect::Create(
+        m_effekseerManager, u"Assets/Effects/SlashGreen.efkefc");
+    if (m_effectSlashGreen == nullptr)
+        OutputDebugStringA("[EFFECT] SlashGreen.efkefc FAILED\n");
+    else
+        OutputDebugStringA("[EFFECT] SlashGreen.efkefc loaded OK\n");
+
+    m_effectGroundSlam = Effekseer::Effect::Create(
+        m_effekseerManager, u"Assets/Effects/GroundSlam.efkefc");
+    if (m_effectGroundSlam == nullptr)
+        OutputDebugStringA("[EFFECT] GroundSlam.efkefc FAILED\n");
+    else
+        OutputDebugStringA("[EFFECT] GroundSlam.efkefc loaded OK\n");
+
+    m_effectBeamRed = Effekseer::Effect::Create(
+        m_effekseerManager, u"Assets/Effects/BeamRed.efkefc");
+    if (m_effectBeamRed == nullptr)
+        OutputDebugStringA("[EFFECT] BeamRed.efkefc FAILED\n");
+    else
+        OutputDebugStringA("[EFFECT] BeamRed.efkefc loaded OK\n");
+
+    m_effectBeamGreen = Effekseer::Effect::Create(
+        m_effekseerManager, u"Assets/Effects/BeamGreen.efkefc");
+    if (m_effectBeamGreen == nullptr)
+        OutputDebugStringA("[EFFECT] BeamGreen.efkefc FAILED\n");
+    else
+        OutputDebugStringA("[EFFECT] BeamGreen.efkefc loaded OK\n");
 
     //  === Imgui   ===
     InitImGui();
@@ -1145,8 +1598,9 @@ void Game::DrawDebugUI()
         ImGui::Text("Visual Debug:");
         ImGui::Checkbox("Show Body Hitboxes", &m_showHitboxes);
         ImGui::Checkbox("Show Head Hitboxes", &m_showHeadHitboxes);
-        ImGui::Checkbox("Show Physics Capsules", &m_showPhysicsHitboxes);  // ← 追加
+        ImGui::Checkbox("Show Physics Capsules", &m_showPhysicsHitboxes);
         ImGui::Checkbox("Show Bullet Trajectory", &m_showBulletTrajectory);
+        ImGui::SliderFloat("Ray Start Y", &m_rayStartY, 0.5f, 3.0f, "%.2f");
 
         // 凡例を追加
         if (m_showHitboxes || m_showHeadHitboxes || m_showPhysicsHitboxes)
@@ -1254,6 +1708,8 @@ void Game::DrawDebugUI()
                     OutputDebugStringA("RUNNER config copied to clipboard!\n");
                 }
 
+
+
                 ImGui::TreePop();
             }
 
@@ -1294,17 +1750,489 @@ void Game::DrawDebugUI()
                 ImGui::TreePop();
             }
 
+            // === MIDBOSS 調整 ===
+            if (ImGui::TreeNode("MIDBOSS Hitbox"))
+            {
+                ImGui::Text("Body:");
+                ImGui::SliderFloat("Body Width##MidBoss", &m_midbossConfigDebug.bodyWidth, 0.1f, 3.0f);
+                ImGui::SliderFloat("Body Height##MidBoss", &m_midbossConfigDebug.bodyHeight, 0.5f, 5.0f);
+                ImGui::Text("Head:");
+                ImGui::SliderFloat("Head Height##MidBoss", &m_midbossConfigDebug.headHeight, 0.5f, 5.0f);
+                ImGui::SliderFloat("Head Radius##MidBoss", &m_midbossConfigDebug.headRadius, 0.1f, 2.0f);
+                ImGui::Text("  Body: %.2f x %.2f", m_midbossConfigDebug.bodyWidth, m_midbossConfigDebug.bodyHeight);
+                ImGui::Text("  Head: Y=%.2f, R=%.2f", m_midbossConfigDebug.headHeight, m_midbossConfigDebug.headRadius);
+                if (ImGui::Button("Copy to Clipboard##MidBoss"))
+                {
+                    char buffer[512];
+                    sprintf_s(buffer,
+                        "case EnemyType::MIDBOSS:\n"
+                        "    config.bodyWidth = %.2ff;\n"
+                        "    config.bodyHeight = %.2ff;\n"
+                        "    config.headHeight = %.2ff;\n"
+                        "    config.headRadius = %.2ff;\n"
+                        "    break;",
+                        m_midbossConfigDebug.bodyWidth, m_midbossConfigDebug.bodyHeight,
+                        m_midbossConfigDebug.headHeight, m_midbossConfigDebug.headRadius);
+                    ImGui::SetClipboardText(buffer);
+                }
+                ImGui::TreePop();
+            }
+
+            // === BOSS 調整 ===
+            if (ImGui::TreeNode("BOSS Hitbox"))
+            {
+                ImGui::Text("Body:");
+                ImGui::SliderFloat("Body Width##Boss", &m_bossConfigDebug.bodyWidth, 0.1f, 4.0f);
+                ImGui::SliderFloat("Body Height##Boss", &m_bossConfigDebug.bodyHeight, 0.5f, 8.0f);
+                ImGui::Text("Head:");
+                ImGui::SliderFloat("Head Height##Boss", &m_bossConfigDebug.headHeight, 0.5f, 8.0f);
+                ImGui::SliderFloat("Head Radius##Boss", &m_bossConfigDebug.headRadius, 0.1f, 3.0f);
+                ImGui::Text("  Body: %.2f x %.2f", m_bossConfigDebug.bodyWidth, m_bossConfigDebug.bodyHeight);
+                ImGui::Text("  Head: Y=%.2f, R=%.2f", m_bossConfigDebug.headHeight, m_bossConfigDebug.headRadius);
+                if (ImGui::Button("Copy to Clipboard##Boss"))
+                {
+                    char buffer[512];
+                    sprintf_s(buffer,
+                        "case EnemyType::BOSS:\n"
+                        "    config.bodyWidth = %.2ff;\n"
+                        "    config.bodyHeight = %.2ff;\n"
+                        "    config.headHeight = %.2ff;\n"
+                        "    config.headRadius = %.2ff;\n"
+                        "    break;",
+                        m_bossConfigDebug.bodyWidth, m_bossConfigDebug.bodyHeight,
+                        m_bossConfigDebug.headHeight, m_bossConfigDebug.headRadius);
+                    ImGui::SetClipboardText(buffer);
+                }
+                ImGui::TreePop();
+            }
+
+            if (ImGui::Button("Apply Hitbox to Physics"))
+            {
+                // 全敵の物理ボディを再作成
+                for (auto& enemy : m_enemySystem->GetEnemies())
+                {
+                    if (!enemy.isAlive) continue;
+                    RemoveEnemyPhysicsBody(enemy.id);
+                    AddEnemyPhysicsBody(enemy);
+                }
+                OutputDebugStringA("[DEBUG] Rebuilt all physics bodies with current hitbox values!\n");
+            }
+
             // リセットボタン
             if (ImGui::Button("Reset All to Default"))
             {
                 m_normalConfigDebug = GetEnemyConfig(EnemyType::NORMAL);
                 m_runnerConfigDebug = GetEnemyConfig(EnemyType::RUNNER);
                 m_tankConfigDebug = GetEnemyConfig(EnemyType::TANK);
+                m_midbossConfigDebug = GetEnemyConfig(EnemyType::MIDBOSS);
+                m_bossConfigDebug = GetEnemyConfig(EnemyType::BOSS);
                 OutputDebugStringA("Reset all hitbox configs to default\n");
             }
 
             ImGui::Separator();
             ImGui::TextWrapped("Tip: Adjust values while looking at hitboxes, then click 'Copy to Clipboard' and paste into Entities.h");
+        }
+
+        // =============================================
+        // Boss/MidBoss AI Debug
+        // =============================================
+        if (ImGui::CollapsingHeader("Boss AI Debug"))
+        {
+            // フェーズ名変換用
+            auto phaseName = [](BossAttackPhase p) -> const char* {
+                switch (p) {
+                case BossAttackPhase::IDLE:           return "IDLE";
+                case BossAttackPhase::JUMP_WINDUP:    return "JUMP_WINDUP";
+                case BossAttackPhase::JUMP_AIR:       return "JUMP_AIR";
+                case BossAttackPhase::JUMP_SLAM:      return "JUMP_SLAM";
+                case BossAttackPhase::SLAM_RECOVERY:  return "SLAM_RECOVERY";
+                case BossAttackPhase::SLASH_WINDUP:    return "SLASH_WINDUP";
+                case BossAttackPhase::SLASH_FIRE:      return "SLASH_FIRE";
+                case BossAttackPhase::SLASH_RECOVERY:  return "SLASH_RECOVERY";
+                case BossAttackPhase::ROAR_WINDUP:     return "ROAR_WINDUP";
+                case BossAttackPhase::ROAR_FIRE:       return "ROAR_FIRE";
+                case BossAttackPhase::ROAR_RECOVERY:   return "ROAR_RECOVERY";
+                default: return "UNKNOWN";
+                }
+                };
+
+            int bossCount = 0;
+            for (auto& enemy : m_enemySystem->GetEnemies())
+            {
+                if (!enemy.isAlive) continue;
+                if (enemy.type != EnemyType::MIDBOSS && enemy.type != EnemyType::BOSS) continue;
+
+                bossCount++;
+                const char* typeName = (enemy.type == EnemyType::BOSS) ? "BOSS" : "MIDBOSS";
+                ImVec4 headerColor = (enemy.type == EnemyType::BOSS)
+                    ? ImVec4(1.0f, 0.3f, 0.3f, 1.0f)
+                    : ImVec4(1.0f, 0.6f, 0.0f, 1.0f);
+
+                ImGui::TextColored(headerColor, "=== %s (ID:%d) ===", typeName, enemy.id);
+
+                // 基本情報
+                ImGui::Text("  HP: %.0f / %.0f", enemy.health, (float)GetEnemyConfig(enemy.type).health);
+                ImGui::Text("  Pos: (%.1f, %.1f, %.1f)", enemy.position.x, enemy.position.y, enemy.position.z);
+
+                // プレイヤーとの距離
+                DirectX::XMFLOAT3 pPos = m_player->GetPosition();
+                float dx = pPos.x - enemy.position.x;
+                float dz = pPos.z - enemy.position.z;
+                float dist = sqrtf(dx * dx + dz * dz);
+                ImGui::Text("  Distance to Player: %.1f", dist);
+
+                // AIフェーズ（色分け）
+                BossAttackPhase phase = enemy.bossPhase;
+                ImVec4 phaseColor(0.5f, 0.5f, 0.5f, 1.0f); // グレー
+                if (phase == BossAttackPhase::IDLE) phaseColor = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+                else if (phase == BossAttackPhase::JUMP_AIR || phase == BossAttackPhase::JUMP_SLAM)
+                    phaseColor = ImVec4(1.0f, 0.5f, 0.0f, 1.0f);  // オレンジ
+                else if (phase == BossAttackPhase::SLASH_FIRE)
+                    phaseColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);  // 赤
+                else if (phase == BossAttackPhase::ROAR_FIRE)
+                    phaseColor = ImVec4(0.8f, 0.2f, 1.0f, 1.0f);  // 紫
+                else if (phase == BossAttackPhase::SLAM_RECOVERY ||
+                    phase == BossAttackPhase::SLASH_RECOVERY ||
+                    phase == BossAttackPhase::ROAR_RECOVERY)
+                    phaseColor = ImVec4(0.3f, 1.0f, 0.3f, 1.0f);  // 緑（チャンス）
+
+                ImGui::TextColored(phaseColor, "  Phase: %s", phaseName(phase));
+                ImGui::Text("  Phase Timer: %.2f s", enemy.bossPhaseTimer);
+                ImGui::Text("  Cooldown: %.2f s", enemy.bossAttackCooldown);
+                ImGui::Text("  Attack Count: %d", enemy.bossAttackCount);
+
+                // スタン情報
+                float stunPercent = (enemy.maxStunValue > 0) ? enemy.stunValue / enemy.maxStunValue : 0;
+                ImGui::Text("  Stun: %.0f / %.0f", enemy.stunValue, enemy.maxStunValue);
+                ImGui::ProgressBar(stunPercent, ImVec2(200, 14), "");
+                if (enemy.isStaggered)
+                    ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "  *** STAGGERED ***");
+
+                // アニメーション情報
+                ImGui::Text("  Animation: %s (t=%.2f)", enemy.currentAnimation.c_str(), enemy.animationTime);
+
+                // ビーム情報（MIDBOSSのみ）
+                if (enemy.type == EnemyType::MIDBOSS)
+                {
+                    ImGui::TextColored(
+                        enemy.bossBeamParriable ? ImVec4(0.0f, 1.0f, 0.3f, 1.0f) : ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                        "  Beam: %s", enemy.bossBeamParriable ? "GREEN (Parriable)" : "RED (Guard only)");
+                }
+
+                // =============================================
+                // 攻撃タイムライン可視化
+                // =============================================
+                if (enemy.bossPhase != BossAttackPhase::IDLE)
+                {
+                    ImGui::Spacing();
+                    ImGui::Text("  --- Attack Timeline ---");
+
+                    struct PhaseInfo {
+                        const char* name;
+                        float duration;
+                        ImVec4 color;
+                        bool isDamagePhase;
+                    };
+
+                    std::vector<PhaseInfo> phases;
+                    float currentOffset = 0.0f;
+                    bool isInTimeline = false;
+
+                    // ジャンプ攻撃
+                    if (enemy.bossPhase == BossAttackPhase::JUMP_WINDUP ||
+                        enemy.bossPhase == BossAttackPhase::JUMP_AIR ||
+                        enemy.bossPhase == BossAttackPhase::JUMP_SLAM ||
+                        enemy.bossPhase == BossAttackPhase::SLAM_RECOVERY)
+                    {
+                        phases = {
+                            {"WINDUP",   0.5f,  ImVec4(0.4f, 0.4f, 0.4f, 1), false},
+                            {"AIR",      0.6f,  ImVec4(1.0f, 0.7f, 0.0f, 1), false},
+                            {"SLAM!",    0.1f,  ImVec4(1.0f, 0.0f, 0.0f, 1), true },
+                            {"RECOVERY", 1.5f,  ImVec4(0.2f, 0.8f, 0.2f, 1), false},
+                        };
+                        if (enemy.bossPhase == BossAttackPhase::JUMP_WINDUP)
+                            currentOffset = enemy.bossPhaseTimer;
+                        else if (enemy.bossPhase == BossAttackPhase::JUMP_AIR)
+                            currentOffset = 0.5f + enemy.bossPhaseTimer;
+                        else if (enemy.bossPhase == BossAttackPhase::JUMP_SLAM)
+                            currentOffset = 1.1f + enemy.bossPhaseTimer;
+                        else if (enemy.bossPhase == BossAttackPhase::SLAM_RECOVERY)
+                            currentOffset = 1.2f + enemy.bossPhaseTimer;
+                        isInTimeline = true;
+                    }
+
+                    // 斬撃攻撃
+                    if (enemy.bossPhase == BossAttackPhase::SLASH_WINDUP ||
+                        enemy.bossPhase == BossAttackPhase::SLASH_FIRE ||
+                        enemy.bossPhase == BossAttackPhase::SLASH_RECOVERY)
+                    {
+                        phases = {
+                            {"WINDUP",   0.8f,  ImVec4(0.4f, 0.4f, 0.4f, 1), false},
+                            {"FIRE!",    0.1f,  ImVec4(1.0f, 0.0f, 0.0f, 1), true },
+                            {"RECOVERY", 1.0f,  ImVec4(0.2f, 0.8f, 0.2f, 1), false},
+                        };
+                        if (enemy.bossPhase == BossAttackPhase::SLASH_WINDUP)
+                            currentOffset = enemy.bossPhaseTimer;
+                        else if (enemy.bossPhase == BossAttackPhase::SLASH_FIRE)
+                            currentOffset = 0.8f + enemy.bossPhaseTimer;
+                        else if (enemy.bossPhase == BossAttackPhase::SLASH_RECOVERY)
+                            currentOffset = 0.9f + enemy.bossPhaseTimer;
+                        isInTimeline = true;
+                    }
+
+                    // 咆哮ビーム
+                    if (enemy.bossPhase == BossAttackPhase::ROAR_WINDUP ||
+                        enemy.bossPhase == BossAttackPhase::ROAR_FIRE ||
+                        enemy.bossPhase == BossAttackPhase::ROAR_RECOVERY)
+                    {
+                        float arrivalTime = 2.0f;  // ビーム到達時間（FIRE内）
+                        float fireTotal = 5.0f;    // FIRE全体の長さ
+                        phases = {
+                            {"CHARGE",  2.5f,                    ImVec4(0.6f, 0.3f, 0.8f, 1), false},
+                            {"TRAVEL",  arrivalTime,             ImVec4(0.8f, 0.5f, 0.0f, 1), false},
+                            {"HIT!",    fireTotal - arrivalTime, ImVec4(1.0f, 0.0f, 0.0f, 1), true },
+                            {"RECOVER", 2.0f,                    ImVec4(0.2f, 0.8f, 0.2f, 1), false},
+                        };
+                        if (enemy.bossPhase == BossAttackPhase::ROAR_WINDUP)
+                            currentOffset = enemy.bossPhaseTimer;
+                        else if (enemy.bossPhase == BossAttackPhase::ROAR_FIRE)
+                            currentOffset = 2.5f + enemy.bossPhaseTimer;
+                        else if (enemy.bossPhase == BossAttackPhase::ROAR_RECOVERY)
+                            currentOffset = 2.5f + fireTotal + enemy.bossPhaseTimer;
+                        isInTimeline = true;
+                    }
+
+                    // タイムラインバー描画
+                    if (isInTimeline && !phases.empty())
+                    {
+                        float totalDuration = 0;
+                        for (auto& p : phases) totalDuration += p.duration;
+
+                        float barWidth = 280.0f;
+                        float barHeight = 20.0f;
+                        ImVec2 barStart = ImGui::GetCursorScreenPos();
+                        barStart.x += 20.0f;
+                        ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+                        float xOffset = 0;
+                        for (auto& p : phases)
+                        {
+                            float w = (p.duration / totalDuration) * barWidth;
+                            ImU32 col = ImGui::ColorConvertFloat4ToU32(p.color);
+
+                            if (p.isDamagePhase)
+                            {
+                                float blink = sinf((float)ImGui::GetTime() * 10.0f) * 0.3f + 0.7f;
+                                ImVec4 blinkColor = p.color;
+                                blinkColor.w = blink;
+                                col = ImGui::ColorConvertFloat4ToU32(blinkColor);
+                            }
+
+                            drawList->AddRectFilled(
+                                ImVec2(barStart.x + xOffset, barStart.y),
+                                ImVec2(barStart.x + xOffset + w, barStart.y + barHeight),
+                                col);
+
+                            if (w > 30)
+                            {
+                                drawList->AddText(
+                                    ImVec2(barStart.x + xOffset + 2, barStart.y + 3),
+                                    IM_COL32(255, 255, 255, 220), p.name);
+                            }
+
+                            xOffset += w;
+                        }
+
+                        drawList->AddRect(
+                            barStart,
+                            ImVec2(barStart.x + barWidth, barStart.y + barHeight),
+                            IM_COL32(200, 200, 200, 180));
+
+                        float markerX = barStart.x + (currentOffset / totalDuration) * barWidth;
+                        markerX = (std::min)(markerX, barStart.x + barWidth);
+                        markerX = (std::max)(markerX, barStart.x);
+
+                        drawList->AddLine(
+                            ImVec2(markerX, barStart.y - 2),
+                            ImVec2(markerX, barStart.y + barHeight + 2),
+                            IM_COL32(255, 255, 255, 255), 2.0f);
+
+                        drawList->AddTriangleFilled(
+                            ImVec2(markerX - 5, barStart.y - 6),
+                            ImVec2(markerX + 5, barStart.y - 6),
+                            ImVec2(markerX, barStart.y - 1),
+                            IM_COL32(255, 255, 0, 255));
+
+                        ImGui::Dummy(ImVec2(barWidth + 30, barHeight + 10));
+
+                        ImGui::Text("    Time: %.2f / %.2f sec", currentOffset, totalDuration);
+
+                        float elapsed = 0;
+                        for (auto& p : phases)
+                        {
+                            if (currentOffset >= elapsed && currentOffset < elapsed + p.duration)
+                            {
+                                if (p.isDamagePhase)
+                                {
+                                    ImGui::TextColored(ImVec4(1, 0, 0, 1),
+                                        "    >>> DAMAGE ACTIVE! <<< Parry NOW!");
+                                }
+                                else
+                                {
+                                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1),
+                                        "    [%s] No damage yet", p.name);
+                                }
+                                break;
+                            }
+                            elapsed += p.duration;
+                        }
+
+                        ImGui::TextColored(
+                            enemy.attackJustLanded ? ImVec4(1, 0, 0, 1) : ImVec4(0.4f, 0.4f, 0.4f, 1),
+                            "    attackJustLanded: %s",
+                            enemy.attackJustLanded ? "TRUE (HIT FRAME!)" : "false");
+                    }
+                }
+
+
+                ImGui::Separator();
+            }
+
+            if (bossCount == 0)
+                ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "No BOSS/MIDBOSS alive");
+
+            // プロジェクタイル情報
+            if (!m_bossProjectiles.empty())
+            {
+                ImGui::Text("Active Projectiles: %d", (int)m_bossProjectiles.size());
+                for (int i = 0; i < (int)m_bossProjectiles.size() && i < 5; i++)
+                {
+                    auto& p = m_bossProjectiles[i];
+                    ImGui::TextColored(
+                        p.isParriable ? ImVec4(0.0f, 1.0f, 0.3f, 1.0f) : ImVec4(1.0f, 0.0f, 0.0f, 1.0f),
+                        "  [%d] %s pos(%.1f,%.1f) life=%.1f",
+                        i, p.isParriable ? "GREEN" : "RED",
+                        p.position.x, p.position.z, p.lifetime);
+                }
+            }
+
+            // シールド状態
+            ImGui::Separator();
+            const char* shieldNames[] = { "Idle", "Parrying", "Guarding", "Throwing", "Charging", "Broken" };
+            int si = (int)m_shieldState;
+            if (si >= 0 && si < 6)
+                ImGui::Text("Shield State: %s", shieldNames[si]);
+            ImGui::Text("Shield HP: %.0f / %.0f", m_shieldHP, m_shieldMaxHP);
+            ImGui::Text("Beam Handle: %d", m_beamHandle);
+
+
+            // =============================================
+            // パリィタイミング
+            // =============================================
+            ImGui::Separator();
+            if (ImGui::CollapsingHeader("Parry Timing", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                // パリィウィンドウ（リアルタイム調整）
+                ImGui::SliderFloat("Parry Window (sec)", &m_parryWindowDuration, 0.05f, 0.5f, "%.3f");
+
+                // 直前のパリィ結果
+                float timeSinceAttempt = m_gameTime - m_lastParryAttemptTime;
+                float timeSinceResult = m_gameTime - m_lastParryResultTime;
+
+                if (timeSinceAttempt < 3.0f)
+                {
+                    ImGui::TextColored(
+                        m_lastParryWasSuccess ? ImVec4(0, 1, 0.3f, 1) : ImVec4(1, 0.3f, 0, 1),
+                        "Last Parry: %s (%.2fs ago)",
+                        m_lastParryWasSuccess ? "SUCCESS!" : "MISS",
+                        timeSinceAttempt);
+                }
+                else
+                {
+                    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1), "Last Parry: ---");
+                }
+
+                ImGui::Text("Success: %d / Fail: %d", m_parrySuccessCount, m_parryFailCount);
+
+                // パリィウィンドウ可視化バー
+                float parryRatio = (m_shieldState == ShieldState::Parrying)
+                    ? m_parryWindowTimer / m_parryWindowDuration : 0.0f;
+                ImGui::Text("Parry Window:");
+                ImGui::SameLine();
+                ImVec4 barColor = (parryRatio > 0) ? ImVec4(0, 1, 0.3f, 1) : ImVec4(0.3f, 0.3f, 0.3f, 1);
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, barColor);
+                ImGui::ProgressBar(parryRatio, ImVec2(150, 16), parryRatio > 0 ? "ACTIVE" : "");
+                ImGui::PopStyleColor();
+            }
+
+            // =============================================
+            // ボス攻撃パラメータ調整
+            // =============================================
+            if (ImGui::CollapsingHeader("Boss Attack Tuning"))
+            {
+                ImGui::Text("--- Jump Slam ---");
+                ImGui::SliderFloat("Slam Radius (BOSS)", &m_slamRadiusBoss, 2.0f, 15.0f);
+                ImGui::SliderFloat("Slam Radius (MID)", &m_slamRadiusMidBoss, 2.0f, 12.0f);
+                ImGui::SliderFloat("Slam Damage (BOSS)", &m_slamDamageBoss, 10.0f, 100.0f);
+                ImGui::SliderFloat("Slam Damage (MID)", &m_slamDamageMidBoss, 5.0f, 60.0f);
+                ImGui::SliderFloat("Slam Stun on Parry", &m_slamStunDamage, 10.0f, 100.0f);
+
+                ImGui::Separator();
+                ImGui::Text("--- Slash Projectile ---");
+                ImGui::SliderFloat("Slash Speed", &m_slashSpeed, 5.0f, 30.0f);
+                ImGui::SliderFloat("Slash Damage", &m_slashDamage, 10.0f, 80.0f);
+                ImGui::SliderFloat("Slash Hit Radius", &m_slashHitRadius, 0.5f, 3.0f);
+                ImGui::SliderFloat("Slash Stun on Parry", &m_slashStunOnParry, 10.0f, 100.0f);
+
+                ImGui::Separator();
+                ImGui::Text("--- Beam ---");
+                ImGui::SliderFloat("Beam Width", &m_beamWidth, 0.5f, 5.0f);
+                ImGui::SliderFloat("Beam Length", &m_beamLength, 5.0f, 40.0f);
+                ImGui::SliderFloat("Beam DPS", &m_beamDPS, 5.0f, 50.0f);
+                ImGui::SliderFloat("Beam Stun on Parry", &m_beamStunOnParry, 10.0f, 80.0f);
+            }
+
+            // =============================================
+            // AI タイミング調整
+            // =============================================
+            if (ImGui::CollapsingHeader("AI Phase Timing"))
+            {
+                ImGui::Text("--- Jump Attack ---");
+                ImGui::SliderFloat("Jump Windup", &m_jumpWindupTime, 0.1f, 2.0f, "%.2f sec");
+                ImGui::SliderFloat("Jump Air Time", &m_jumpAirTime, 0.2f, 2.0f, "%.2f sec");
+                ImGui::SliderFloat("Slam Recovery", &m_slamRecoveryTime, 0.5f, 4.0f, "%.2f sec");
+
+                ImGui::Separator();
+                ImGui::Text("--- Slash Attack ---");
+                ImGui::SliderFloat("Slash Windup", &m_slashWindupTime, 0.2f, 2.0f, "%.2f sec");
+                ImGui::SliderFloat("Slash Recovery", &m_slashRecoveryTime, 0.3f, 3.0f, "%.2f sec");
+
+                ImGui::Separator();
+                ImGui::Text("--- Roar Beam ---");
+                ImGui::SliderFloat("Roar Windup", &m_roarWindupTime, 0.5f, 5.0f, "%.2f sec");
+                ImGui::SliderFloat("Roar Fire Time", &m_roarFireTime, 1.0f, 6.0f, "%.2f sec");
+                ImGui::SliderFloat("Roar Recovery", &m_roarRecoveryTime, 0.5f, 4.0f, "%.2f sec");
+
+                ImGui::Separator();
+                ImGui::SliderFloat("Attack Cooldown", &m_bossAttackCooldownBase, 1.0f, 8.0f, "%.1f sec");
+
+                if (ImGui::Button("Copy Current Values"))
+                {
+                    char buf[512];
+                    sprintf_s(buf,
+                        "// Jump: Windup=%.2f Air=%.2f Recovery=%.2f\n"
+                        "// Slash: Windup=%.2f Recovery=%.2f\n"
+                        "// Roar: Windup=%.2f Fire=%.2f Recovery=%.2f\n"
+                        "// Parry Window=%.3f Cooldown=%.1f\n",
+                        m_jumpWindupTime, m_jumpAirTime, m_slamRecoveryTime,
+                        m_slashWindupTime, m_slashRecoveryTime,
+                        m_roarWindupTime, m_roarFireTime, m_roarRecoveryTime,
+                        m_parryWindowDuration, m_bossAttackCooldownBase);
+                    ImGui::SetClipboardText(buf);
+                    OutputDebugStringA("[DEBUG] Boss timing values copied!\n");
+                }
+            }
+
         }
 
         ImGui::End();
@@ -1499,6 +2427,12 @@ void Game::DrawHitboxes()
                 case EnemyType::TANK:
                     config = m_tankConfigDebug;
                     break;
+                case EnemyType::MIDBOSS:
+                    config = m_midbossConfigDebug;
+                    break;
+                case EnemyType::BOSS:
+                    config = m_bossConfigDebug;
+                    break;
                 }
             }
             else
@@ -1573,6 +2507,12 @@ void Game::DrawHitboxes()
                     break;
                 case EnemyType::TANK:
                     config = m_tankConfigDebug;
+                    break;
+                case EnemyType::MIDBOSS:
+                    config = m_midbossConfigDebug;
+                    break;
+                case EnemyType::BOSS:
+                    config = m_bossConfigDebug;
                     break;
                 }
             }
@@ -1665,46 +2605,67 @@ void Game::DrawHitboxes()
     }
 
     // === レイの開始位置を可視化（緑の十字マーク）===
-    DirectX::XMFLOAT3 rayStart(playerPos.x, playerPos.y + 0.5f, playerPos.z);
+    if (m_showBulletTrajectory)
+    {
+        // 発射位置（実際の射撃と同じ計算）
+        DirectX::XMFLOAT3 laserStart(playerPos.x, m_rayStartY, playerPos.z);
 
-    DirectX::XMFLOAT4 crossColor(0.0f, 1.0f, 0.0f, 1.0f);  // 緑
-    float crossSize = 0.1f;
+        // 視線方向（実際の射撃と同じ計算）
+        float dirX = sinf(playerRot.y) * cosf(playerRot.x);
+        float dirY = -sinf(playerRot.x);
+        float dirZ = cosf(playerRot.y) * cosf(playerRot.x);
 
-    // X軸の線
-    primitiveBatch->DrawLine(
-        DirectX::VertexPositionColor(
-            DirectX::XMFLOAT3(rayStart.x - crossSize, rayStart.y, rayStart.z),
-            crossColor
-        ),
-        DirectX::VertexPositionColor(
-            DirectX::XMFLOAT3(rayStart.x + crossSize, rayStart.y, rayStart.z),
-            crossColor
-        )
-    );
+        // 50m先まで線を伸ばす
+        float laserLength = 50.0f;
+        DirectX::XMFLOAT3 laserEnd(
+            laserStart.x + dirX * laserLength,
+            laserStart.y + dirY * laserLength,
+            laserStart.z + dirZ * laserLength
+        );
 
-    // Y軸の線
-    primitiveBatch->DrawLine(
-        DirectX::VertexPositionColor(
-            DirectX::XMFLOAT3(rayStart.x, rayStart.y - crossSize, rayStart.z),
-            crossColor
-        ),
-        DirectX::VertexPositionColor(
-            DirectX::XMFLOAT3(rayStart.x, rayStart.y + crossSize, rayStart.z),
-            crossColor
-        )
-    );
+        // 赤いレーザー線
+        DirectX::XMFLOAT4 laserColor(1.0f, 0.0f, 0.0f, 0.8f);
+        primitiveBatch->DrawLine(
+            DirectX::VertexPositionColor(laserStart, laserColor),
+            DirectX::VertexPositionColor(laserEnd, laserColor)
+        );
+    }
 
-    // Z軸の線
-    primitiveBatch->DrawLine(
-        DirectX::VertexPositionColor(
-            DirectX::XMFLOAT3(rayStart.x, rayStart.y, rayStart.z - crossSize),
-            crossColor
-        ),
-        DirectX::VertexPositionColor(
-            DirectX::XMFLOAT3(rayStart.x, rayStart.y, rayStart.z + crossSize),
-            crossColor
-        )
-    );
+    //// X軸の線
+    //primitiveBatch->DrawLine(
+    //    DirectX::VertexPositionColor(
+    //        DirectX::XMFLOAT3(rayStart.x - crossSize, rayStart.y, rayStart.z),
+    //        crossColor
+    //    ),
+    //    DirectX::VertexPositionColor(
+    //        DirectX::XMFLOAT3(rayStart.x + crossSize, rayStart.y, rayStart.z),
+    //        crossColor
+    //    )
+    //);
+
+    //// Y軸の線
+    //primitiveBatch->DrawLine(
+    //    DirectX::VertexPositionColor(
+    //        DirectX::XMFLOAT3(rayStart.x, rayStart.y - crossSize, rayStart.z),
+    //        crossColor
+    //    ),
+    //    DirectX::VertexPositionColor(
+    //        DirectX::XMFLOAT3(rayStart.x, rayStart.y + crossSize, rayStart.z),
+    //        crossColor
+    //    )
+    //);
+
+    //// Z軸の線
+    //primitiveBatch->DrawLine(
+    //    DirectX::VertexPositionColor(
+    //        DirectX::XMFLOAT3(rayStart.x, rayStart.y, rayStart.z - crossSize),
+    //        crossColor
+    //    ),
+    //    DirectX::VertexPositionColor(
+    //        DirectX::XMFLOAT3(rayStart.x, rayStart.y, rayStart.z + crossSize),
+    //        crossColor
+    //    )
+    //);
 
     primitiveBatch->End();
 }
@@ -1715,15 +2676,15 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
     static int frameCount = 0;
     frameCount++;
 
-    //	===	1秒ごとにデバッグ情報を出力	===
-    if (frameCount % 60 == 0)
-    {
-        auto& enemies = m_enemySystem->GetEnemies();
+    ////	===	1秒ごとにデバッグ情報を出力	===
+    //if (frameCount % 60 == 0)
+    //{
+    //    auto& enemies = m_enemySystem->GetEnemies();
 
-        char debugMsg[512];
-        sprintf_s(debugMsg, "=== Enemies: %zu ===\n", enemies.size());
-        OutputDebugStringA(debugMsg);
-    }
+    //    char debugMsg[512];
+    //    sprintf_s(debugMsg, "=== Enemies: %zu ===\n", enemies.size());
+    //    OutputDebugStringA(debugMsg);
+    //}
 
     //  深度書き込みを強制的に有効化
     m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
@@ -1759,7 +2720,22 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
     std::vector<InstanceData> tankDeadHeadless;
 
     //  === MIDBASS用    ===
-    
+    std::vector<InstanceData> midBossWalking;
+    std::vector<InstanceData> midBossAttacking;
+    std::vector<InstanceData> midBossWalkingHeadless;
+    std::vector<InstanceData> midBossAttackingHeadless;
+    std::vector<InstanceData> midBossDead;
+    std::vector<InstanceData> midBossDeadHeadless;
+
+    // BOSS用インスタンスリスト
+    std::vector<InstanceData> bossWalking;
+    std::vector<InstanceData> bossAttackingJump;
+    std::vector<InstanceData> bossAttackingSlash;
+    std::vector<InstanceData> bossAttackingJumpHeadless;
+    std::vector<InstanceData> bossAttackingSlashHeadless;
+    std::vector<InstanceData> bossWalkingHeadless;
+    std::vector<InstanceData> bossDead;
+    std::vector<InstanceData> bossDeadHeadless;
 
     //  === 死亡アニメーション再生時間の取得    ===
     float deathDuration = m_enemyModel->GetAnimationDuration("Death");
@@ -1769,11 +2745,16 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
         if (!enemy.isAlive && !enemy.isDying)
             continue;
 
+        if (enemy.isExploded)
+            continue;
+
         if (skipGloryKillTarget && m_gloryKillTargetEnemy && enemy.id == m_gloryKillTargetEnemy->id)
             continue;
 
         // ワールド行列を計算
-        DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(0.01f, 0.01f, 0.01f);
+        float s = 0.01f;
+        if (enemy.type == EnemyType::BOSS) s = 0.015f;  // 1.5倍
+        DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(s, s, s);
         DirectX::XMMATRIX rotation = DirectX::XMMatrixRotationY(enemy.rotationY);
         DirectX::XMMATRIX translation = DirectX::XMMatrixTranslation(
             enemy.position.x,
@@ -1821,6 +2802,20 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                         tankDeadHeadless.push_back(instance);
                     else
                         tankDead.push_back(instance);
+                    break;
+
+                case EnemyType::MIDBOSS:
+                    if (enemy.headDestroyed)
+                        midBossDeadHeadless.push_back(instance);
+                    else
+                        midBossDead.push_back(instance);
+                    break;
+
+                case EnemyType::BOSS:
+                    if (enemy.headDestroyed)
+                        bossDeadHeadless.push_back(instance);
+                    else
+                        bossDead.push_back(instance);
                     break;
                 }
 
@@ -1939,6 +2934,45 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                     tankAttacking.push_back(instance);
                 else
                     tankWalking.push_back(instance);
+            }
+            break;
+
+            //MIDBOSS
+        case EnemyType::MIDBOSS:
+            if (enemy.headDestroyed)
+            {
+                if (enemy.currentAnimation == "Attack")
+                    midBossAttackingHeadless.push_back(instance);
+                else
+                    midBossWalkingHeadless.push_back(instance);
+            }
+            else
+            {
+                if (enemy.currentAnimation == "Attack")
+                    midBossAttacking.push_back(instance);
+                else
+                    midBossWalking.push_back(instance);
+            }
+            break;
+
+        case EnemyType::BOSS:
+            if (enemy.headDestroyed)
+            {
+                if (enemy.currentAnimation == "AttackJump")
+                    bossAttackingJumpHeadless.push_back(instance);
+                else if (enemy.currentAnimation == "AttackSlash")
+                    bossAttackingSlashHeadless.push_back(instance);
+                else
+                    bossWalkingHeadless.push_back(instance);
+            }
+            else
+            {
+                if (enemy.currentAnimation == "AttackJump")
+                    bossAttackingJump.push_back(instance);
+                else if (enemy.currentAnimation == "AttackSlash")
+                    bossAttackingSlash.push_back(instance);
+                else
+                    bossWalking.push_back(instance);
             }
             break;
         }
@@ -2157,6 +3191,174 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
         m_tankModel->SetBoneScale("Head", 1.0f);
     }
 
+    // ====================================================================
+    // MIDBOSS の描画
+    // ====================================================================
+    if (m_midBossModel)
+    {
+        m_midBossModel->SetBoneScale("Head", 1.0f);
+
+        // Walking - 頭あり
+        if (!midBossWalking.empty())
+        {
+            float walkTime = fmod(m_accumulatedAnimTime,
+                m_midBossModel->GetAnimationDuration("Walk"));
+            m_midBossModel->DrawInstanced(m_d3dContext.Get(), midBossWalking,
+                viewMatrix, projectionMatrix, "Walk", walkTime);
+        }
+
+        // Attacking - 頭あり
+        if (!midBossAttacking.empty())
+        {
+            float duration = m_midBossModel->GetAnimationDuration("Attack");
+            float attackTime = fmod(m_accumulatedAnimTime, duration);
+
+            // ビーム発射中 or リカバリー中 → 最終フレーム固定
+            for (const auto& enemy : m_enemySystem->GetEnemies())
+            {
+                if (enemy.type == EnemyType::MIDBOSS && enemy.isAlive &&
+                    (enemy.bossPhase == BossAttackPhase::ROAR_FIRE ||
+                        enemy.bossPhase == BossAttackPhase::ROAR_RECOVERY))
+                {
+                    attackTime = duration - 0.01f;  // 最後のフレーム
+                    break;
+                }
+            }
+
+            m_midBossModel->DrawInstanced(m_d3dContext.Get(), midBossAttacking,
+                viewMatrix, projectionMatrix, "Attack", attackTime);
+        }
+
+        // Dead - 頭あり
+        if (!midBossDead.empty())
+        {
+            float finalTime = m_midBossModel->GetAnimationDuration("Death") - 0.001f;
+            m_midBossModel->DrawInstanced(m_d3dContext.Get(), midBossDead,
+                viewMatrix, projectionMatrix, "Death", finalTime);
+        }
+
+        // 頭なし描画
+        m_midBossModel->SetBoneScale("Head", 0.0f);
+
+        if (!midBossAttacking.empty())
+        {
+            float duration = m_midBossModel->GetAnimationDuration("Attack");
+            float attackTime = fmod(m_accumulatedAnimTime, duration);
+
+            // ビーム発射中 or リカバリー中 → 最終フレーム固定
+            for (const auto& enemy : m_enemySystem->GetEnemies())
+            {
+                if (enemy.type == EnemyType::MIDBOSS && enemy.isAlive &&
+                    (enemy.bossPhase == BossAttackPhase::ROAR_FIRE ||
+                        enemy.bossPhase == BossAttackPhase::ROAR_RECOVERY))
+                {
+                    attackTime = duration - 0.01f;  // 最後のフレーム
+                    break;
+                }
+            }
+
+            m_midBossModel->DrawInstanced(m_d3dContext.Get(), midBossAttacking,
+                viewMatrix, projectionMatrix, "Attack", attackTime);
+        }
+
+        if (!midBossAttackingHeadless.empty())
+        {
+            float attackTime = fmod(m_accumulatedAnimTime,
+                m_midBossModel->GetAnimationDuration("Attack"));
+            m_midBossModel->DrawInstanced(m_d3dContext.Get(), midBossAttackingHeadless,
+                viewMatrix, projectionMatrix, "Attack", attackTime);
+        }
+
+        if (!midBossDeadHeadless.empty())
+        {
+            float finalTime = m_midBossModel->GetAnimationDuration("Death") - 0.001f;
+            m_midBossModel->DrawInstanced(m_d3dContext.Get(), midBossDeadHeadless,
+                viewMatrix, projectionMatrix, "Death", finalTime);
+        }
+
+        m_midBossModel->SetBoneScale("Head", 1.0f);
+    }
+
+    // ====================================================================
+    // ★BOSS の描画
+    // ====================================================================
+    if (m_bossModel)
+    {
+        m_bossModel->SetBoneScale("Head", 1.0f);
+
+        // Walking - 頭あり
+        if (!bossWalking.empty())
+        {
+            float walkTime = fmod(m_accumulatedAnimTime,
+                m_bossModel->GetAnimationDuration("Walk"));
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossWalking,
+                viewMatrix, projectionMatrix, "Walk", walkTime);
+        }
+
+        // ジャンプ叩き
+        if (!bossAttackingJump.empty())
+        {
+            float attackTime = fmod(m_accumulatedAnimTime,
+                m_bossModel->GetAnimationDuration("AttackJump"));
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossAttackingJump,
+                viewMatrix, projectionMatrix, "AttackJump", attackTime);
+        }
+
+        // 殴り上げ斬撃
+        if (!bossAttackingSlash.empty())
+        {
+            float attackTime = fmod(m_accumulatedAnimTime,
+                m_bossModel->GetAnimationDuration("AttackSlash"));
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossAttackingSlash,
+                viewMatrix, projectionMatrix, "AttackSlash", attackTime);
+        }
+
+        // Dead - 頭あり
+        if (!bossDead.empty())
+        {
+            float finalTime = m_bossModel->GetAnimationDuration("Death") - 0.001f;
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossDead,
+                viewMatrix, projectionMatrix, "Death", finalTime);
+        }
+
+        // --- Headless variants ---
+        m_bossModel->SetBoneScale("Head", 0.0f);
+
+        if (!bossWalkingHeadless.empty())
+        {
+            float walkTime = fmod(m_accumulatedAnimTime,
+                m_bossModel->GetAnimationDuration("Walk"));
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossWalkingHeadless,
+                viewMatrix, projectionMatrix, "Walk", walkTime);
+        }
+
+        if (!bossAttackingJumpHeadless.empty())
+        {
+            float attackTime = fmod(m_accumulatedAnimTime,
+                m_bossModel->GetAnimationDuration("AttackJump"));
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossAttackingJumpHeadless,
+                viewMatrix, projectionMatrix, "AttackJump", attackTime);
+        }
+
+        if (!bossAttackingSlashHeadless.empty())
+        {
+            float attackTime = fmod(m_accumulatedAnimTime,
+                m_bossModel->GetAnimationDuration("AttackSlash"));
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossAttackingSlashHeadless,
+                viewMatrix, projectionMatrix, "AttackSlash", attackTime);
+        }
+
+
+        if (!bossDeadHeadless.empty())
+        {
+            float finalTime = m_bossModel->GetAnimationDuration("Death") - 0.001f;
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossDeadHeadless,
+                viewMatrix, projectionMatrix, "Death", finalTime);
+        }
+
+        m_bossModel->SetBoneScale("Head", 1.0f);
+    }
+
     //	========================================================================
     //	HPバーを描画
     //	========================================================================
@@ -2175,6 +3377,9 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
     for (const auto& enemy : m_enemySystem->GetEnemies())
     {
         if (!enemy.isAlive || enemy.isDying || enemy.health >= enemy.maxHealth)
+            continue;
+
+        if (enemy.isExploded)
             continue;
 
         float barWidth = 1.0f;
@@ -2219,6 +3424,9 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
 void Game::DrawSingleEnemy(const Enemy& enemy, DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix)
 {
     if (!enemy.isAlive && !enemy.isDying)
+        return;
+
+    if (enemy.isExploded)
         return;
 
     // ワールド行列を計算
@@ -2300,6 +3508,12 @@ float Game::CheckRayIntersection(
             break;
         case EnemyType::TANK:
             config = m_tankConfigDebug;
+            break;
+        case EnemyType::MIDBOSS:
+            config = m_midbossConfigDebug;
+            break;
+        case EnemyType::BOSS:
+            config = m_bossConfigDebug;
             break;
         }
     }
@@ -2421,7 +3635,7 @@ void Game::DrawBillboard()
 
     float aspectRatio = (float)m_outputWidth / (float)m_outputHeight;
     DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
-        DirectX::XMConvertToRadians(70.0f), aspectRatio, 0.1f, 1000.0f
+        DirectX::XMConvertToRadians(m_currentFOV), aspectRatio, 0.1f, 1000.0f
     );
 
     // 小さな黄色いキューブをダメージ表示位置に描画
@@ -2457,7 +3671,7 @@ void Game::DrawParticles()
 
     float aspectRatio = (float)m_outputWidth / (float)m_outputHeight;
     DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
-        DirectX::XMConvertToRadians(70.0f), aspectRatio, 0.1f, 1000.0f
+        DirectX::XMConvertToRadians(m_currentFOV), aspectRatio, 0.1f, 1000.0f
     );
 
     // 重要：頂点カラーを有効化
@@ -2472,24 +3686,51 @@ void Game::DrawParticles()
 
     auto primitiveBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
     primitiveBatch->Begin();
+    // ① ビュー行列から「カメラの右方向」と「上方向」を取り出す
+    //    ビュー行列の1行目 = カメラのRight、2行目 = カメラのUp
+    DirectX::XMFLOAT4X4 viewF;
+    DirectX::XMStoreFloat4x4(&viewF, viewMatrix);
+
+    // right = ビュー行列の1行目（カメラの「右」方向）
+    DirectX::XMFLOAT3 right(viewF._11, viewF._21, viewF._31);
+    // up    = ビュー行列の2行目（カメラの「上」方向）
+    DirectX::XMFLOAT3 up(viewF._12, viewF._22, viewF._32);
 
     for (const auto& particle : m_particleSystem->GetParticles())
     {
-        float size = 0.1f; // サイズを大きくして見やすく 
+        float size = 0.1f;
+        DirectX::XMFLOAT3 c = particle.position; // 中心座標
 
-        // より見やすい十字形で描画
-        DirectX::XMFLOAT3 center = particle.position;
-
-        // 横線
+        // ② 「右方向」に沿った横線
+        DirectX::XMFLOAT3 leftPt(
+            c.x - right.x * size,
+            c.y - right.y * size,
+            c.z - right.z * size
+        );
+        DirectX::XMFLOAT3 rightPt(
+            c.x + right.x * size,
+            c.y + right.y * size,
+            c.z + right.z * size
+        );
         primitiveBatch->DrawLine(
-            DirectX::VertexPositionColor(DirectX::XMFLOAT3(center.x - size, center.y, center.z), particle.color),
-            DirectX::VertexPositionColor(DirectX::XMFLOAT3(center.x + size, center.y, center.z), particle.color)
+            DirectX::VertexPositionColor(leftPt, particle.color),
+            DirectX::VertexPositionColor(rightPt, particle.color)
         );
 
-        // 縦線
+        // ③ 「上方向」に沿った縦線
+        DirectX::XMFLOAT3 downPt(
+            c.x - up.x * size,
+            c.y - up.y * size,
+            c.z - up.z * size
+        );
+        DirectX::XMFLOAT3 upPt(
+            c.x + up.x * size,
+            c.y + up.y * size,
+            c.z + up.z * size
+        );
         primitiveBatch->DrawLine(
-            DirectX::VertexPositionColor(DirectX::XMFLOAT3(center.x, center.y - size, center.z), particle.color),
-            DirectX::VertexPositionColor(DirectX::XMFLOAT3(center.x, center.y + size, center.z), particle.color)
+            DirectX::VertexPositionColor(downPt, particle.color),
+            DirectX::VertexPositionColor(upPt, particle.color)
         );
     }
 
@@ -2538,6 +3779,14 @@ void Game::DrawWeapon()
     if (!m_weaponModel)
     {
         return;
+    }
+
+    //  パリィ中は銃を非表示にする
+    if (m_shieldState == ShieldState::Parrying ||
+        m_shieldState == ShieldState::Guarding ||
+        m_shieldBashTimer > 0.0f)
+    {
+        return; //  盾が出てる間は表示しない
     }
 
     DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
@@ -2610,8 +3859,174 @@ void Game::DrawWeapon()
 }
 
 // =================================================================
-// 【最上位】描画全体の司令塔
+// 盾を左手に描画（DOOM: The Dark Ages スタイル）
 // =================================================================
+void Game::DrawShield()
+{
+    if (!m_shieldModel)
+        return;
+
+    // ★ 盾投げ中は別の描画（ワールド空間で飛んでる盾）
+    if (m_shieldState == ShieldState::Throwing)
+    {
+        DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+        DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+
+        DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&playerPos);
+        DirectX::XMVECTOR cameraTarget = DirectX::XMVectorSet(
+            playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
+            playerPos.y - sinf(playerRot.x),
+            playerPos.z + cosf(playerRot.y) * cosf(playerRot.x),
+            0.0f
+        );
+        DirectX::XMVECTOR upVector = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(cameraPosition, cameraTarget, upVector);
+
+        float aspectRatio = (float)m_outputWidth / (float)m_outputHeight;
+        DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
+            DirectX::XMConvertToRadians(m_currentFOV), aspectRatio, 0.1f, 1000.0f
+        );
+
+        // ワールド空間での盾の位置
+        float shieldScale = 0.25f;
+        DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(shieldScale, shieldScale, shieldScale);
+
+        // 回転: 元の向き補正 + 高速スピン
+        DirectX::XMMATRIX modelFix = DirectX::XMMatrixRotationY(-DirectX::XM_PIDIV2);
+        DirectX::XMMATRIX standUp = DirectX::XMMatrixRotationX(DirectX::XM_PIDIV2);
+        DirectX::XMMATRIX spin = DirectX::XMMatrixRotationY(m_thrownShieldSpin);
+
+        // 飛ぶ方向に向ける
+        float yaw = atan2f(m_thrownShieldDir.x, m_thrownShieldDir.z);
+        float pitch = -asinf(m_thrownShieldDir.y);
+        DirectX::XMMATRIX faceDir = DirectX::XMMatrixRotationRollPitchYaw(pitch, yaw, 0.0f);
+
+        DirectX::XMMATRIX translation = DirectX::XMMatrixTranslation(
+            m_thrownShieldPos.x, m_thrownShieldPos.y, m_thrownShieldPos.z);
+
+        DirectX::XMMATRIX shieldWorld = scale * modelFix * standUp * spin * faceDir * translation;
+
+        m_shieldModel->Draw(
+            m_d3dContext.Get(),
+            shieldWorld,
+            viewMatrix,
+            projectionMatrix,
+            DirectX::Colors::White
+        );
+        return;  // 通常描画はスキップ
+    }
+
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+    DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+
+    DirectX::XMVECTOR cameraPosition = DirectX::XMLoadFloat3(&playerPos);
+    DirectX::XMVECTOR cameraTarget = DirectX::XMVectorSet(
+        playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
+        playerPos.y - sinf(playerRot.x),
+        playerPos.z + cosf(playerRot.y) * cosf(playerRot.x),
+        0.0f
+    );
+    DirectX::XMVECTOR upVector = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(cameraPosition, cameraTarget, upVector);
+
+    float aspectRatio = (float)m_outputWidth / (float)m_outputHeight;
+    DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
+        DirectX::XMConvertToRadians(m_currentFOV), aspectRatio, 0.1f, 1000.0f
+    );
+
+    // カメラの方向ベクトル
+    DirectX::XMVECTOR forward = DirectX::XMVectorSet(
+        sinf(playerRot.y) * cosf(playerRot.x),
+        -sinf(playerRot.x),
+        cosf(playerRot.y) * cosf(playerRot.x),
+        0.0f
+    );
+    DirectX::XMVECTOR right = DirectX::XMVectorSet(
+        cosf(playerRot.y), 0.0f, -sinf(playerRot.y), 0.0f
+    );
+    DirectX::XMVECTOR up = DirectX::XMVector3Cross(forward, right);
+
+    // === 盾の位置アニメーション ===
+    // パリィ中: 左下 → 正面中央にスライド
+    float guardProgress = 0.0f;  // 0.0=待機位置、1.0=正面ガード位置
+    if (m_shieldBashTimer > 0.0f)
+    {
+        float t = 1.0f - (m_shieldBashTimer / m_shieldBashDuration);
+        // 最初の20%: サッと正面に構える（イージングで素早く）
+        // 最後の30%: ゆっくり戻す
+        // 中間50%: 正面キープ
+        if (t < 0.2f)
+        {
+            // 0→1 に素早く（easeOut）
+            float p = t / 0.2f;
+            guardProgress = 1.0f - (1.0f - p) * (1.0f - p);  // easeOutQuad
+        }
+        else if (t < 0.7f)
+        {
+            // 正面キープ
+            guardProgress = 1.0f;
+        }
+        else
+        {
+            // 1→0 にゆっくり戻す
+            float p = (t - 0.7f) / 0.3f;
+            guardProgress = 1.0f - p * p;  // easeInQuad
+        }
+    }
+
+    // === 待機位置（左下）===
+    float restRight = -0.35f;    // 左側
+    float restUp = -0.30f;       // 下
+    float restForward = 0.45f;   // 前
+
+    // === ガード位置（正面中央）===
+    float guardRight = -0.10f;   // ほぼ中央（少し左）
+    float guardUp = -0.30f;      // 目線の少し下
+    float guardForward = 0.40f;  // 少し前に出して小さく見せる
+
+    // 線形補間（lerp）で待機→ガードをスムーズに遷移
+    float currentRight = restRight + (guardRight - restRight) * guardProgress;
+    float currentUp = restUp + (guardUp - restUp) * guardProgress;
+    float currentForward = restForward + (guardForward - restForward) * guardProgress;
+
+    DirectX::XMVECTOR rightOffset = XMVectorScale(right, currentRight + m_weaponSwayX * 0.05f * (1.0f - guardProgress));
+    DirectX::XMVECTOR upOffset = XMVectorScale(up, currentUp + m_weaponSwayY * 0.05f * (1.0f - guardProgress));
+    DirectX::XMVECTOR forwardOffset = XMVectorScale(forward, currentForward);
+
+    DirectX::XMVECTOR shieldPos = cameraPosition;
+    shieldPos = XMVectorAdd(shieldPos, rightOffset);
+    shieldPos = XMVectorAdd(shieldPos, upOffset);
+    shieldPos = XMVectorAdd(shieldPos, forwardOffset);
+
+    // === スケール ===
+    float shieldScale = 0.25f;
+    DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(shieldScale, shieldScale, shieldScale);
+
+    // === 回転 ===
+    DirectX::XMMATRIX modelFix = DirectX::XMMatrixRotationY(-DirectX::XM_PIDIV2);
+    DirectX::XMMATRIX standUp = DirectX::XMMatrixRotationZ(DirectX::XM_PIDIV2);
+    // ガード中は盾をまっすぐ、待機中は少し傾ける
+    float tiltAngle = 0.1f * (1.0f - guardProgress);
+    DirectX::XMMATRIX tilt = DirectX::XMMatrixRotationX(tiltAngle);
+
+    DirectX::XMMATRIX cameraRotation = DirectX::XMMatrixRotationRollPitchYaw(
+        playerRot.x, playerRot.y, 0.0f
+    );
+    DirectX::XMMATRIX translation = DirectX::XMMatrixTranslationFromVector(shieldPos);
+
+    // 合成（bashTilt は削除、tilt に統合済み）
+    DirectX::XMMATRIX shieldWorld = scale * modelFix * standUp * tilt * cameraRotation * translation;
+
+    m_shieldModel->Draw(
+        m_d3dContext.Get(),
+        shieldWorld,
+        viewMatrix,
+        projectionMatrix,
+        DirectX::Colors::White
+    );
+}
+
+//  描画全体
 void Game::Render()
 {
     Clear();
@@ -2639,10 +4054,10 @@ void Game::Render()
 void Game::RenderPlaying()
 {
     // デバッグログ
-    char debugRender[256];
+   /* char debugRender[256];
     sprintf_s(debugRender, "[RENDER] DOFActive=%d, Intensity=%.2f, OffscreenRTV=%p\n",
         m_gloryKillDOFActive, m_gloryKillDOFIntensity, m_offscreenRTV.Get());
-    OutputDebugStringA(debugRender);
+    OutputDebugStringA(debugRender);*/
 
     if (m_gloryKillDOFActive && m_offscreenRTV)
     {
@@ -2719,7 +4134,7 @@ void Game::RenderPlaying()
 
         float aspectRatio = (float)m_outputWidth / (float)m_outputHeight;
         DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
-            DirectX::XMConvertToRadians(70.0f), aspectRatio, 0.1f, 1000.0f
+            DirectX::XMConvertToRadians(m_currentFOV), aspectRatio, 0.1f, 1000.0f
         );
         //  深度テストと深度書き込みを有効化
         m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
@@ -2729,6 +4144,18 @@ void Game::RenderPlaying()
         {
             m_mapSystem->Draw(m_d3dContext.Get(), viewMatrix, projectionMatrix);
         }
+
+        //  地面の苔を描画
+            if (m_furRenderer && m_furReady)
+            {
+                m_furRenderer->DrawGroundMoss(
+                    m_d3dContext.Get(),
+                    viewMatrix,
+                    projectionMatrix,
+                    m_accumulatedAnimTime 
+                );
+            }
+
         //  深度テストと深度書き込みを有効化
         m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 
@@ -2751,6 +4178,10 @@ void Game::RenderPlaying()
 
         DrawBillboard();
         DrawWeapon();
+        DrawShield();
+
+        
+
         DrawWeaponSpawns();
 
         // グローリーキル腕・ナイフ描画（FBXモデル版）
@@ -2964,7 +4395,7 @@ void Game::RenderPlaying()
 
         float aspectRatio = (float)m_outputWidth / (float)m_outputHeight;
         DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
-            DirectX::XMConvertToRadians(70.0f), aspectRatio, 0.1f, 1000.0f
+            DirectX::XMConvertToRadians(m_currentFOV), aspectRatio, 0.1f, 1000.0f
         );
 
         // マップ描画
@@ -2972,6 +4403,17 @@ void Game::RenderPlaying()
         {
             m_mapSystem->Draw(m_d3dContext.Get(), viewMatrix, projectionMatrix);
         }
+
+        //  地面の苔を描画
+            if (m_furRenderer && m_furReady)
+            {
+                m_furRenderer->DrawGroundMoss(
+                    m_d3dContext.Get(),
+                    viewMatrix,
+                    projectionMatrix,
+                    m_accumulatedAnimTime  // 経過時間（風の揺れ用）
+                );
+            }
 
         // 武器スポーンのテクスチャ描画
         if (m_weaponSpawnSystem)
@@ -2984,6 +4426,31 @@ void Game::RenderPlaying()
         DrawEnemies(viewMatrix, projectionMatrix);
         DrawBillboard();
         DrawWeapon();
+        DrawShield();
+
+
+
+        //  シールドトレイル描画
+        //  Effekseer描画
+        if (m_effekseerRenderer != nullptr && m_effekseerManager != nullptr)
+        {
+            Effekseer::Matrix44 efkView;
+            Effekseer::Matrix44 efkProj;
+
+            DirectX::XMFLOAT4X4 viewF, projF;
+            DirectX::XMStoreFloat4x4(&viewF, viewMatrix);
+            DirectX::XMStoreFloat4x4(&projF, projectionMatrix);
+            memcpy(&efkView, &viewF, sizeof(float) * 16);
+            memcpy(&efkProj, &projF, sizeof(float) * 16);
+
+            m_effekseerRenderer->SetCameraMatrix(efkView);
+            m_effekseerRenderer->SetProjectionMatrix(efkProj);
+
+            m_effekseerRenderer->BeginRendering();
+            m_effekseerManager->Draw();
+            m_effekseerRenderer->EndRendering();
+        }
+
         DrawWeaponSpawns();
 
         // グローリーキル腕・ナイフ描画（FBXモデル版）
@@ -3111,6 +4578,9 @@ void Game::RenderPlaying()
         RenderDamageFlash();
     }
 
+    //  スピードライン
+    RenderSpeedLines();
+
     // デバッグ描画
     DrawHitboxes();
     DrawDebugUI();
@@ -3165,11 +4635,337 @@ void Game::DrawUI()
 
     primitiveBatch->End();
 
+    {
+        char debugStyle[512];
+        sprintf_s(debugStyle, "[STYLE_HUD] m_styleRank=%s, m_spriteBatch=%s, m_fontLarge=%s, m_font=%s, m_states=%s\n",
+            m_styleRank ? "OK" : "NULL",
+            m_spriteBatch ? "OK" : "NULL",
+            m_fontLarge ? "OK" : "NULL",
+            m_font ? "OK" : "NULL",
+            m_states ? "OK" : "NULL");
+        OutputDebugStringA(debugStyle);
+
+        if (m_styleRank)
+        {
+            sprintf_s(debugStyle, "[STYLE_HUD] Rank=%s, Points=%.1f, Combo=%d\n",
+                m_styleRank->GetRankName(),
+                m_styleRank->GetStylePoints(),
+                m_styleRank->GetComboCount());
+            OutputDebugStringA(debugStyle);
+        }
+
+        sprintf_s(debugStyle, "[STYLE_HUD] Screen: %d x %d, RankPos: (%.0f, %.0f)\n",
+            m_outputWidth, m_outputHeight,
+            (float)m_outputWidth - 120.0f, 30.0f);
+        OutputDebugStringA(debugStyle);
+    }
+
+
+    // =============================================
+    // スタイルランク HUD表示（テクスチャ版）
+    // =============================================
+    if (m_styleRank && m_spriteBatch && m_states)
+    {
+        m_spriteBatch->Begin(
+            DirectX::SpriteSortMode_Deferred,
+            m_states->AlphaBlend(),
+            nullptr,
+            m_states->DepthNone()
+        );
+
+        // --- ランクテクスチャ描画 ---
+        int rankIndex = static_cast<int>(m_styleRank->GetRank());
+
+        if (m_rankTexturesLoaded && rankIndex >= 0 && rankIndex < 7
+            && m_rankTextures[rankIndex]
+            && m_styleRank->GetStylePoints() > 0.0f)
+        {
+            float rankX = m_outputWidth - 160.0f;
+            float rankY = 10.0f;
+
+            RECT destRect;
+            destRect.left = (LONG)rankX;
+            destRect.top = (LONG)rankY;
+            destRect.right = (LONG)(rankX + 128.0f);
+            destRect.bottom = (LONG)(rankY + 128.0f);
+
+            m_spriteBatch->Draw(
+                m_rankTextures[rankIndex].Get(),
+                destRect,
+                DirectX::Colors::White
+            );
+
+            // --- コンボ数（ランク画像の下）---
+            int combo = m_styleRank->GetComboCount();
+            if (combo > 1 && m_comboTexturesLoaded)
+            {
+                // コンボ数を文字列に変換（例: 12 → "12"）
+                char comboStr[16];
+                sprintf_s(comboStr, "%d", combo);
+                int numDigits = (int)strlen(comboStr);
+
+                // 各桁の表示サイズ
+                float digitW = 40.0f;
+                float digitH = 40.0f;
+                float startX = rankX;
+                float startY = rankY + 130.0f;
+
+                // 数字を1桁ずつテクスチャで描画
+                for (int i = 0; i < numDigits; i++)
+                {
+                    int digit = comboStr[i] - '0';  // 文字→数値変換
+                    if (digit >= 0 && digit <= 9 && m_comboDigitTex[digit])
+                    {
+                        RECT dRect;
+                        dRect.left = (LONG)(startX + i * digitW);
+                        dRect.top = (LONG)startY;
+                        dRect.right = (LONG)(startX + i * digitW + digitW);
+                        dRect.bottom = (LONG)(startY + digitH);
+
+                        m_spriteBatch->Draw(
+                            m_comboDigitTex[digit].Get(),
+                            dRect,
+                            DirectX::Colors::White
+                        );
+                    }
+                }
+
+                // "COMBO" ラベル（数字の右に表示）
+                if (m_comboLabelTex)
+                {
+                    float labelX = startX + numDigits * digitW + 4.0f;
+                    RECT lRect;
+                    lRect.left = (LONG)labelX;
+                    lRect.top = (LONG)(startY + 2.0f);
+                    lRect.right = (LONG)(labelX + 80.0f);
+                    lRect.bottom = (LONG)(startY + digitH - 2.0f);
+
+                    m_spriteBatch->Draw(
+                        m_comboLabelTex.Get(),
+                        lRect,
+                        DirectX::Colors::White
+                    );
+                }
+            }
+        }
+
+            // ==============================================
+            // HP & シールドバー テクスチャHUD描画
+            // ==============================================
+            if (m_shieldHudLoaded)
+            {
+                // --- バーの位置・サイズ（ピクセル座標）---
+                float barW = 260.0f;    // バーの幅
+                float barH = 6.0f;     // バーの高さ
+                float barX = 30.0f;     // 左端
+                float hpBarY = (float)m_outputHeight - 50.0f;   // HPバーのY位置
+                float shieldBarY = hpBarY + barH + 14.0f;        // シールドバー（HPの下）
+
+                // アイコンサイズ
+                float iconSize = 18.0f;
+
+                // ─────────────────────────
+                // HPバー
+                // ─────────────────────────
+                {
+                    float hpPercent = (float)m_player->GetHealth() / (float)m_player->GetMaxHealth();
+                    hpPercent = max(0.0f, min(1.0f, hpPercent));
+
+                    // ゲージ中身（HP割合でsourceRectを制限）
+                    auto* fillTex = (hpPercent < 0.25f && m_hpHudFillCritical)
+                        ? m_hpHudFillCritical.Get()
+                        : m_hpHudFillGreen.Get();
+
+                    if (fillTex)
+                    {
+                        // sourceRect: テクスチャの左端から割合分だけ切り取る
+                        RECT srcRect = { 0, 0, (LONG)(512 * hpPercent), 16 };
+                        // destRect: 画面上の表示位置（割合分の幅）
+                        RECT destRect = {
+                            (LONG)barX,
+                            (LONG)hpBarY,
+                            (LONG)(barX + barW * hpPercent),
+                            (LONG)(hpBarY + barH)
+                        };
+                        m_spriteBatch->Draw(fillTex, destRect, &srcRect, DirectX::Colors::White);
+                    }
+
+                    // フレーム（常に全幅で表示）
+                    if (m_hpHudFrame)
+                    {
+                        RECT frameRect = {
+                            (LONG)barX, (LONG)hpBarY,
+                            (LONG)(barX + barW), (LONG)(hpBarY + barH)
+                        };
+                        m_spriteBatch->Draw(m_hpHudFrame.Get(), frameRect, DirectX::Colors::White);
+                    }
+                }
+
+                // ─────────────────────────
+                // シールドバー
+                // ─────────────────────────
+                {
+                    // 表示用HPを滑らかに追従
+                    float shieldPercent = m_shieldDisplayHP / m_shieldMaxHP;
+                    shieldPercent = max(0.0f, min(1.0f, shieldPercent));
+
+                    // ① グロウ（ガード/パリィ中のみ）
+                    if (m_shieldGlowIntensity > 0.01f && m_shieldHudGlow)
+                    {
+                        float glowExpand = 6.0f;
+                        RECT glowRect = {
+                            (LONG)(barX - glowExpand),
+                            (LONG)(shieldBarY - glowExpand),
+                            (LONG)(barX + barW + glowExpand),
+                            (LONG)(shieldBarY + barH + glowExpand)
+                        };
+                        // 透明度をグロウ強度で制御
+                        float a = m_shieldGlowIntensity;
+                        DirectX::XMVECTORF32 glowColor = { a, a, a, a };
+                        m_spriteBatch->Draw(m_shieldHudGlow.Get(), glowRect, glowColor);
+                    }
+
+                    // ゲージ中身（状態で切替）
+                    ID3D11ShaderResourceView* shieldFillTex = nullptr;
+                    if (m_shieldState == ShieldState::Broken)
+                    {
+                        shieldFillTex = nullptr;  // 壊れてる → 空
+                    }
+                    else if (shieldPercent < 0.25f)
+                    {
+                        shieldFillTex = m_shieldHudFillDanger.Get();  // 危険 → 赤
+                    }
+                    else if (m_shieldState == ShieldState::Guarding || m_shieldState == ShieldState::Parrying)
+                    {
+                        shieldFillTex = m_shieldHudFillGuard.Get();   // ガード中 → 水色
+                    }
+                    else
+                    {
+                        shieldFillTex = m_shieldHudFillBlue.Get();    // 通常 → 青
+                    }
+
+                    if (shieldFillTex && shieldPercent > 0.0f)
+                    {
+                        RECT srcRect = { 0, 0, (LONG)(512 * shieldPercent), 16 };
+                        RECT destRect = {
+                            (LONG)barX,
+                            (LONG)shieldBarY,
+                            (LONG)(barX + barW * shieldPercent),
+                            (LONG)(shieldBarY + barH)
+                        };
+                        m_spriteBatch->Draw(shieldFillTex, destRect, &srcRect, DirectX::Colors::White);
+                    }
+
+                    // フレーム
+                    if (m_shieldHudFrame)
+                    {
+                        RECT frameRect = {
+                            (LONG)barX, (LONG)shieldBarY,
+                            (LONG)(barX + barW), (LONG)(shieldBarY + barH)
+                        };
+                        m_spriteBatch->Draw(m_shieldHudFrame.Get(), frameRect, DirectX::Colors::White);
+                    }
+
+                    // ヒビ割れオーバーレイ（壊れた時のみ）
+                    if (m_shieldState == ShieldState::Broken && m_shieldHudCrack)
+                    {
+                        RECT crackRect = {
+                            (LONG)barX, (LONG)shieldBarY,
+                            (LONG)(barX + barW), (LONG)(shieldBarY + barH)
+                        };
+                        // 点滅させる
+                        float blink = (sinf(m_shieldBrokenTimer * 10.0f) + 1.0f) * 0.5f;
+                        DirectX::XMVECTORF32 crackColor = { 1.0f, 1.0f, 1.0f, 0.5f + blink * 0.5f };
+                        m_spriteBatch->Draw(m_shieldHudCrack.Get(), crackRect, crackColor);
+                    }
+
+                    // パリィ成功フラッシュ
+                    if (m_parryFlashTimer > 0.0f && m_shieldHudParryFlash)
+                    {
+                        float flashAlpha = m_parryFlashTimer / 0.3f;  // 0.3秒かけてフェードアウト
+                        RECT flashRect = {
+                            (LONG)(barX - 8),
+                            (LONG)(shieldBarY - 6),
+                            (LONG)(barX + barW + 8),
+                            (LONG)(shieldBarY + barH + 6)
+                        };
+                        DirectX::XMVECTORF32 flashColor = { flashAlpha, flashAlpha, flashAlpha, flashAlpha };
+                        m_spriteBatch->Draw(m_shieldHudParryFlash.Get(), flashRect, flashColor);
+                    }
+
+                    // シールドアイコン（バー左横）
+                    if (m_shieldHudIcon)
+                    {
+                        RECT iconRect = {
+                            (LONG)(barX + barW + 6),
+                            (LONG)(shieldBarY + (barH - iconSize) * 0.5f),
+                            (LONG)(barX + barW + 6 + iconSize),
+                            (LONG)(shieldBarY + (barH + iconSize) * 0.5f)
+                        };
+                        m_spriteBatch->Draw(m_shieldHudIcon.Get(), iconRect, DirectX::Colors::White);
+                    }
+                }
+
+                //  チャージエネルギーゲージ
+                if (m_chargeEnergy > 0.0f && m_shieldHudFillGuard
+                    && (m_shieldState == ShieldState::Guarding || m_shieldState == ShieldState::Charging))
+                {
+                    float centerX = m_outputWidth * 0.5f;
+                    float centerY = m_outputHeight * 0.5f;
+                    float eBarW = 60.0f;
+                    float eBarH = 3.0f;
+                    float eBarY = centerY + 25.0f;
+
+                    float filledW = eBarW * m_chargeEnergy;
+                    float left = centerX - eBarW * 0.5f;
+                    float right = centerX + eBarW * 0.5f;
+
+                    // 外枠（白、1px大きく）
+                    RECT frameRect = {
+                        (LONG)(left - 1), (LONG)(eBarY - 1),
+                        (LONG)(right + 1), (LONG)(eBarY + eBarH + 1)
+                    };
+                    DirectX::XMVECTORF32 frameColor = { 0.8f, 0.8f, 0.8f, 0.7f };
+                    m_spriteBatch->Draw(m_shieldHudFillGuard.Get(), frameRect, frameColor);
+
+                    // 背景（暗い）
+                    RECT bgRect = {
+                        (LONG)left, (LONG)eBarY,
+                        (LONG)right, (LONG)(eBarY + eBarH)
+                    };
+                    DirectX::XMVECTORF32 bgColor = { 0.05f, 0.05f, 0.1f, 0.8f };
+                    m_spriteBatch->Draw(m_shieldHudFillGuard.Get(), bgRect, bgColor);
+
+                    // エネルギー（明るいシアン、満タンで白く輝く）
+                    RECT fillRect = {
+                        (LONG)left, (LONG)eBarY,
+                        (LONG)(left + filledW), (LONG)(eBarY + eBarH)
+                    };
+                    if (m_chargeReady)
+                    {
+                        float pulse = 0.8f + sinf(m_chargeEnergy * 20.0f) * 0.2f;
+                        DirectX::XMVECTORF32 readyColor = { pulse, pulse, 1.0f, 1.0f };
+                        m_spriteBatch->Draw(m_shieldHudFillGuard.Get(), fillRect, readyColor);
+                    }
+                    else
+                    {
+                        DirectX::XMVECTORF32 fillColor = { 0.3f, 0.7f, 1.0f, 0.9f };
+                        m_spriteBatch->Draw(m_shieldHudFillGuard.Get(), fillRect, fillColor);
+                    }
+                }
+
+            }
+
+        m_spriteBatch->End();
+    }
+
 }
 
 
 void Game::UpdatePlaying()
 {
+
+
     // F1キーでデバッグウィンドウ切り替え
     static bool f1Pressed = false;
     if (GetAsyncKeyState(VK_F1) & 0x8000)
@@ -3187,6 +4983,21 @@ void Game::UpdatePlaying()
 
     float deltaTime = m_deltaTime * m_timeScale;
     m_accumulatedAnimTime += deltaTime * 0.5f;
+
+    m_gameTime += deltaTime;
+
+    //  スタイルランクシ更新
+    m_styleRank->Update(deltaTime);
+
+    // === デバッグ：ウィンドウタイトルにランク表示 ===
+    {
+        char titleBuf[256];
+        sprintf_s(titleBuf, "Gothic Swarm | Rank: %s | Points: %.0f | Combo: %d",
+            m_styleRank->GetRankName(),
+            m_styleRank->GetStylePoints(), 
+            m_styleRank->GetComboCount());
+        SetWindowTextA(m_window, titleBuf);
+    }
 
     UpdateGloryKillAnimation(deltaTime);
 
@@ -3375,9 +5186,9 @@ void Game::UpdatePlaying()
 
             m_gloryKillActive = true;
             // デバッグログ追加
-            char debugGK[256];
+            /*char debugGK[256];
             sprintf_s(debugGK, "[GLORY KILL] Executed! Target ID=%d, DOF will activate next frame\n", m_gloryKillTargetID);
-            OutputDebugStringA(debugGK);
+            OutputDebugStringA(debugGK);*/
 
             // === カメラをターゲット敵に向ける ===
             m_gloryKillCameraActive = false;
@@ -3423,10 +5234,10 @@ void Game::UpdatePlaying()
             m_gloryKillDOFActive = true;
             m_gloryKillDOFIntensity = 0.0f;  // 徐々に強くする
             // デバッグログ追加
-            char debugDOF[256];
+            /*char debugDOF[256];
             sprintf_s(debugDOF, "[GLORY KILL] DOF Activated! Active=%d, Intensity=%.2f, FocalDepth=%.2f\n",
                 m_gloryKillDOFActive, m_gloryKillDOFIntensity, m_gloryKillFocalDepth);
-            OutputDebugStringA(debugDOF);
+            OutputDebugStringA(debugDOF);*/
 
 
             //  終点距離を計算(プレイヤーから敵までの距離)
@@ -3438,14 +5249,14 @@ void Game::UpdatePlaying()
             m_gloryKillFocalDepth = enemyDistance;
 
             // デバッグログ（焦点距離も表示）
-            char debugFocal[256];
+            /*char debugFocal[256];
             sprintf_s(debugFocal, "[DOF] Focal depth set to: %.2f meters\n", m_gloryKillFocalDepth);
-            OutputDebugStringA(debugFocal);
+            OutputDebugStringA(debugFocal);*/
 
-            char cdebugDOF[256];
+            /*char cdebugDOF[256];
             sprintf_s(cdebugDOF, "[GLORY KILL] DOF Activated! Active=%d, Intensity=%.2f, Offscreen=%p\n",
                 m_gloryKillDOFActive, m_gloryKillDOFIntensity, m_offscreenRTV.Get());
-            OutputDebugStringA(cdebugDOF);
+            OutputDebugStringA(cdebugDOF);*/
 
             // 敵を即座に倒す
             m_gloryKillTargetEnemy->isDying = true;
@@ -3471,10 +5282,10 @@ void Game::UpdatePlaying()
             m_score += 100;
 
             // 4. デバッグログ
-            char buffer[256];
+            /*char buffer[256];
             sprintf_s(buffer, "[GLORY KILL] Enemy ID:%d killed! HP: %d→%d, Score: +100\n",
                 m_gloryKillTargetEnemy->id, currentHP, newHP);
-            OutputDebugStringA(buffer);
+            OutputDebugStringA(buffer);*/
 
 
             // カメラシェイク（強め）
@@ -3523,6 +5334,14 @@ void Game::UpdatePlaying()
         m_cameraShake *= 0.9f;
     }
 
+    if (m_currentFOV < m_targetFOV)
+        m_currentFOV = min(m_targetFOV, m_currentFOV + deltaTime * 360.0f);
+    else if (m_currentFOV > m_targetFOV)
+        m_currentFOV = max(m_targetFOV, m_currentFOV - deltaTime * 240.0f);
+
+    if (m_shieldState != ShieldState::Charging)
+        m_speedLineAlpha = max(0.0f, m_speedLineAlpha - deltaTime * 5.0f);
+
     float deltatime = (1.0f / 60.0f) * m_timeScale;
 
 
@@ -3548,7 +5367,7 @@ void Game::UpdatePlaying()
     SetWindowTextA(m_window, debug);
 
  
- if(!m_gloryKillCameraActive)   //  === プレイヤー移動 + 壁の当たり判定
+    if (!m_gloryKillCameraActive && m_shieldState != ShieldState::Charging)   //  === プレイヤー移動（チャージ中はスキップ）
  {
     //  --- 移動前の位置を保存   ---
     DirectX::XMFLOAT3 oldPosition = m_player->GetPosition();
@@ -3616,70 +5435,63 @@ void Game::UpdatePlaying()
         m_player->GetPosition()
     );
 
-    //  --- Eキーで入力  ---
+    //  --- Eキーで盾投げ / 呼び戻し ---
     static bool eKeyPressed = false;
     if (GetAsyncKeyState('E') & 0x8000)
     {
-        if (!eKeyPressed && m_nearbyWeaponSpawn != nullptr)
+        if (!eKeyPressed)
         {
-            //  === 購入処理    ===
-
-            //  既に持っている武器化
-            bool already0wned = false;
-            if (m_weaponSystem->GetPrimaryWeapon() == m_nearbyWeaponSpawn->weaponType ||
-                (m_weaponSystem->HasSecondaryWeapon() &&
-                    m_weaponSystem->GetSecondaryWeapon() == m_nearbyWeaponSpawn->weaponType))
+            if (m_shieldState == ShieldState::Throwing)
             {
-                already0wned = true;
+                // 投げてる最中にもう一度E → 呼び戻し
+                m_thrownShieldReturning = true;
+                OutputDebugStringA("[SHIELD] Recall shield!\n");
             }
-
-            if (already0wned)
+            else if (m_shieldState != ShieldState::Broken
+                && m_shieldState != ShieldState::Charging)
             {
-                //  --- 弾薬補充 ---
-                int ammoCost = m_nearbyWeaponSpawn->cost / 2;
+                // 盾投げ発動！
+                DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+                DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
 
-                if (m_player->GetPoints() >= ammoCost)
+                m_thrownShieldDir = {
+                    sinf(playerRot.y) * cosf(playerRot.x),
+                    -sinf(playerRot.x),
+                    cosf(playerRot.y) * cosf(playerRot.x)
+                };
+
+                float yaw = playerRot.y;
+                float rightX = cosf(yaw);   // カメラの右方向X
+                float rightZ = -sinf(yaw);  // カメラの右方向Z
+
+                m_thrownShieldPos = {
+                   playerPos.x + m_thrownShieldDir.x * 0.5f + rightX * 0.3f,
+                   playerPos.y + m_thrownShieldDir.y * 0.5f - 0.3f,
+                   playerPos.z + m_thrownShieldDir.z * 0.5f + rightZ * 0.3f
+                };
+
+                m_thrownShieldDist = 0.0f;
+                m_thrownShieldReturning = false;
+                m_thrownShieldSpin = 0.0f;
+                m_thrownShieldHitEnemies.clear();
+                m_thrownShieldReturnHitEnemies.clear();
+                m_shieldState = ShieldState::Throwing;
+
+            
+                //  Effekseerトレイル再生（1回だけ再生してハンドルを保持）
+                if (m_effectShieldTrail != nullptr)
                 {
-                    //  ポイント消費
-                    m_player->AddPoints(-ammoCost);
-
-                    char msg[128];
-                    sprintf_s(msg, "Ammo refilled! -%d points\n", ammoCost);
-                    OutputDebugStringA(msg);
-                }
-                else
-                {
-                    OutputDebugStringA("Not enough points for ammo!\n");
-                }
-            }
-
-            else
-            {
-                //  === 武器購入    ===
-                int cost = m_nearbyWeaponSpawn->cost;
-
-                if (m_player->GetPoints() >= cost)
-                {
-                    m_player->AddPoints(-cost);
-
-                    m_weaponSystem->BuyWeapon(
-                    m_nearbyWeaponSpawn->weaponType,
-                        m_player->GetPointsRef()
+                    m_shieldTrailHandle = m_effekseerManager->Play(
+                        m_effectShieldTrail,
+                        m_thrownShieldPos.x,
+                        m_thrownShieldPos.y,
+                        m_thrownShieldPos.z
                     );
-
-                    char msg[128];
-                    sprintf_s(msg, "Weapon purchased! -%d points\n", cost);
-                    OutputDebugStringA(msg);
-                }
-                else
-                {
-                    OutputDebugStringA("Not enough points!\n");
                 }
 
+                OutputDebugStringA("[SHIELD] Shield thrown!\n");
             }
-
             eKeyPressed = true;
-
         }
     }
     else
@@ -3771,15 +5583,17 @@ void Game::UpdatePlaying()
         if (currentMouseState && !m_lastMouseState &&
             !m_weaponSystem->IsReloading() &&
             m_weaponSystem->GetCurrentAmmo() > 0 &&
-            m_weaponSystem->GetFireRateTimer() <= 0.0f)
+            m_weaponSystem->GetFireRateTimer() <= 0.0f &&
+            m_shieldState != ShieldState::Guarding &&
+            m_shieldState != ShieldState::Charging)
         {
             auto& weapon = m_weaponSystem->GetWeaponData(m_weaponSystem->GetCurrentWeapon());
 
             // === デバッグ: 取得した武器データを確認 ===
-            char debugWeapon[512];
+            /*char debugWeapon[512];
             sprintf_s(debugWeapon, "[DEBUG WEAPON] GetWeaponData returned: damage=%d, maxAmmo=%d, fireRate=%.2f, cost=%d\n",
                 weapon.damage, weapon.maxAmmo, weapon.fireRate, weapon.cost);
-            OutputDebugStringA(debugWeapon);
+            OutputDebugStringA(debugWeapon);*/
 
             //  弾を消費
             m_weaponSystem->SetCurrentAmmo(m_weaponSystem->GetCurrentAmmo() - 1);
@@ -3816,12 +5630,32 @@ void Game::UpdatePlaying()
             }
 
 
-            //  銃口位置を計算
+            
+            //  銃口位置を「カメラ基準」で計算する（DrawWeaponと同じ方式）
             DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+            DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+
+            // forward（DrawWeaponと同じ）
+            DirectX::XMVECTOR forward = DirectX::XMVectorSet(
+                sinf(playerRot.y) * cosf(playerRot.x),
+                -sinf(playerRot.x),
+                cosf(playerRot.y) * cosf(playerRot.x), 0.0f);
+
+            // right（DrawWeaponと同じ）
+            DirectX::XMVECTOR right = DirectX::XMVectorSet(
+                cosf(playerRot.y), 0.0f, -sinf(playerRot.y), 0.0f);
+
+            // up = forward × right（★ワールド固定じゃなくカメラの上！）
+            DirectX::XMVECTOR up = DirectX::XMVector3Cross(forward, right);
+
+            // 銃口 = プレイヤー位置 + 前0.8 + 右0.45 + 下0.15
+            DirectX::XMVECTOR muzzleVec = DirectX::XMLoadFloat3(&playerPos);
+            muzzleVec = DirectX::XMVectorAdd(muzzleVec, DirectX::XMVectorScale(forward, 0.8f));
+            muzzleVec = DirectX::XMVectorAdd(muzzleVec, DirectX::XMVectorScale(right, 0.45f));
+            muzzleVec = DirectX::XMVectorAdd(muzzleVec, DirectX::XMVectorScale(up, -0.15f));
+
             DirectX::XMFLOAT3 muzzlePosition;
-            muzzlePosition.x = playerPos.x + 0.45f;
-            muzzlePosition.y = playerPos.y - 0.15f;
-            muzzlePosition.z = playerPos.z + 0.8f;
+            DirectX::XMStoreFloat3(&muzzlePosition, muzzleVec);
 
             m_particleSystem->CreateMuzzleFlash(muzzlePosition, m_player->GetRotation(), currentWeapon);
 
@@ -3835,7 +5669,7 @@ void Game::UpdatePlaying()
 
                 //  カメラ(視点)空の位置から玉を発射
                 DirectX::XMFLOAT3 rayStart = playerPos;
-                rayStart.y = 1.5f;  // 固定で地面から0.5m（目の高さ）
+                rayStart.y = m_rayStartY;  // 固定で地面から0.5m（目の高さ）
 
                 //  射撃方向
                 DirectX::XMFLOAT3 rayDir(
@@ -3891,6 +5725,12 @@ void Game::UpdatePlaying()
                             case EnemyType::TANK:
                                 config = m_tankConfigDebug;
                                 break;
+                            case EnemyType::MIDBOSS:
+                                config = m_midbossConfigDebug;
+                                break;
+                            case EnemyType::BOSS:
+                                config = m_bossConfigDebug;
+                                break;
                             }
                         }
                         else
@@ -3914,9 +5754,14 @@ void Game::UpdatePlaying()
                         if (isHeadShot && !hitEnemy->headDestroyed)
                         {
                             // === ヘッドショット処理 ===
-                            OutputDebugStringA("[BULLET] HEADSHOT!\n");
+                            //OutputDebugStringA("[BULLET] HEADSHOT!\n");
 
-                            hitEnemy->headDestroyed = true;
+                            if (hitEnemy->type != EnemyType::BOSS &&
+                                hitEnemy->type != EnemyType::MIDBOSS &&
+                                hitEnemy->type != EnemyType::TANK)
+                            {
+                                hitEnemy->headDestroyed = true;
+                            }
                             hitEnemy->bloodDirection = shotDir;
 
                             // 血のエフェクト（後方）
@@ -3950,13 +5795,23 @@ void Game::UpdatePlaying()
                             m_particleSystem->CreateExplosion(hitEnemy->headPosition);
 
                             // ダメージ
-                            hitEnemy->health = 0;
+                            if (hitEnemy->type == EnemyType::BOSS || hitEnemy->type == EnemyType::MIDBOSS || hitEnemy->type == EnemyType::TANK)
+                            {
+                                hitEnemy->health -= weapon.damage * 3;
+                            }
+                            else
+                            {
+                                hitEnemy->health = 0;
+                            }
 
-                            // 吹っ飛ばす
-                            hitEnemy->isRagdoll = true;
-                            hitEnemy->velocity.x = shotDir.x * 15.0f;
-                            hitEnemy->velocity.y = 8.0f;
-                            hitEnemy->velocity.z = shotDir.z * 15.0f;
+                            if (hitEnemy->type != EnemyType::BOSS && hitEnemy->type != EnemyType::MIDBOSS && hitEnemy->type != EnemyType::TANK)
+                            {
+                                // 雑魚だけ吹っ飛ばす
+                                hitEnemy->isRagdoll = true;
+                                hitEnemy->velocity.x = shotDir.x * 15.0f;
+                                hitEnemy->velocity.y = 8.0f;
+                                hitEnemy->velocity.z = shotDir.z * 15.0f;
+                            }
 
                             // Effekseer エフェクト
                             /*if (m_effekseerManager != nullptr && m_effectBlood != nullptr)
@@ -3985,28 +5840,28 @@ void Game::UpdatePlaying()
                         else
                         {
                             // === ボディショット処理 ===
-                            OutputDebugStringA("[BULLET] Body shot\n");
+                            //OutputDebugStringA("[BULLET] Body shot\n");
 
                             // === デバッグ: ダメージ前のHP ===
-                            char debugHP1[256];
-                            sprintf_s(debugHP1, "[DEBUG] Enemy ID:%d HP BEFORE damage: %df\n",
-                                hitEnemy->id, hitEnemy->health);
-                            OutputDebugStringA(debugHP1);
+                            //char debugHP1[256];
+                            //sprintf_s(debugHP1, "[DEBUG] Enemy ID:%d HP BEFORE damage: %df\n",
+                            //    hitEnemy->id, hitEnemy->health);
+                            //OutputDebugStringA(debugHP1);
 
-                            // === デバッグ: 武器のダメージ ===
-                            char debugDamage[256];
-                            sprintf_s(debugDamage, "[DEBUG] Weapon damage: %d (WeaponType:%d)\n",
-                                weapon.damage, (int)currentWeapon);
-                            OutputDebugStringA(debugDamage);
+                            //// === デバッグ: 武器のダメージ ===
+                            //char debugDamage[256];
+                            //sprintf_s(debugDamage, "[DEBUG] Weapon damage: %d (WeaponType:%d)\n",
+                            //    weapon.damage, (int)currentWeapon);
+                            //OutputDebugStringA(debugDamage);
 
                             m_particleSystem->CreateBloodEffect(rayResult.hitPoint, shotDir, 15);
                             hitEnemy->health -= weapon.damage;
 
                             // === デバッグ: ダメージ後のHP ===
-                            char debugHP2[256];
+                            /*char debugHP2[256];
                             sprintf_s(debugHP2, "[DEBUG] Enemy ID:%d HP AFTER damage: %d\n",
                                 hitEnemy->id, hitEnemy->health);
-                            OutputDebugStringA(debugHP2);
+                            OutputDebugStringA(debugHP2);*/
 
                             //// ヒットストップ（軽め）
                             //m_timeScale = 0.1f;
@@ -4020,7 +5875,7 @@ void Game::UpdatePlaying()
                             if (hitEnemy->health <= 0.0f)
                             {
                                 // === デバッグ: ラグドール処理に入った ===
-                                OutputDebugStringA("[DEBUG] Entering ragdoll processing (HP <= 0.0f)\n");
+                                //OutputDebugStringA("[DEBUG] Entering ragdoll processing (HP <= 0.0f)\n");
 
                                 hitEnemy->isRagdoll = true;
                                 float knockbackPower = 10.0f;
@@ -4048,7 +5903,7 @@ void Game::UpdatePlaying()
                             else
                             {
                                 // === デバッグ: ラグドール処理に入らなかった ===
-                                OutputDebugStringA("[DEBUG] NOT entering ragdoll (HP > 0.0f)\n");
+                               //OutputDebugStringA("[DEBUG] NOT entering ragdoll (HP > 0.0f)\n");
                             }
                         }
 
@@ -4061,15 +5916,15 @@ void Game::UpdatePlaying()
                         if (hitEnemy->health <= 0)
                         {
                             // === デバッグ: 死亡判定に入った ===
-                            OutputDebugStringA("[DEBUG] Entering death check (HP <= 0)\n");
+                            //OutputDebugStringA("[DEBUG] Entering death check (HP <= 0)\n");
 
                             if (!hitEnemy->isDying)
                             {
                                 // === デバッグ: 死亡処理実行 ===
-                                char debugDeath[256];
+                                /*char debugDeath[256];
                                 sprintf_s(debugDeath, "[DEBUG] Setting isDying=true, isAlive=false for enemy ID:%d\n",
-                                    hitEnemy->id);
-                                OutputDebugStringA(debugDeath);
+                                    hitEnemy->id);*/
+                                /*OutputDebugStringA(debugDeath);*/
 
                                 hitEnemy->isDying = true;
                                 hitEnemy->isAlive = false;
@@ -4084,13 +5939,16 @@ void Game::UpdatePlaying()
                             else
                             {
                                 // === デバッグ: すでにisDying=true ===
-                                OutputDebugStringA("[DEBUG] Enemy already dying (isDying=true)\n");
+                                /*OutputDebugStringA("[DEBUG] Enemy already dying (isDying=true)\n");*/
                             }
 
                             // ポイント加算
                             int waveBonus = m_waveManager->OnEnemyKilled();
                             int totalPoints = (isHeadShot ? 150 : 60) + waveBonus;
                             m_player->AddPoints(totalPoints);
+
+                            //  スタイルランク：キル通知
+                            m_styleRank->NotifyKill(isHeadShot);
 
                             // ダメージ表示
                             m_showDamageDisplay = true;
@@ -4108,21 +5966,21 @@ void Game::UpdatePlaying()
                         else
                         {
                             // === デバッグ: 死亡判定に入らなかった ===
-                            OutputDebugStringA("[DEBUG] NOT entering death check (HP > 0)\n");
+                            /*OutputDebugStringA("[DEBUG] NOT entering death check (HP > 0)\n");*/
                         }
                     }
                     else
                     {
                         // 敵に当たらなかった（壁など）
-                        OutputDebugStringA("[BULLET] Hit wall or object\n");
+                       /* OutputDebugStringA("[BULLET] Hit wall or object\n");*/
                     }
                 }
                 else
                 {
                     // 何にも当たらなかった
-                    OutputDebugStringA("[BULLET] Complete miss\n");
-                    // === デバッグ: 死亡判定に入らなかった ===
-                    OutputDebugStringA("[DEBUG] NOT entering death check (HP > 0)\n");
+                    //OutputDebugStringA("[BULLET] Complete miss\n");
+                    //// === デバッグ: 死亡判定に入らなかった ===
+                    //OutputDebugStringA("[DEBUG] NOT entering death check (HP > 0)\n");
                 }
             }
 }
@@ -4187,6 +6045,8 @@ void Game::UpdatePlaying()
         //  【用途】敵がプレイヤーに向かって動くため
         m_enemySystem->Update(deltaTime, m_player->GetPosition());
     }
+
+   
 
     //  === 敵の「移動・回転・アニメーション更新・死亡」をまとめて制御するループ   ===
     //DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
@@ -4303,27 +6163,1097 @@ void Game::UpdatePlaying()
     }
 
 
-    // === 接触ダメージ処理 ===
-// 【目的】敵に触れられたらプレイヤーがダメージを受ける
-// 【仕組み】全ての敵をチェックして、接触していたらHP減少
-    for (const auto& enemy : m_enemySystem->GetEnemies())
+    // ==============================================
+    // シールドシステム入力処理
+    // ==============================================
+    static bool rmbPressed = false;
+    bool rmbDown = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+
+    switch (m_shieldState)
     {
-        // 生きていて、かつ「死んでいない（isDying == false）」敵だけ攻撃してくる
-        if (enemy.isAlive && !enemy.isDying && enemy.touchingPlayer)
+        // ─── 通常状態 ───
+    case ShieldState::Idle:
+    {
+        // 右クリック押した瞬間 → パリィウィンドウ開始
+        if (rmbDown && !rmbPressed)
         {
-            if (m_gloryKillInvincibleTimer <= 0)
+            m_shieldState = ShieldState::Parrying;
+            m_parryWindowTimer = m_parryWindowDuration;  // 0.15秒
+            m_lastParryAttemptTime = m_gameTime;
+            m_shieldBashTimer = m_shieldBashDuration;    // 盾アニメ開始
+            OutputDebugStringA("[SHIELD] State: PARRYING (window open)\n");
+        }
+
+        // 盾を下ろすアニメ（ゆっくり戻す）
+        m_shieldGuardBlend = max(0.0f, m_shieldGuardBlend - deltaTime * 5.0f);
+
+        //  ガードしてないときはエネルギーリセット
+        m_chargeEnergy = 0.0f;
+        m_chargeReady = false;
+
+        // シールドHP回復（非ガード時、遅延後）
+        if (m_shieldRegenDelayTimer > 0.0f)
+        {
+            m_shieldRegenDelayTimer -= deltaTime;
+        }
+        else if (m_shieldHP < m_shieldMaxHP)
+        {
+            m_shieldHP = min(m_shieldMaxHP, m_shieldHP + m_shieldRegenRate * deltaTime);
+        }
+        break;
+    }
+
+    // ─── パリィ受付中（右クリ押した直後の短い時間）───
+    case ShieldState::Parrying:
+    {
+        m_parryWindowTimer -= deltaTime;
+
+        // 盾を構えるアニメ（素早く上げる）
+        m_shieldGuardBlend = min(1.0f, m_shieldGuardBlend + deltaTime * 10.0f);
+
+        if (m_parryWindowTimer <= 0.0f)
+        {
+            // パリィウィンドウ終了
+            if (rmbDown)
             {
-                bool died = m_player->TakeDamage(10);
+                // まだ押してる → ガードに移行
+                m_shieldState = ShieldState::Guarding;
+                m_isGuarding = true;
+                OutputDebugStringA("[SHIELD] State: GUARDING (hold)\n");
+            }
+            else
+            {
+                // もう離した → タップだった、Idleに戻る
+                m_shieldState = ShieldState::Idle;
+                OutputDebugStringA("[SHIELD] State: IDLE (parry tap ended)\n");
+            }
+        }
+        break;
+    }
+
+    // ─── ガード中（長押し）───
+    case ShieldState::Guarding:
+    {
+        // 盾を表示し続ける
+        m_shieldGuardBlend = min(1.0f, m_shieldGuardBlend + deltaTime * 10.0f);
+
+        // 盾アニメを表示位置でキープ
+        m_shieldBashTimer = m_shieldBashDuration * 0.5f;
+
+        //  チャージエネルギー蓄積
+        if (m_chargeEnergy < 1.0f)
+        {
+            m_chargeEnergy += m_chargeEnergyRate * deltaTime;
+            if (m_chargeEnergy >= 1.0f)
+            {
+                m_chargeEnergy = 1.0f;
+                m_chargeReady = true;
+                OutputDebugStringA("[SHIELD] Charge energy FULL! Ready to charge!\n");
+            }
+        }
+
+        //  シールドチャージ: ガード中に左クリックで突進！
+        bool lmbDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+        if (lmbDown && m_chargeReady)
+        {
+            // --- ロックオン: 視線方向に最も近い敵を探す ---
+            DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+            float camYaw = m_player->GetRotation().y;
+            float camPitch = m_player->GetRotation().x;
+
+            // プレイヤーの視線方向ベクトル
+            DirectX::XMFLOAT3 lookDir;
+            lookDir.x = sinf(camYaw) * cosf(camPitch);
+            lookDir.y = -sinf(camPitch);
+            lookDir.z = cosf(camYaw) * cosf(camPitch);
+
+            // 視線に最も近い敵を検索
+            float bestScore = -1.0f;
+            int bestEnemyID = -1;
+            DirectX::XMFLOAT3 bestPos = { 0,0,0 };
+
+            for (auto& enemy : m_enemySystem->GetEnemies())
+            {
+                if (!enemy.isAlive || enemy.isDying) continue;
+
+                // プレイヤーから敵へのベクトル
+                float dx = enemy.position.x - playerPos.x;
+                float dy = enemy.position.y - playerPos.y;
+                float dz = enemy.position.z - playerPos.z;
+                float dist = sqrtf(dx * dx + dy * dy + dz * dz);
+
+                if (dist < 1.0f || dist > 50.0f) continue;  // 近すぎ・遠すぎは無視
+
+                // 正規化
+                float nx = dx / dist;
+                float ny = dy / dist;
+                float nz = dz / dist;
+
+                // 視線との内積（1.0に近いほど正面）
+                float dot = nx * lookDir.x + ny * lookDir.y + nz * lookDir.z;
+
+                // 視野角45度以内（dot > 0.7）の敵だけ対象
+                if (dot > 0.7f)
+                {
+                    // スコア = 内積が高く、距離が近いほど優先
+                    float score = dot / dist;
+                    if (score > bestScore)
+                    {
+                        bestScore = score;
+                        bestEnemyID = enemy.id;
+                        bestPos = enemy.position;
+                    }
+                }
+            }
+
+            if (bestEnemyID >= 0)
+            {
+                // ロックオン成功 → チャージ開始！
+                m_shieldState = ShieldState::Charging;
+                m_chargeTimer = 0.0f;
+                m_chargeEnergy = 0.0f;  //  エネルギー消費
+                m_chargeReady = false;  //  リセット
+                m_chargeHasTarget = true;
+                m_chargeTargetEnemyID = bestEnemyID;
+                m_chargeTarget = bestPos;
+
+                // 突進方向を計算（水平方向のみ）
+                float dx = bestPos.x - playerPos.x;
+                float dz = bestPos.z - playerPos.z;
+                float len = sqrtf(dx * dx + dz * dz);
+                if (len > 0.01f)
+                {
+                    m_chargeDirection = { dx / len, 0.0f, dz / len };
+                }
+                else
+                {
+                    m_chargeDirection = lookDir;
+                    m_chargeDirection.y = 0.0f;
+                }
+
+                // 距離に応じてチャージ時間を調整（最低0.2秒、最大0.8秒）
+                float distToTarget = len;
+                m_chargeDuration = min(0.8f, max(0.2f, distToTarget / m_chargeSpeed));
+
+                OutputDebugStringA("[SHIELD] CHARGE START! Lock-on!\n");
+            }
+            else
+            {
+                
+            }
+        }
+
+        if (!rmbDown)
+        {
+            // 右クリック離す → Idleに戻る
+            m_shieldState = ShieldState::Idle;
+            m_isGuarding = false;
+            OutputDebugStringA("[SHIELD] State: IDLE (guard released)\n");
+        }
+        break;
+    }
+
+    // ??? シールドチャージ突進中 ???
+    case ShieldState::Charging:
+    {
+        m_chargeTimer += deltaTime;
+
+        //  FOV拡大＋スピードライン
+        m_targetFOV = 100.0f;
+        m_speedLineAlpha = 0.8f;
+
+        DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+        playerPos.x += m_chargeDirection.x * m_chargeSpeed * deltaTime;
+        playerPos.z += m_chargeDirection.z * m_chargeSpeed * deltaTime;
+        m_player->SetPosition(playerPos);
+
+        float dxTarget = m_chargeTarget.x - playerPos.x;
+        float dzTarget = m_chargeTarget.z - playerPos.z;
+        float distToTarget = sqrtf(dxTarget * dxTarget + dzTarget * dzTarget);
+
+        bool reachedTarget = (distToTarget < 2.0f);  // within 2m of target
+        bool timeUp = (m_chargeTimer >= m_chargeDuration);
+
+        if (m_mapSystem && m_mapSystem->CheckCollision(playerPos, 0.5f))
+        {
+            reachedTarget = true; 
+            OutputDebugStringA("[CHARGE] Hit wall! Exploding here.\n");
+        }
+
+        if (reachedTarget || timeUp)
+        {
+            
+            DirectX::XMFLOAT3 blastCenter = m_player->GetPosition();
+            float blastRadius = 5.0f; 
+
+            int killCount = 0;
+            for (auto& enemy : m_enemySystem->GetEnemies())
+            {
+                if (!enemy.isAlive || enemy.isDying) continue;
+
+                float dx = enemy.position.x - blastCenter.x;
+                float dz = enemy.position.z - blastCenter.z;
+                float dist = sqrtf(dx * dx + dz * dz);
+
+                if (dist > blastRadius) continue;  
+
+                if (enemy.type == EnemyType::NORMAL || enemy.type == EnemyType::RUNNER)
+                {
+                    enemy.health = 0;
+                    enemy.isDying = true;
+                    enemy.isAlive = false;
+                    enemy.isRagdoll = true;
+                    enemy.isExploded = true;
+                    enemy.corpseTimer = 3.0f;
+
+                    RemoveEnemyPhysicsBody(enemy.id);
+
+                    int waveBonus = m_waveManager->OnEnemyKilled();
+                    m_player->AddPoints(100 + waveBonus);
+
+                    //  肉片を生成（8個、爆発力15）
+                    SpawnGibs(enemy.position, 12, 18.0f);
+
+                  
+                    DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
+                    m_particleSystem->CreateBloodEffect(enemy.position, upDir, 400);
+                    m_particleSystem->CreateExplosion(enemy.position);
+
+                   
+                    for (int a = 0; a < 6; a++)
+                    {
+                        float rad = a * 1.047f; 
+                        DirectX::XMFLOAT3 radDir = { cosf(rad), 0.3f, sinf(rad) };
+                        m_particleSystem->CreateBloodEffect(enemy.position, radDir, 40);
+                    }
+
+                    killCount++;
+                }
+                else
+                {
+                    enemy.health -= 80;
+                    enemy.stunValue = enemy.maxStunValue;
+                    if (enemy.health <= 0)
+                    {
+                        enemy.health = 0;
+                        enemy.isDying = true;
+                        enemy.isAlive = false;
+                        enemy.isRagdoll = true;
+                        enemy.corpseTimer = 3.0f;
+                        RemoveEnemyPhysicsBody(enemy.id);
+
+                        int waveBonus = m_waveManager->OnEnemyKilled();
+                        m_player->AddPoints(150 + waveBonus);
+                    }
+                }
+            }
+
+            DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
+            m_particleSystem->CreateBloodEffect(blastCenter, upDir, 300);
+            m_particleSystem->CreateExplosion(blastCenter);
+
+            char buf[128];
+            sprintf_s(buf, "[CHARGE] AOE EXPLOSION! %d grunts obliterated!\n", killCount);
+            OutputDebugStringA(buf);
+
+            // Camera shake (kills数に応じて強さ変化)
+            m_cameraShake = 0.3f + killCount * 0.15f;      // 1体:0.45  3体:0.75  5体:1.05
+            m_cameraShakeTimer = 0.3f;
+
+            // Slow-mo (短めでキレのある演出)
+            if (killCount > 0)
+            {
+                m_timeScale = 0.15f;
+                m_slowMoTimer = 0.02f + killCount * 0.02f;
+            }
+
+            //  FOVを戻す
+            m_targetFOV = 70.0f;
+            m_speedLineAlpha = 0.0f;
+
+            m_shieldState = ShieldState::Guarding;
+            m_isGuarding = true;
+            m_chargeHasTarget = false;
+            m_chargeTargetEnemyID = -1;
+        }
+
+        m_shieldGuardBlend = 1.0f;
+        break;
+    }
+
+    case ShieldState::Throwing:
+    {
+        //  ガード不可（盾が手元にない）
+        m_shieldGuardBlend = max(0.0f, m_shieldGuardBlend - deltaTime * 10.0f);
+
+        // 回転（見た目のスピン）
+        m_thrownShieldSpin += deltaTime * 20.0f;
+
+
+        if (!m_thrownShieldReturning)
+        {
+            // === 前進（直線） ===
+            float move = m_thrownShieldSpeed * deltaTime;
+            m_thrownShieldPos.x += m_thrownShieldDir.x * move;
+            m_thrownShieldPos.y += m_thrownShieldDir.y * move;
+            m_thrownShieldPos.z += m_thrownShieldDir.z * move;
+            m_thrownShieldDist += move;
+
+            // 最大距離で折り返し
+            if (m_thrownShieldDist >= m_thrownShieldMaxDist)
+            {
+                m_thrownShieldReturning = true;
+                OutputDebugStringA("[SHIELD] Max distance, returning!\n");
+            }
+        }
+        else
+        {
+            // === 戻り（プレイヤーに向かう） ===
+            DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+            float dx = playerPos.x - m_thrownShieldPos.x;
+            float dy = playerPos.y - m_thrownShieldPos.y;
+            float dz = playerPos.z - m_thrownShieldPos.z;
+            float dist = sqrtf(dx * dx + dy * dy + dz * dz);
+
+            if (dist < 2.0f)
+            {
+                // プレイヤーに到達 → 盾復活！
+                m_shieldState = ShieldState::Idle;
+
+                //  Effekseerトレイル停止
+                if (m_shieldTrailHandle >= 0)
+                {
+                    m_effekseerManager->StopEffect(m_shieldTrailHandle);
+                    m_shieldTrailHandle = -1;
+                }
+
+                OutputDebugStringA("[SHIELD] Shield caught! Back to Idle.\n");
+                break;
+            }
+
+            // 方向を正規化
+            float invDist = 1.0f / dist;
+            dx *= invDist;
+            dy *= invDist;
+            dz *= invDist;
+
+            // 戻り速度は少し速く（50）
+            float returnSpeed = 50.0f * deltaTime;
+            m_thrownShieldPos.x += dx * returnSpeed;
+            m_thrownShieldPos.y += dy * returnSpeed;
+            m_thrownShieldPos.z += dz * returnSpeed;
+        }
+
+        //  Effekseer: SetBaseMatrixで盾に追従
+        if (m_shieldTrailHandle >= 0 && m_effekseerManager != nullptr)
+        {
+            m_effekseerManager->SetLocation(m_shieldTrailHandle,
+                Effekseer::Vector3D(
+                    m_thrownShieldPos.x,
+                    m_thrownShieldPos.y,
+                    m_thrownShieldPos.z));
+        }
+
+        
+
+        // === 敵との当たり判定 ===
+        for (auto& enemy : m_enemySystem->GetEnemies())
+        {
+            if (!enemy.isAlive || enemy.isDying) continue;
+
+            float ex = enemy.position.x - m_thrownShieldPos.x;
+            float ey = (enemy.position.y + 0.8f) - m_thrownShieldPos.y;
+            float ez = enemy.position.z - m_thrownShieldPos.z;
+            float distSq = ex * ex + ey * ey + ez * ez;
+            float hitR = m_thrownShieldHitRadius;
+
+            if (distSq < hitR * hitR)
+            {
+                // 重複チェック（行きと帰りで別管理）
+                auto& hitSet = m_thrownShieldReturning
+                    ? m_thrownShieldReturnHitEnemies
+                    : m_thrownShieldHitEnemies;
+
+                if (hitSet.find(enemy.id) == hitSet.end())
+                {
+                    hitSet.insert(enemy.id);
+
+                    // ダメージ
+                    enemy.health -= (int)m_thrownShieldDamage;
+                    enemy.staggerFlashTimer = 0.15f;
+
+                    //  死亡チェック
+                    if (enemy.health <= 0)
+                    {
+                        enemy.health = 0;
+                        enemy.isDying = true;
+                        enemy.isAlive = false;
+                        enemy.isRagdoll = true;
+                        enemy.corpseTimer = 3.0f;
+                        RemoveEnemyPhysicsBody(enemy.id);
+
+                        int waveBonus = m_waveManager->OnEnemyKilled();
+                        m_player->AddPoints(100 + waveBonus);
+                    }
+
+                    // スタン
+                    enemy.stunValue = enemy.maxStunValue;
+
+                    // 血エフェクト
+                    DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
+                    m_particleSystem->CreateBloodEffect(enemy.position, upDir, 80);
+
+                    // カメラシェイク（軽め）
+                    m_cameraShake = 0.15f;
+                    m_cameraShakeTimer = 0.1f;
+
+                    // ヒットストップ（短め）
+                    m_hitStopTimer = 0.03f;
+
+                    char msg[128];
+                    sprintf_s(msg, "[SHIELD THROW] Hit enemy ID:%d! HP:%d\n",
+                        enemy.id, enemy.health);
+                    OutputDebugStringA(msg);
+                }
+            }
+        }
+
+        break;
+    }
+
+    // ─── 盾破壊（一時使用不能）───
+    case ShieldState::Broken:
+    {
+        m_shieldGuardBlend = max(0.0f, m_shieldGuardBlend - deltaTime * 3.0f);
+        m_isGuarding = false;
+        m_shieldBrokenTimer -= deltaTime;
+
+        if (m_shieldBrokenTimer <= 0.0f)
+        {
+            // 復帰！
+            m_shieldState = ShieldState::Idle;
+            m_shieldHP = m_shieldMaxHP * 0.3f;  // 30%で復帰
+            OutputDebugStringA("[SHIELD] State: IDLE (shield restored!)\n");
+        }
+        break;
+    }
+    }
+
+    rmbPressed = rmbDown;
+
+    // === シールドHUD アニメーション更新 ===
+    {
+        // 表示HPを実際のHPに滑らかに追従させる
+        // 減る時はゆっくり（ダメージ演出）、回復時は速い
+        float lerpSpeed = (m_shieldDisplayHP > m_shieldHP) ? 3.0f : 8.0f;
+        m_shieldDisplayHP += (m_shieldHP - m_shieldDisplayHP) * min(1.0f, lerpSpeed * deltaTime);
+
+        // グロウ強度の更新（ガード/パリィで光る）
+        float targetGlow = 0.0f;
+        if (m_shieldState == ShieldState::Guarding)
+            targetGlow = 0.7f;
+        else if (m_shieldState == ShieldState::Parrying)
+            targetGlow = 1.0f;
+        m_shieldGlowIntensity += (targetGlow - m_shieldGlowIntensity) * min(1.0f, 12.0f * deltaTime);
+    }
+
+    // パリィ成功エフェクトタイマー
+    if (m_parryFlashTimer > 0.0f)
+    {
+        m_parryFlashTimer -= deltaTime;
+    }
+
+    // 盾バッシュタイマー（Idle時のみ減少、Guarding時はキープ）
+    if (m_shieldState != ShieldState::Guarding && m_shieldState != ShieldState::Charging && m_shieldBashTimer > 0.0f)
+    {
+        m_shieldBashTimer -= deltaTime;
+        if (m_shieldBashTimer < 0.0f)
+            m_shieldBashTimer = 0.0f;
+    }
+
+    // === 接触ダメージ判定 ===
+    for (auto& enemy : m_enemySystem->GetEnemies())
+    {
+        if (!enemy.isAlive || enemy.isDying)
+            continue;
+
+        if ((enemy.type == EnemyType::MIDBOSS) &&
+            enemy.bossPhase != BossAttackPhase::ROAR_FIRE &&
+            m_beamHandle >= 0 && m_effekseerManager != nullptr)
+        {
+            m_effekseerManager->StopEffect(m_beamHandle);
+            m_beamHandle = -1;
+        }
+
+        //  === ボス特殊攻撃の処理 ===
+        if ((enemy.type == EnemyType::BOSS || enemy.type == EnemyType::MIDBOSS) &&
+            enemy.bossPhase != BossAttackPhase::IDLE &&
+            enemy.attackJustLanded)
+        {
+            // --- ジャンプ叩きつけ：範囲ダメージ ---
+            if (enemy.bossPhase == BossAttackPhase::JUMP_SLAM)
+            {
+                DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+                float dx = playerPos.x - enemy.position.x;
+                float dz = playerPos.z - enemy.position.z;
+                float dist = sqrtf(dx * dx + dz * dz);
+
+                float slamRadius = (enemy.type == EnemyType::BOSS) ? m_slamRadiusBoss : m_slamRadiusMidBoss;
+                float slamDamage = (enemy.type == EnemyType::BOSS) ? m_slamDamageBoss : m_slamDamageMidBoss;
+
+                if (dist < slamRadius)
+                {
+                    // パリィ/ガード判定
+                    if (m_shieldState == ShieldState::Parrying)
+                    {
+                        // ジャンプ叩きはパリィ可能
+                        m_shieldState = ShieldState::Idle;
+                        m_parrySuccess = true;
+                        m_lastParryResultTime = m_gameTime;
+                        m_lastParryWasSuccess = true;
+                        m_parrySuccessCount++;
+                        m_parryFlashTimer = 0.3f;
+
+                        float stunDamage = m_slamStunDamage;
+                        enemy.stunValue += stunDamage;
+                        if (enemy.stunValue >= enemy.maxStunValue)
+                        {
+                            enemy.isStaggered = true;
+                            enemy.staggerFlashTimer = 0.0f;
+                            enemy.stunValue = 0.0f;
+                        }
+
+                        m_cameraShake = 0.2f;
+                        m_cameraShakeTimer = 0.3f;
+                        m_hitStopTimer = 0.1f;
+                        m_timeScale = 0.2f;
+                        m_slowMoTimer = 0.4f;
+
+                        OutputDebugStringA("[BOSS] JUMP SLAM PARRIED!\n");
+                    }
+                    else if (m_shieldState == ShieldState::Guarding)
+                    {
+                        // ガード：ダメージ軽減
+                        float reduced = slamDamage * (1.0f - m_guardDamageReduction);
+                        bool died = m_player->TakeDamage((int)reduced);
+                        m_shieldHP -= slamDamage * 0.5f;
+                        m_shieldRegenDelayTimer = m_shieldRegenDelay;
+                        m_cameraShake = 0.1f;
+                        m_cameraShakeTimer = 0.15f;
+
+                        if (m_shieldHP <= 0.0f)
+                        {
+                            m_shieldHP = 0.0f;
+                            m_shieldState = ShieldState::Broken;
+                            m_shieldBrokenTimer = m_shieldBrokenDuration;
+                        }
+                        if (died) m_gameState = GameState::GAMEOVER;
+
+                        OutputDebugStringA("[BOSS] JUMP SLAM GUARDED!\n");
+                    }
+                    else
+                    {
+                        // ノーガード：フルダメージ
+                        bool died = m_player->TakeDamage((int)slamDamage);
+                        m_cameraShake = 0.3f;
+                        m_cameraShakeTimer = 0.3f;
+                        if (died) m_gameState = GameState::GAMEOVER;
+
+                        OutputDebugStringA("[BOSS] JUMP SLAM HIT! (no guard)\n");
+                    }
+                }
+
+                // 叩きつけで画面揺れ（距離に関係なく）
+                m_cameraShake = (std::max)(m_cameraShake, 0.08f);
+                m_cameraShakeTimer = (std::max)(m_cameraShakeTimer, 0.2f);
+
+                // 地面エフェクトはここで後で追加（Effekseer）
+                if (m_particleSystem)
+                {
+                    m_particleSystem->CreateExplosion(enemy.position);
+                }
+
+                //  衝撃波エフェクト追加
+                if (m_effectGroundSlam != nullptr && m_effekseerManager != nullptr)
+                {
+                    m_effekseerManager->Play(
+                        m_effectGroundSlam,
+                        enemy.position.x, 0.1f, enemy.position.z);
+                }
+
+                enemy.attackJustLanded = false;
+                continue;  // このenemyの処理は終わり
+            }
+
+            // --- 斬撃3本発射（BOSS） ---
+            if (enemy.bossPhase == BossAttackPhase::SLASH_FIRE)
+            {
+                DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+
+                // 敵→プレイヤーの方向
+                float dx = playerPos.x - enemy.position.x;
+                float dz = playerPos.z - enemy.position.z;
+                float dist = sqrtf(dx * dx + dz * dz);
+                if (dist < 0.1f) dist = 0.1f;
+                float nx = dx / dist;
+                float nz = dz / dist;
+
+                // 3本の斬撃を扇状に発射
+                // 角度オフセット: -15度, 0度, +15度
+                float angles[3] = { -0.26f, 0.0f, 0.26f };  // ラジアン（約15度）
+
+                for (int i = 0; i < 3; i++)
+                {
+                    BossProjectile proj;
+                    // 方向を回転
+                    float cosA = cosf(angles[i]);
+                    float sinA = sinf(angles[i]);
+                    proj.direction.x = nx * cosA - nz * sinA;
+                    proj.direction.y = 0.0f;
+                    proj.direction.z = nx * sinA + nz * cosA;
+
+                    // 発射位置（ボスの前方1m）
+                    proj.position.x = enemy.position.x + proj.direction.x * 1.0f;
+                    proj.position.y = 1.0f;  // 地面より少し上
+                    proj.position.z = enemy.position.z + proj.direction.z * 1.0f;
+
+                    proj.speed = m_slashSpeed;
+                    proj.lifetime = 3.0f;
+                    proj.damage = m_slashDamage;
+                    proj.ownerID = enemy.id;
+                    proj.isActive = true;
+
+                    // 真ん中の1本だけパリィ可能（緑）
+                    proj.isParriable = (rand() % 2 == 0);
+
+                    // エフェクト再生＆ハンドル保存
+                    Effekseer::EffectRef slashEffect = proj.isParriable
+                        ? m_effectSlashGreen : m_effectSlashRed;
+                    if (slashEffect != nullptr && m_effekseerManager != nullptr)
+                    {
+                        Effekseer::Handle h = m_effekseerManager->Play(
+                            slashEffect,
+                            proj.position.x, proj.position.y, proj.position.z);
+                        float angle = atan2f(proj.direction.x, proj.direction.z);
+                        m_effekseerManager->SetRotation(h, 0.0f, angle, 0.0f);
+                        m_effekseerManager->SetScale(h, 0.3f, 0.3f, 0.3f);
+                        proj.effectHandle = h;  
+                    }
+
+                    m_bossProjectiles.push_back(proj);
+
+                    char buf[128];
+                    sprintf_s(buf, "[BOSS] Slash projectile %d fired! Parriable: %s\n",
+                        i, proj.isParriable ? "YES(green)" : "NO(red)");
+                    OutputDebugStringA(buf);
+                }
+
+                enemy.attackJustLanded = false;
+                continue;
+            }
+
+            // --- 咆哮ビーム（MIDBOSS） ---
+            if (enemy.bossPhase == BossAttackPhase::ROAR_FIRE)
+            {
+                // ビームエフェクト再生（初回のみ
+                Effekseer::EffectRef beamEffect = enemy.bossBeamParriable
+                    ? m_effectBeamGreen : m_effectBeamRed;
+                if (beamEffect != nullptr && m_beamHandle < 0 && m_effekseerManager != nullptr)
+                {
+                    m_beamHandle = m_effekseerManager->Play(
+                        beamEffect,
+                        enemy.position.x, enemy.position.y + 1.5f, enemy.position.z);
+                    m_effekseerManager->SetScale(m_beamHandle, 0.5f, 0.5f, 0.5f);
+                }
+
+                // ビームの位置と向きを毎フレーム更新
+                if (m_beamHandle >= 0 && m_effekseerManager != nullptr)
+                {
+                    m_effekseerManager->SetLocation(m_beamHandle,
+                        Effekseer::Vector3D(enemy.position.x, enemy.position.y + 1.5f, enemy.position.z));
+                    float angle = atan2f(
+                        enemy.bossTargetPos.x - enemy.position.x,
+                        enemy.bossTargetPos.z - enemy.position.z) + 3.14159f;
+                    m_effekseerManager->SetRotation(m_beamHandle, 0.0f, angle, 0.0f);
+                }
+
+
+                DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+
+                //  ビーム到達遅延（発射から3.5秒後にプレイヤーに届く）
+                float beamArrivalTime = 2.0f;  // ROAR_FIRE開始からの到達時間
+                bool beamReached = (enemy.bossPhaseTimer >= beamArrivalTime);
+
+                // ビームの方向計算（エフェクト表示用、到達前も必要）
+                float bdx = enemy.bossTargetPos.x - enemy.position.x;
+                float bdz = enemy.bossTargetPos.z - enemy.position.z;
+                float bDist = sqrtf(bdx * bdx + bdz * bdz);
+                if (bDist < 0.1f) bDist = 0.1f;
+                float bnx = bdx / bDist;
+                float bnz = bdz / bDist;
+
+                float px = playerPos.x - enemy.position.x;
+                float pz = playerPos.z - enemy.position.z;
+
+                float projDist = px * bnx + pz * bnz;
+                float perpDist = fabs(px * (-bnz) + pz * bnx);
+
+                float beamWidth = m_beamWidth;
+                float beamLength = m_beamLength;
+                float beamDPS = m_beamDPS;
+
+                // ★ ビーム到達後のみダメージ判定
+                if (beamReached && projDist > 0.0f && projDist < beamLength && perpDist < beamWidth)
+                {
+                    float frameDamage = beamDPS * (1.0f / 60.0f);
+
+                    if (m_shieldState == ShieldState::Parrying && enemy.bossBeamParriable)
+                    {
+                        // 緑ビーム → パリィ成功！
+                        m_shieldState = ShieldState::Idle;
+                        m_parrySuccess = true;
+                        m_parryFlashTimer = 0.3f;
+
+                        enemy.stunValue += m_beamStunOnParry * 2.0f;
+                        if (enemy.stunValue >= enemy.maxStunValue)
+                        {
+                            enemy.isStaggered = true;
+                            enemy.staggerFlashTimer = 0.0f;
+                            enemy.stunValue = 0.0f;
+                        }
+
+                        // パリィ成功でビーム中断！
+                        enemy.bossPhase = BossAttackPhase::ROAR_RECOVERY;
+                        enemy.bossPhaseTimer = 0.0f;
+
+                        m_cameraShake = 0.25f;
+                        m_cameraShakeTimer = 0.3f;
+                        m_hitStopTimer = 0.15f;
+                        m_timeScale = 0.15f;
+                        m_slowMoTimer = 0.5f;
+
+                        if (m_beamHandle >= 0 && m_effekseerManager != nullptr)
+                        {
+                            m_effekseerManager->StopEffect(m_beamHandle);
+                            m_beamHandle = -1;
+                        }
+
+                        OutputDebugStringA("[MIDBOSS] BEAM PARRIED!\n");
+                    }
+                    else if (m_shieldState == ShieldState::Parrying && !enemy.bossBeamParriable)
+                    {
+                        // 赤ビーム → パリィ不可、ガードに格下げ
+                        float reduced = frameDamage * (1.0f - m_guardDamageReduction);
+                        m_player->TakeDamage((int)(std::max)(1.0f, reduced));
+                        m_shieldHP -= frameDamage * 0.3f;
+                        m_shieldRegenDelayTimer = m_shieldRegenDelay;
+                    }
+                    else if (m_shieldState == ShieldState::Guarding)
+                    {
+                        float reduced = frameDamage * (1.0f - m_guardDamageReduction);
+                        m_player->TakeDamage((int)(std::max)(1.0f, reduced));
+                        m_shieldHP -= frameDamage * 0.3f;
+                        m_shieldRegenDelayTimer = m_shieldRegenDelay;
+
+                        if (m_shieldHP <= 0.0f)
+                        {
+                            m_shieldHP = 0.0f;
+                            m_shieldState = ShieldState::Broken;
+                            m_shieldBrokenTimer = m_shieldBrokenDuration;
+                        }
+                    }
+                    else
+                    {
+                        bool died = m_player->TakeDamage((int)(std::max)(1.0f, frameDamage));
+                        if (died) m_gameState = GameState::GAMEOVER;
+                    }
+                }
+
+                continue;
+            }
+
+            // 上記以外のボス攻撃フェーズは通常のattackJustLandedにフォールスルー
+            enemy.attackJustLanded = false;
+            continue;
+        }
+
+        // 攻撃が「今まさに当たった瞬間」のみ判定
+        if (enemy.attackJustLanded)
+        {
+            if (m_gloryKillInvincibleTimer > 0)
+                break;
+
+            // パリィウィンドウ中 → パリィ成功！
+            if (m_shieldState == ShieldState::Parrying)
+            {
+                // パリィ成功 → シールドHP消費なし
+                m_shieldState = ShieldState::Idle;
+                m_parrySuccess = true;
+                m_lastParryResultTime = m_gameTime;
+                m_lastParryWasSuccess = true;
+                m_parrySuccessCount++;
+                m_parryFlashTimer = 0.3f;
+
+                if (enemy.type == EnemyType::NORMAL || enemy.type == EnemyType::RUNNER)
+                {
+                    enemy.isStaggered = true;
+                    enemy.staggerFlashTimer = 0.0f;
+
+                    char buf[128];
+                    sprintf_s(buf, "[PARRY] SUCCESS! Enemy ID:%d STAGGERED instantly!\n", enemy.id);
+                    OutputDebugStringA(buf);
+                }
+                else
+                {
+                    float stunDamage = 40.0f;
+                    enemy.stunValue += stunDamage;
+
+                    char buf[256];
+                    sprintf_s(buf, "[PARRY] SUCCESS! Enemy ID:%d Stun: %.0f/%.0f\n",
+                        enemy.id, enemy.stunValue, enemy.maxStunValue);
+                    OutputDebugStringA(buf);
+
+                    if (enemy.stunValue >= enemy.maxStunValue)
+                    {
+                        enemy.isStaggered = true;
+                        enemy.staggerFlashTimer = 0.0f;
+                        enemy.stunValue = 0.0f;
+
+                        sprintf_s(buf, "[PARRY] STUN BREAK! Enemy ID:%d is now STAGGERED!\n", enemy.id);
+                        OutputDebugStringA(buf);
+                    }
+                }
+
+                // フィードバック
+                m_cameraShake = 0.15f;
+                m_cameraShakeTimer = 0.2f;
+                m_hitStopTimer = 0.08f;
+                m_timeScale = 0.3f;
+                m_slowMoTimer = 0.3f;
+
+                if (m_particleSystem)
+                {
+                    XMFLOAT3 sparkDir(0.0f, 1.0f, 0.0f);
+                    m_particleSystem->CreateBloodEffect(
+                        enemy.position, sparkDir, 30);
+                }
+
+                OutputDebugStringA("[PARRY] === TIMING PARRY! ===\n");
+                break;
+            }
+            else if(m_shieldState == ShieldState::Guarding)
+            {
+                float rawDamage = 10.0f;
+                float reducedDamage = rawDamage * (1.0f - m_guardDamageReduction);
+                bool died = m_player->TakeDamage((int)reducedDamage);
+
+                // シールドHP消費
+                m_shieldHP -= rawDamage * 0.5f;  // 元ダメージの半分をシールドから
+                m_shieldRegenDelayTimer = m_shieldRegenDelay;
+
+                // カメラ揺れ（パリィより小さめ）
+                m_cameraShake = 0.05f;
+                m_cameraShakeTimer = 0.1f;
+
+                char buf[128];
+                sprintf_s(buf, "[GUARD] Blocked! Damage: %.0f -> %.0f, ShieldHP: %.0f/%.0f\n",
+                    rawDamage, reducedDamage, m_shieldHP, m_shieldMaxHP);
+                OutputDebugStringA(buf);
+
+                // シールド破壊チェック
+                if (m_shieldHP <= 0.0f)
+                {
+                    m_shieldHP = 0.0f;
+                    m_shieldState = ShieldState::Broken;
+                    m_shieldBrokenTimer = m_shieldBrokenDuration;
+                    m_isGuarding = false;
+                    OutputDebugStringA("[SHIELD] === SHIELD BROKEN! ===\n");
+                }
 
                 if (died)
                 {
                     m_gameState = GameState::GAMEOVER;
                 }
-
+                break;
             }
 
-            break;
         }
+        // 継続ダメージ（密着し続けてる場合、一定間隔でダメージ）
+        else if (enemy.touchingPlayer && m_shieldState == ShieldState::Idle)
+        {
+            if (m_gloryKillInvincibleTimer <= 0)
+            {
+                
+            }
+        }
+    }
+
+
+        // ================================================== =
+        // ボスプロジェクタイル更新 & 当たり判定
+        // ===================================================
+    {
+        DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+
+        for (auto& proj : m_bossProjectiles)
+        {
+            if (!proj.isActive) continue;
+
+            // --- 移動 ---
+            proj.position.x += proj.direction.x * proj.speed * deltaTime;
+            proj.position.z += proj.direction.z * proj.speed * deltaTime;
+            
+            //  エフェクト追従
+            if (proj.effectHandle >= 0 && m_effekseerManager != nullptr)
+            {
+                m_effekseerManager->SetLocation(proj.effectHandle,
+                    Effekseer::Vector3D(proj.position.x, proj.position.y, proj.position.z));
+            }
+
+            // --- 寿命 ---
+            proj.lifetime -= deltaTime;
+            if (proj.lifetime <= 0.0f)
+            {
+                // エフェクト停止
+                if (proj.effectHandle >= 0 && m_effekseerManager != nullptr)
+                {
+                    m_effekseerManager->StopEffect(proj.effectHandle);
+                    proj.effectHandle = -1;
+                }
+
+                proj.isActive = false;
+                continue;
+            }
+
+            // --- プレイヤーとの当たり判定 ---
+            float dx = playerPos.x - proj.position.x;
+            float dz = playerPos.z - proj.position.z;
+            float dist = sqrtf(dx * dx + dz * dz);
+
+            float hitRadius = m_slashHitRadius;  // 斬撃の当たり判定の幅
+
+            if (dist < hitRadius)
+            {
+                // ========================================
+                // パリィ可能（緑）＋ パリィ状態 → パリィ成功！
+                // ========================================
+                if (proj.isParriable && m_shieldState == ShieldState::Parrying)
+                {
+                    m_shieldState = ShieldState::Idle;
+                    m_parrySuccess = true;
+                    m_lastParryResultTime = m_gameTime;
+                    m_lastParryWasSuccess = true;
+                    m_parrySuccessCount++;
+                    m_parryFlashTimer = 0.3f;
+
+                    // 発射元のボスにスタンダメージ
+                    for (auto& enemy : m_enemySystem->GetEnemies())
+                    {
+                        if (enemy.id == proj.ownerID && enemy.isAlive)
+                        {
+                            enemy.stunValue += m_slashStunOnParry;
+                            if (enemy.stunValue >= enemy.maxStunValue)
+                            {
+                                enemy.isStaggered = true;
+                                enemy.staggerFlashTimer = 0.0f;
+                                enemy.stunValue = 0.0f;
+                                OutputDebugStringA("[PROJECTILE] PARRY -> BOSS STAGGERED!\n");
+                            }
+                            break;
+                        }
+                    }
+
+                    m_cameraShake = 0.2f;
+                    m_cameraShakeTimer = 0.25f;
+                    m_hitStopTimer = 0.1f;
+                    m_timeScale = 0.2f;
+                    m_slowMoTimer = 0.4f;
+
+                    // エフェクト停止
+                    if (proj.effectHandle >= 0 && m_effekseerManager != nullptr)
+                    {
+                        m_effekseerManager->StopEffect(proj.effectHandle);
+                        proj.effectHandle = -1;
+                    }
+
+                    proj.isActive = false;
+                    OutputDebugStringA("[PROJECTILE] GREEN SLASH PARRIED!\n");
+                }
+                // ========================================
+                // ガード中 → ダメージ軽減（赤もガード可能）
+                // ========================================
+                else if (m_shieldState == ShieldState::Guarding)
+                {
+                    float reduced = proj.damage * (1.0f - m_guardDamageReduction);
+                    bool died = m_player->TakeDamage((int)reduced);
+                    m_shieldHP -= proj.damage * 0.4f;
+                    m_shieldRegenDelayTimer = m_shieldRegenDelay;
+
+                    m_cameraShake = 0.08f;
+                    m_cameraShakeTimer = 0.1f;
+
+                    if (m_shieldHP <= 0.0f)
+                    {
+                        m_shieldHP = 0.0f;
+                        m_shieldState = ShieldState::Broken;
+                        m_shieldBrokenTimer = m_shieldBrokenDuration;
+                    }
+                    if (died) m_gameState = GameState::GAMEOVER;
+
+                    // エフェクト停止
+                    if (proj.effectHandle >= 0 && m_effekseerManager != nullptr)
+                    {
+                        m_effekseerManager->StopEffect(proj.effectHandle);
+                        proj.effectHandle = -1;
+                    }
+
+                    proj.isActive = false;
+
+                    char buf[64];
+                    sprintf_s(buf, "[PROJECTILE] %s SLASH GUARDED!\n",
+                        proj.isParriable ? "GREEN" : "RED");
+                    OutputDebugStringA(buf);
+                }
+                // ========================================
+                // ノーガード → フルダメージ
+                // ========================================
+                else
+                {
+                    bool died = m_player->TakeDamage((int)proj.damage);
+                    m_cameraShake = 0.15f;
+                    m_cameraShakeTimer = 0.2f;
+                    if (died) m_gameState = GameState::GAMEOVER;
+
+                    // エフェクト停止
+                    if (proj.effectHandle >= 0 && m_effekseerManager != nullptr)
+                    {
+                        m_effekseerManager->StopEffect(proj.effectHandle);
+                        proj.effectHandle = -1;
+                    }
+
+                    proj.isActive = false;
+
+                    char buf[64];
+                    sprintf_s(buf, "[PROJECTILE] %s SLASH HIT! (no guard)\n",
+                        proj.isParriable ? "GREEN" : "RED");
+                    OutputDebugStringA(buf);
+                }
+            }
+        }
+
+        // --- 消えたプロジェクタイルを削除 ---
+        m_bossProjectiles.erase(
+            std::remove_if(m_bossProjectiles.begin(), m_bossProjectiles.end(),
+                [](const BossProjectile& p) { return !p.isActive; }),
+            m_bossProjectiles.end()
+        );
+    }
+
+
+    //  Effekseer更新
+    if (m_effekseerManager != nullptr)
+    {
+        m_effekseerManager->Update(1.0f);
     }
 
 }
@@ -4336,6 +7266,7 @@ void Game::UpdateGameOver()
     {
         // ゲーム状態をリセット
         m_score = 0;
+        m_styleRank->Reset();
         for (int i = 0; i < 3; i++)
         {
             //m_cubesDestroyed[i] = false;
@@ -4414,6 +7345,78 @@ void Game::RenderDamageFlash()
 
 
     primitiveBatch->End();
+}
+
+//  スピードライン描画 
+void Game::RenderSpeedLines()
+{
+    if (m_speedLineAlpha <= 0.01f) return;
+
+    auto context = m_d3dContext.Get();
+
+    // 2D描画セットアップ（RenderDamageFlashと同じパターン）
+    DirectX::XMMATRIX view = DirectX::XMMatrixIdentity();
+    DirectX::XMMATRIX projection = DirectX::XMMatrixOrthographicLH(
+        (float)m_outputWidth, (float)m_outputHeight, 0.1f, 10.0f);
+
+    m_effect->SetView(view);
+    m_effect->SetProjection(projection);
+    m_effect->SetWorld(DirectX::XMMatrixIdentity());
+    m_effect->SetVertexColorEnabled(true);
+    m_effect->Apply(context);
+    context->IASetInputLayout(m_inputLayout.Get());
+
+    auto batch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
+    batch->Begin();
+
+    float halfW = m_outputWidth * 0.5f;
+    float halfH = m_outputHeight * 0.5f;
+    float alpha = m_speedLineAlpha;
+
+    int lineCount = 28;  // 放射状の線の数
+
+    for (int i = 0; i < lineCount; i++)
+    {
+        // 放射角度
+        float angle = (float)i / lineCount * 6.283f;
+
+        // ランダムなゆらぎ（毎フレーム変わって動いてる感じ）
+        float jitter = ((float)(rand() % 1000) / 1000.0f) * 0.15f;
+        angle += jitter;
+
+        float cosA = cosf(angle);
+        float sinA = sinf(angle);
+
+        // 外側の点（画面端の外まで伸ばす）
+        float outerDist = halfW * 1.3f;
+        float outerX = cosA * outerDist;
+        float outerY = sinA * outerDist;
+
+        // 内側の点（画面中央に向かって）
+        // ランダムな長さで「流れてる」感じ
+        float innerRatio = 0.45f + ((float)(rand() % 1000) / 1000.0f) * 0.25f;
+        float innerX = cosA * outerDist * innerRatio;
+        float innerY = sinA * outerDist * innerRatio;
+
+        // 線の太さ（外側が太く、内側が細い）
+        float thickness = 2.5f + ((float)(rand() % 1000) / 1000.0f) * 3.0f;
+        float perpX = -sinA * thickness;
+        float perpY = cosA * thickness;
+
+        // 色（白、外側は不透明、内側は透明）
+        float lineAlpha = alpha * (0.3f + ((float)(rand() % 1000) / 1000.0f) * 0.5f);
+        DirectX::XMFLOAT4 outerColor(1.0f, 1.0f, 1.0f, lineAlpha);
+        DirectX::XMFLOAT4 innerColor(1.0f, 1.0f, 1.0f, 0.0f);
+
+        // 三角形2枚で1本のスピードラインを描画
+        DirectX::VertexPositionColor v1(DirectX::XMFLOAT3(outerX + perpX, outerY + perpY, 1.0f), outerColor);
+        DirectX::VertexPositionColor v2(DirectX::XMFLOAT3(outerX - perpX, outerY - perpY, 1.0f), outerColor);
+        DirectX::VertexPositionColor v3(DirectX::XMFLOAT3(innerX, innerY, 1.0f), innerColor);
+
+        batch->DrawTriangle(v1, v2, v3);
+    }
+
+    batch->End();
 }
 
 void Game::RenderGloryKillFlash()
@@ -4639,6 +7642,8 @@ void Game::DrawWeaponSpawns()
         }
 
         m_cube->Draw(world, viewMatrix, projectionMatrix, color);
+        // 肉片描画
+        DrawGibs(viewMatrix, projectionMatrix);
     }
 
 }
@@ -4674,6 +7679,7 @@ void Game::UpdatePhysics(float deltaTime)
         // 物理シミュレーションを1ステップ進める
         // これにより、手動で動かしたKinematic ObjectのAABB(境界ボックス)も更新されます
         m_dynamicsWorld->stepSimulation(deltaTime, 10);
+        UpdateGibs(deltaTime);
     }
 }
 

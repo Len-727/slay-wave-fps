@@ -51,27 +51,16 @@ void EnemySystem::Update(float deltaTime, DirectX::XMFLOAT3 playerPos)
 		}
 
 		//	===	よろめき状態判定	===
-
-		//	HPが30%以下ならよろめき状態にする
 		float hpRatio = (float)enemy.health / (float)enemy.maxHealth;
 
-		if (hpRatio <= 0.3f && enemy.health > 0)
+		// HP30%以下 OR パリィによるスタン蓄積MAX → スタガー
+		if ((hpRatio <= 0.3f && enemy.health > 0) || enemy.isStaggered)
 		{
-			enemy.isStaggered = true;
+			// isStaggeredが既にtrueの場合はそのまま維持
+			if (!enemy.isStaggered)
+				enemy.isStaggered = true;
 
-			//	点滅タイマー(5倍速)
 			enemy.staggerFlashTimer += deltaTime * 0.5f;
-
-			// デバッグログ（最初の1回だけ）
-			static int lastStaggeredID = -1;
-			if (lastStaggeredID != enemy.id)
-			{
-				char buffer[128];
-				sprintf_s(buffer, "[GLORY] Enemy ID:%d is STAGGERED! HP:%.1f/%.1f\n",
-					enemy.id, (float)enemy.health, (float)enemy.maxHealth);
-				OutputDebugStringA(buffer);
-				lastStaggeredID = enemy.id;
-			}
 		}
 		else
 		{
@@ -101,6 +90,13 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 {
 	if (enemy.isDying)
 		return;
+
+		// == = MIDBOSS / BOSS は専用AIで処理 == =
+		if (enemy.type == EnemyType::MIDBOSS || enemy.type == EnemyType::BOSS)
+		{
+			UpdateBossAI(enemy, playerPos, deltaTime);
+			return;  // 通常AIはスキップ
+		}
 
 	//	移動タイマーを増やす
 	//	【役割】「何秒うごいたか」を記録
@@ -191,32 +187,61 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 
 
 	// 接触判定（距離が1.5メートル以内）
-	// 【理由】敵のサイズ(2.0) + プレイヤーのサイズを考慮
 	if (playerDist < 1.5f)
 	{
-		enemy.touchingPlayer = true;  // フラグを立てる
+		enemy.touchingPlayer = true;
 	}
 	else
 	{
 		enemy.touchingPlayer = false;
 	}
 
-	//	===	プレイヤーに接触しているなら攻撃	===
+	// === プレイヤーに接触しているなら攻撃 ===
 	if (enemy.touchingPlayer)
 	{
 		if (enemy.currentAnimation != "Attack")
 		{
 			enemy.currentAnimation = "Attack";
-			enemy.animationTime = 0.0f;	//	最初から再生
+			enemy.animationTime = 0.0f;   // 最初から再生
+			enemy.attackJustLanded = false; // まだ殴ってない
 		}
 
-		//	---	攻撃中は足を止める	---
+		// --- 攻撃中は止まる ---
 		enemy.velocity.x = 0.0f;
 		enemy.velocity.z = 0.0f;
+
+		// アニメが「殴る瞬間」に達したらダメージ発生
+		float attackHitTime = 0.4f;  // ★Mixamoアニメの打撃タイミング（後で調整）
+		float prevTime = enemy.animationTime;
+		enemy.animationTime += deltaTime;
+
+		// prevTime < hitTime <= currentTime → 殴る瞬間を通過した！
+		if (prevTime < attackHitTime && enemy.animationTime >= attackHitTime)
+		{
+			enemy.attackJustLanded = true;
+
+			char buf[128];
+			sprintf_s(buf, "[ATTACK] Enemy ID:%d STRIKE! (animTime=%.2f)\n",
+				enemy.id, enemy.animationTime);
+			OutputDebugStringA(buf);
+		}
+		else
+		{
+			enemy.attackJustLanded = false;
+		}
+
+		// アタックアニメのループ（終了→最初に戻る）
+		float attackDuration = 1.2f;  // アニメの長さ（後で調整）
+		if (enemy.animationTime >= attackDuration)
+		{
+			enemy.animationTime = 0.0f;
+		}
 	}
 	//	動いているなら移動
 	else
 	{
+		enemy.attackJustLanded = false;
+
 		//	速度の長さ(スピード計算)
 		float speed = sqrtf(enemy.velocity.x * enemy.velocity.x + enemy.velocity.z * enemy.velocity.z);
 
@@ -299,18 +324,11 @@ void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 		enemy.maxHealth = 50;
 		enemy.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
-	else if (typeRoll < 99)
+	else
 	{
 		enemy.type = EnemyType::TANK;
 		enemy.health = 300;
 		enemy.maxHealth = 300;
-		enemy.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
-	}
-	else
-	{
-		enemy.type = EnemyType::MIDBOSS;
-		enemy.health = 5000;
-		enemy.maxHealth = 5000;
 		enemy.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 
@@ -369,6 +387,82 @@ void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 
 	m_enemies.push_back(enemy);
 }
+
+void EnemySystem::SpawnMidBoss(DirectX::XMFLOAT3 playerPos)
+{
+	Enemy enemy;
+	enemy.id = m_nextEnemyID++;
+
+	// MIDBOSS固定ステータス
+	enemy.type = EnemyType::MIDBOSS;
+	enemy.health = 5000;
+	enemy.maxHealth = 5000;
+	enemy.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+
+	// プレイヤーの正面やや遠くにスポーン
+	float angle = (float)rand() / RAND_MAX * 2.0f * 3.14159f;
+	float distance = 15.0f + (float)rand() / RAND_MAX * 5.0f;
+
+	enemy.position.x = playerPos.x + cosf(angle) * distance;
+	enemy.position.y = 0.0f;
+	enemy.position.z = playerPos.z + sinf(angle) * distance;
+
+	enemy.velocity = { 0.0f, 0.0f, 0.0f };
+	enemy.isAlive = true;
+	enemy.isDying = false;
+	enemy.isRagdoll = false;
+	enemy.isStaggered = false;
+	enemy.headDestroyed = false;
+	enemy.staggerFlashTimer = 0.0f;
+	enemy.currentAnimation = "Idle";
+	enemy.animationTime = 0.0f;
+	enemy.corpseTimer = 0.0f;
+	enemy.rotationY = 0.0f;
+
+	m_enemies.push_back(enemy);
+
+	char buf[128];
+	sprintf_s(buf, "[MIDBOSS] Spawned! ID:%d, HP:%d\n", enemy.id, enemy.health);
+	OutputDebugStringA(buf);
+}
+
+
+void EnemySystem::SpawnBoss(DirectX::XMFLOAT3 playerPos)
+{
+	Enemy enemy;
+	enemy.id = m_nextEnemyID++;
+
+	enemy.type = EnemyType::BOSS;
+	enemy.health = 15000;        // MIDBOSSの3倍！
+	enemy.maxHealth = 15000;
+	enemy.color = DirectX::XMFLOAT4(0.8f, 0.1f, 0.1f, 1.0f);  // 赤黒い
+
+	float angle = (float)rand() / RAND_MAX * 2.0f * 3.14159f;
+	float distance = 18.0f + (float)rand() / RAND_MAX * 5.0f;
+
+	enemy.position.x = playerPos.x + cosf(angle) * distance;
+	enemy.position.y = 0.0f;
+	enemy.position.z = playerPos.z + sinf(angle) * distance;
+
+	enemy.velocity = { 0.0f, 0.0f, 0.0f };
+	enemy.isAlive = true;
+	enemy.isDying = false;
+	enemy.isRagdoll = false;
+	enemy.isStaggered = false;
+	enemy.headDestroyed = false;
+	enemy.staggerFlashTimer = 0.0f;
+	enemy.currentAnimation = "Idle";
+	enemy.animationTime = 0.0f;
+	enemy.corpseTimer = 0.0f;
+	enemy.rotationY = 0.0f;
+
+	m_enemies.push_back(enemy);
+
+	char buf[128];
+	sprintf_s(buf, "[BOSS] Spawned! ID:%d, HP:%d\n", enemy.id, enemy.health);
+	OutputDebugStringA(buf);
+}
+
 //	\死んだ敵を配列から削除
 //	【いつ呼ばれる】Update()の最後、またはウェーブ終了時
 //	【役割】isAlive == false の敵をメモリから削除
@@ -392,7 +486,8 @@ void EnemySystem::ClearDeadEnemies()
 			//	【引数】const Enemy& e = 各敵(参照で受け取る)
 			//	【戻り値】bool = true なら削除
 			[](const Enemy& e) {
-				return !e.isAlive;	//	死んでいたら true(削除)
+				// isDying中（死亡アニメ再生中）は消さない
+				return !e.isAlive && !e.isDying;
 			}
 		),
 		m_enemies.end()	//	remove_ifが返した「ここから削除」位置
@@ -572,4 +667,385 @@ bool EnemySystem::IsPositionValid(const DirectX::XMFLOAT3& position, float minDi
 
 	// 全ての敵から十分離れていたらtrue
 	return true;
+}
+
+// =============================================================
+// ボスAI状態マシン（MIDBOSS / BOSS 共通）
+// =============================================================
+void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float deltaTime)
+{
+	// --- プレイヤーへの方向と距離を計算 ---
+	float dx = playerPos.x - enemy.position.x;
+	float dz = playerPos.z - enemy.position.z;
+	float dist = sqrtf(dx * dx + dz * dz);
+
+	// --- 常にプレイヤーの方を向く ---
+	if (dist > 0.1f)
+	{
+		enemy.rotationY = atan2f(dx, dz) + 3.14159f;
+	}
+
+	// --- フェーズタイマー進行 ---
+	enemy.bossPhaseTimer += deltaTime;
+
+	// --- 状態マシン ---
+	switch (enemy.bossPhase)
+	{
+		// ============================================
+		// IDLE：プレイヤーに近づく → 距離or時間で攻撃開始
+		// ============================================
+	case BossAttackPhase::IDLE:
+	{
+		// クールダウン中は近づくだけ
+		enemy.bossAttackCooldown -= deltaTime;
+
+		// プレイヤーに向かって歩く
+		if (dist > 3.0f)
+		{
+			float speed = 0.4f;  // ボスの歩行速度
+			if (enemy.type == EnemyType::MIDBOSS) speed = 0.5f;
+
+			float nx = dx / dist;  // 正規化
+			float nz = dz / dist;
+			enemy.velocity.x = nx * speed;
+			enemy.velocity.z = nz * speed;
+
+			float finalSpeed = (enemy.type == EnemyType::BOSS) ? 0.3f : 0.4f;
+			enemy.position.x += enemy.velocity.x * finalSpeed * deltaTime;
+			enemy.position.z += enemy.velocity.z * finalSpeed * deltaTime;
+
+			if (enemy.currentAnimation != "Walk")
+			{
+				enemy.currentAnimation = "Walk";
+				enemy.animationTime = 0.0f;
+			}
+		}
+		else
+		{
+			enemy.velocity = { 0, 0, 0 };
+			if (enemy.currentAnimation != "Idle")
+			{
+				enemy.currentAnimation = "Idle";
+				enemy.animationTime = 0.0f;
+			}
+		}
+
+		// --- 攻撃選択 ---
+		// クールダウンが終わっていて、ある程度近い
+		if (enemy.bossAttackCooldown <= 0.0f && dist < 12.0f)
+		{
+			enemy.bossTargetPos = playerPos;  // 攻撃時のターゲット位置を記録
+			enemy.bossAttackCount++;
+
+			if (enemy.type == EnemyType::BOSS)
+			{
+				// BOSS: ジャンプ叩きつけ と 斬撃 をランダム
+				int pattern = rand() % 2;  // 0=ジャンプ, 1=斬撃
+				if (pattern == 0)
+				{
+					enemy.bossPhase = BossAttackPhase::JUMP_WINDUP;
+					enemy.bossPhaseTimer = 0.0f;
+					enemy.currentAnimation = "AttackJump";
+					enemy.animationTime = 0.0f;
+
+					OutputDebugStringA("[BOSS AI] -> JUMP_WINDUP (random)\n");
+				}
+				else
+				{
+					enemy.bossPhase = BossAttackPhase::SLASH_WINDUP;
+					enemy.bossPhaseTimer = 0.0f;
+					enemy.currentAnimation = "AttackSlash";
+					enemy.animationTime = 0.0f;
+
+					OutputDebugStringA("[BOSS AI] -> SLASH_WINDUP (random)\n");
+				}
+			}
+			else // MIDBOSS
+			{
+				// MIDBOSS: 咆哮ビーム と ジャンプ叩きつけ を交互
+				if (enemy.bossAttackCount % 2 == 1)
+				{
+					enemy.bossPhase = BossAttackPhase::ROAR_WINDUP;
+					enemy.bossPhaseTimer = 0.0f;
+					enemy.currentAnimation = "Attack";
+					enemy.animationTime = 0.0f;
+					enemy.bossBeamParriable = (rand() % 2 == 0);
+
+					char buf[64];
+					sprintf_s(buf, "[MIDBOSS AI] -> ROAR_WINDUP (%s)\n",
+						enemy.bossBeamParriable ? "GREEN" : "RED");
+					OutputDebugStringA(buf);
+				}
+				else
+				{
+					enemy.bossPhase = BossAttackPhase::JUMP_WINDUP;
+					enemy.bossPhaseTimer = 0.0f;
+					enemy.currentAnimation = "Attack";
+					enemy.animationTime = 0.0f;
+
+					OutputDebugStringA("[MIDBOSS AI] -> JUMP_WINDUP\n");
+				}
+			}
+		}
+
+		// 近接攻撃（通常殴り）- プレイヤーが超近い場合
+		if (dist < 1.5f)
+		{
+			enemy.touchingPlayer = true;
+			if (enemy.type == EnemyType::BOSS)
+			{
+				if (enemy.currentAnimation != "AttackJump")
+				{
+					enemy.currentAnimation = "AttackJump";
+					enemy.animationTime = 0.0f;
+				}
+			}
+			else
+			{
+				if (enemy.currentAnimation != "Attack")
+				{
+					enemy.currentAnimation = "Attack";
+					enemy.animationTime = 0.0f;
+				}
+			}
+		}
+		else
+		{
+			enemy.touchingPlayer = false;
+		}
+
+		break;
+	}
+
+	// ============================================
+	// ジャンプ叩きつけ（BOSS & MIDBOSS共通）
+	// ============================================
+	case BossAttackPhase::JUMP_WINDUP:
+	{
+		// 0.5秒の溜めモーション（地面に力を込める）
+		enemy.velocity = { 0, 0, 0 };
+
+		if (enemy.bossPhaseTimer >= 0.5f)
+		{
+			enemy.bossPhase = BossAttackPhase::JUMP_AIR;
+			enemy.bossPhaseTimer = 0.0f;
+			enemy.bossTargetPos = playerPos;  // ジャンプ先を更新
+
+			OutputDebugStringA("[BOSS AI] -> JUMP_AIR\n");
+		}
+		break;
+	}
+
+	case BossAttackPhase::JUMP_AIR:
+	{
+		// 0.6秒で空中 → ターゲット位置に向かって移動
+		float jumpDuration = 0.6f;
+		float progress = enemy.bossPhaseTimer / jumpDuration;
+
+		// 放物線（sin で山なり）
+		enemy.bossJumpHeight = sinf(progress * 3.14159f) * 8.0f;
+		enemy.position.y = enemy.bossJumpHeight;
+
+		// 水平移動（ターゲットに向かって補間）
+		float lerpSpeed = 5.0f * deltaTime;
+		enemy.position.x += (enemy.bossTargetPos.x - enemy.position.x) * lerpSpeed;
+		enemy.position.z += (enemy.bossTargetPos.z - enemy.position.z) * lerpSpeed;
+
+		if (enemy.bossPhaseTimer >= jumpDuration)
+		{
+			enemy.bossPhase = BossAttackPhase::JUMP_SLAM;
+			enemy.bossPhaseTimer = 0.0f;
+			enemy.position.y = 0.0f;
+			enemy.bossJumpHeight = 0.0f;
+
+			// ★ ここでダメージ判定とエフェクトを発生させる
+			//   (game.cppで処理 - attackJustLandedを流用)
+			enemy.attackJustLanded = true;
+
+			OutputDebugStringA("[BOSS AI] -> JUMP_SLAM!\n");
+		}
+		break;
+	}
+
+	case BossAttackPhase::JUMP_SLAM:
+	{
+		// 着地した瞬間 → 0.1秒だけSLAM状態
+		enemy.position.y = 0.0f;
+
+		if (enemy.bossPhaseTimer >= 0.1f)
+		{
+			enemy.attackJustLanded = false;
+			enemy.bossPhase = BossAttackPhase::SLAM_RECOVERY;
+			enemy.bossPhaseTimer = 0.0f;
+
+			OutputDebugStringA("[BOSS AI] -> SLAM_RECOVERY\n");
+		}
+		break;
+	}
+
+	case BossAttackPhase::SLAM_RECOVERY:
+	{
+		// 1.5秒の硬直（プレイヤーの攻撃チャンス）
+		enemy.velocity = { 0, 0, 0 };
+
+		if (enemy.currentAnimation != "Idle")
+		{
+			enemy.currentAnimation = "Idle";
+			enemy.animationTime = 0.0f;
+		}
+
+		if (enemy.bossPhaseTimer >= 1.5f)
+		{
+			enemy.bossPhase = BossAttackPhase::IDLE;
+			enemy.bossPhaseTimer = 0.0f;
+			enemy.bossAttackCooldown = 3.0f;  // 次の攻撃まで3秒
+
+			OutputDebugStringA("[BOSS AI] -> IDLE (cooldown)\n");
+		}
+		break;
+	}
+
+	// ============================================
+	// 斬撃3本飛ばし（BOSS）
+	// ============================================
+	case BossAttackPhase::SLASH_WINDUP:
+	{
+		// 0.8秒の殴り上げモーション
+		enemy.velocity = { 0, 0, 0 };
+
+		if (enemy.bossPhaseTimer >= 0.8f)
+		{
+			enemy.bossPhase = BossAttackPhase::SLASH_FIRE;
+			enemy.bossPhaseTimer = 0.0f;
+			enemy.bossTargetPos = playerPos;  // 発射方向を確定
+
+			// ★ game.cppで3本のプロジェクタイルを生成する
+			//   (フラグで通知)
+			enemy.attackJustLanded = true;
+
+			OutputDebugStringA("[BOSS AI] -> SLASH_FIRE!\n");
+		}
+		break;
+	}
+
+	case BossAttackPhase::SLASH_FIRE:
+	{
+		// 発射の瞬間（0.2秒）
+		if (enemy.bossPhaseTimer >= 0.2f)
+		{
+			enemy.attackJustLanded = false;
+			enemy.bossPhase = BossAttackPhase::SLASH_RECOVERY;
+			enemy.bossPhaseTimer = 0.0f;
+
+			OutputDebugStringA("[BOSS AI] -> SLASH_RECOVERY\n");
+		}
+		break;
+	}
+
+	case BossAttackPhase::SLASH_RECOVERY:
+	{
+		// 1.0秒の硬直
+		enemy.velocity = { 0, 0, 0 };
+
+		if (enemy.currentAnimation != "Idle")
+		{
+			enemy.currentAnimation = "Idle";
+			enemy.animationTime = 0.0f;
+		}
+
+		if (enemy.bossPhaseTimer >= 1.0f)
+		{
+			enemy.bossPhase = BossAttackPhase::IDLE;
+			enemy.bossPhaseTimer = 0.0f;
+			enemy.bossAttackCooldown = 2.5f;
+
+			OutputDebugStringA("[BOSS AI] -> IDLE (cooldown)\n");
+		}
+		break;
+	}
+
+	// ============================================
+	// 咆哮ビーム（MIDBOSS）
+	// ============================================
+	case BossAttackPhase::ROAR_WINDUP:
+	{
+		//  チャージ中もAttackアニメを維持
+		if (enemy.currentAnimation != "Attack")
+		{
+			enemy.currentAnimation = "Attack";
+		}
+
+		// 1.0秒の咆哮溜め（口を開ける演出）
+		enemy.velocity = { 0, 0, 0 };
+
+		if (enemy.bossPhaseTimer >= 1.0f)
+		{
+			enemy.bossPhase = BossAttackPhase::ROAR_FIRE;
+			enemy.bossPhaseTimer = 0.0f;
+			enemy.bossTargetPos = playerPos;
+
+			enemy.attackJustLanded = true;
+
+			OutputDebugStringA("[MIDBOSS AI] -> ROAR_FIRE!\n");
+		}
+		break;
+	}
+
+	case BossAttackPhase::ROAR_FIRE:
+	{
+		if (enemy.currentAnimation != "Attack")
+			enemy.currentAnimation = "Attack";
+
+		// ゆっくりプレイヤーを追従
+		float trackSpeed = 0.5f * deltaTime;
+		enemy.bossTargetPos.x += (playerPos.x - enemy.bossTargetPos.x) * trackSpeed;
+		enemy.bossTargetPos.z += (playerPos.z - enemy.bossTargetPos.z) * trackSpeed;
+
+		float bdx = enemy.bossTargetPos.x - enemy.position.x;
+		float bdz = enemy.bossTargetPos.z - enemy.position.z;
+		if (fabs(bdx) > 0.01f || fabs(bdz) > 0.01f)
+		{
+			enemy.rotationY = atan2f(bdx, bdz) + 3.14159f;
+		}
+
+		// 5.0秒間（チャージ2.5s + 発射5.0s = 全体7.5sで届く）
+		if (enemy.bossPhaseTimer >= 5.0f)
+		{
+			enemy.attackJustLanded = false;
+			enemy.bossPhase = BossAttackPhase::ROAR_RECOVERY;
+			enemy.bossPhaseTimer = 0.0f;
+			OutputDebugStringA("[MIDBOSS AI] -> ROAR_RECOVERY\n");
+		}
+		break;
+	}
+
+	case BossAttackPhase::ROAR_RECOVERY:
+	{
+		// 2.0秒の硬直（大きな攻撃チャンス）
+		enemy.velocity = { 0, 0, 0 };
+
+		if (enemy.currentAnimation != "Idle")
+		{
+			enemy.currentAnimation = "Idle";
+			enemy.animationTime = 0.0f;
+		}
+
+		if (enemy.bossPhaseTimer >= 2.0f)
+		{
+			enemy.bossPhase = BossAttackPhase::IDLE;
+			enemy.bossPhaseTimer = 0.0f;
+			enemy.bossAttackCooldown = 3.0f;
+
+			OutputDebugStringA("[MIDBOSS AI] -> IDLE (cooldown)\n");
+		}
+		break;
+	}
+
+	} // switch end
+
+	// --- マップ境界チェック ---
+	if (enemy.position.x < -50.0f) enemy.position.x = -50.0f;
+	if (enemy.position.x > 50.0f) enemy.position.x = 50.0f;
+	if (enemy.position.z < -50.0f) enemy.position.z = -50.0f;
+	if (enemy.position.z > 50.0f) enemy.position.z = 50.0f;
 }

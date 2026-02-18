@@ -225,6 +225,12 @@
     <ClInclude Include="FireParticleSystem.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
+    <ClInclude Include="StyleRankSystem.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="Furrenderer.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -350,6 +356,12 @@
     <ClCompile Include="FireParticleSystem.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
+    <ClCompile Include="StyleRankSystem.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="Furrenderer.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\Models\Y_Bot\Y_Bot.fbx">
@@ -401,6 +413,12 @@
       <Filter>Assets\shader</Filter>
     </FxCompile>
     <FxCompile Include="TitleBackgroundPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="FurPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="FurVS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
   </ItemGroup>

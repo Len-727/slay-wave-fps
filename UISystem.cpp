@@ -31,7 +31,7 @@ void UISystem::DrawAll(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* ba
         return;
 
     // ŠeUI—v‘f‚ð•`‰æ
-    DrawHealthBar(batch, player->GetHealth());
+    //DrawHealthBar(batch, player->GetHealth());
     DrawCrosshair(batch);
     DrawWaveNumber(batch, waveManager->GetCurrentWave());
     DrawPoints(batch, player->GetPoints());
