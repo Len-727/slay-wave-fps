@@ -54,6 +54,24 @@ public:
 	//	ウェーブ管理用	ウェーブが進むと敵の上限を増やすなどで使う
 	void SeMaxEnemies(int max) { m_maxEnemies = max; }
 
+    // アタックタイミング　IMGui
+    float m_normalAttackHitTime = 1.22f;
+    float m_normalAttackDuration = 3.83f;
+    float m_runnerAttackHitTime = 1.2f;
+    float m_runnerAttackDuration = 2.20f;
+    float m_tankAttackHitTime = 1.2f;
+    float m_tankAttackDuration = 3.17f;
+
+    // デバッグ用：指定タイプの敵を1体スポーン
+    void SpawnEnemyOfType(EnemyType type, DirectX::XMFLOAT3 playerPos);
+
+    // アニメーション速度（タイプ×アニメ別）
+    // [0]=NORMAL [1]=RUNNER [2]=TANK [3]=MIDBOSS [4]=BOSS
+    float m_animSpeed_Idle[5] = { 1.0f, 1.20f, 1.0f, 1.0f, 1.0f };
+    float m_animSpeed_Walk[5] = { 1.0f, 1.20f, 1.0f, 1.0f, 1.0f };
+    float m_animSpeed_Run[5] = { 1.0f, 1.20f, 1.0f, 1.0f, 1.0f };
+    float m_animSpeed_Attack[5] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.00f };
+    float m_animSpeed_Death[5] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
 private:
     // グリッドセルのキー（X, Z座標のペア）
     struct GridKey

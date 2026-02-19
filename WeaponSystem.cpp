@@ -3,14 +3,14 @@
 
 //	コンストラクタ: 武器システムを初期状態にセット
 WeaponSystem::WeaponSystem()
-	: m_currentWeapon(WeaponType::PISTOL)	//	現在の武器：ピストル
-	, m_primaryWeapon(WeaponType::PISTOL)	//	プライマリスロット：ピストル
-	, m_secondaryWeapon(WeaponType::PISTOL)	//	セカンダリスロット：未使用だが初期化
+	: m_currentWeapon(WeaponType::SHOTGUN)	//	現在の武器：ピストル
+	, m_primaryWeapon(WeaponType::SHOTGUN)	//	プライマリスロット：ピストル
+	, m_secondaryWeapon(WeaponType::SHOTGUN)	//	セカンダリスロット：未使用だが初期化
 	, m_currentWeaponSlot(0)				//	現在のスロット：０番
 	, m_hasSecondaryWeapon(false)			//	２つ目の武器：まだ持っていない
-	, m_currentAmmo(8)						//	装填弾数：８発
-	, m_maxAmmo(8)							//	最大装填数：８発
-	, m_reserveAmmo(80)						//	予備弾薬：８０発
+	, m_currentAmmo(20)						//	装填弾数：８発
+	, m_maxAmmo(20)							//	最大装填数：８発
+	, m_reserveAmmo(120)						//	予備弾薬：８０発
 	, m_isReloading(false)					//	リロード中：いいえ
 	, m_reloadTimer(0.0f)					//	リロードタイマー0秒
 	, m_fireRateTimer(0.0f)					//	連射制限タイマー
@@ -27,7 +27,7 @@ void WeaponSystem::InitializeWeapons()
 
 	//	ショットガン（近距離特化・500ポイント）
 	m_weaponStats[WeaponType::SHOTGUN] = {
-		WeaponType::SHOTGUN, 200, 2, 60, 0.8f, 10.0f, 1, 2.5f, 500
+		WeaponType::SHOTGUN, 200, 20, 120, 0.3f, 10.0f, 1, 1.0f, 500
 	};
 
 	//	ライフル（中距離バランス型・1000ポイント）
@@ -42,7 +42,7 @@ void WeaponSystem::InitializeWeapons()
 
 	//	各武器の弾薬状態を初期化（最初は満タン）
 	m_weaponAmmoStatus[WeaponType::PISTOL] = { 8, 80 };
-	m_weaponAmmoStatus[WeaponType::SHOTGUN] = { 2, 60 };
+	m_weaponAmmoStatus[WeaponType::SHOTGUN] = { 20, 120 };
 	m_weaponAmmoStatus[WeaponType::RIFLE] = { 30, 180 };
 	m_weaponAmmoStatus[WeaponType::SNIPER] = { 5, 50 };
 }

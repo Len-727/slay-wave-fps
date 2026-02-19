@@ -135,7 +135,7 @@ inline EnemyTypeConfig GetEnemyConfig(EnemyType type)
 
 	case EnemyType::RUNNER:
 		config.bodyWidth = 0.45f;
-		config.bodyHeight = 1.37f;
+		config.bodyHeight = 1.70f;
 		config.headHeight = 1.47f;
 		config.headRadius = 0.25f;
 		config.health = 50;
@@ -216,6 +216,7 @@ struct Enemy {
 
 	//	ヘッドショット用
 	bool headDestroyed = false;			//	頭が吹き飛んだか？
+	bool justSpawned = false;
 	DirectX::XMFLOAT3 headPosition;		//	頭の位置(ヒット判定用)
 	DirectX::XMFLOAT3 bloodDirection;	//	吹っ飛び中か	
 

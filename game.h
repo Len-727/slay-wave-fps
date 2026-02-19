@@ -68,7 +68,11 @@ public:
     void Tick();                                          // メインループ
     void OnWindowSizeChanged(int width, int height);      // ウィンドウサイズ変更
 
+    void ResetGame();
+
 private:
+
+    bool m_enemiesInitialized = false;
 
     std::unique_ptr<TitleScene> m_titleScene;
 
@@ -212,8 +216,24 @@ private:
     float m_weaponSwayY;
     float m_lastCameraRotX;
     float m_lastCameraRotY;
+    float m_weaponScale = 0.0056f;    // 武器スケール
+    float m_weaponTiltX = -0.1f;     // X回転（上下）
+    float m_weaponRotX = 0.0f;   // X回転
+    float m_weaponRotY = 0.0f;   // Y回転
+    float m_weaponRotZ = 0.0f;   // Z回転
 
-    
+    float m_weaponOffsetRight = 0.44f;   // 右方向
+    float m_weaponOffsetUp = -0.63f;  // 上方向（マイナスで下）
+    float m_weaponOffsetForward = 0.29f;    // 前方向
+
+    // 武器ボブ（武器だけ揺れる）
+    float m_weaponBobTimer = 0.0f;
+    float m_weaponBobSpeed = 10.0f;
+    float m_weaponBobStrength = 0.02f;  // 上下量
+    float m_weaponBobAmount = 0.0f;
+    float m_weaponLandingImpact = 0.0f;
+    float m_prevWeaponBobSin = 0.0f;
+    bool  m_isPlayerMoving = false;
     
     bool m_showMuzzleFlash;
     float m_muzzleFlashTimer;
@@ -272,6 +292,10 @@ private:
 
     //  アニメーション累積時間
     float m_accumulatedAnimTime;
+
+    // タイプ別アニメタイマー [0]=NORMAL [1]=RUNNER [2]=TANK [3]=MIDBOSS [4]=BOSS
+    float m_typeWalkTimer[5] = {};
+    float m_typeAttackTimer[5] = {};
 
     int m_gloryKillTargetID;
     float m_gloryKillRange;
@@ -371,6 +395,12 @@ private:
     Effekseer::EffectRef m_effectBeamRed;    // 赤ビーム（ガードのみ）
     Effekseer::EffectRef m_effectBeamGreen;  // 緑ビーム（パリィ可）
     Effekseer::Handle m_beamHandle = -1;         // ビームのハンドル（継続再生用）
+
+    Effekseer::EffectRef m_effectGunFire;
+    Effekseer::EffectRef m_effectAttackImpact;
+    Effekseer::EffectRef m_effectBossSpawn;
+    Effekseer::EffectRef m_effectEnemySpawn;
+    Effekseer::EffectRef m_effectParry;
 
     // === パリィ＆ボス攻撃チューニング ===
     // パリィウィンドウ

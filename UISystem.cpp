@@ -34,7 +34,7 @@ void UISystem::DrawAll(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* ba
     //DrawHealthBar(batch, player->GetHealth());
     DrawCrosshair(batch);
     DrawWaveNumber(batch, waveManager->GetCurrentWave());
-    DrawPoints(batch, player->GetPoints());
+    /*DrawPoints(batch, player->GetPoints());*/
     DrawAmmo(batch, weaponSystem->GetCurrentAmmo(),
         weaponSystem->GetReserveAmmo(),
         weaponSystem->IsReloading());

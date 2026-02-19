@@ -8,20 +8,23 @@
 //	コンストラクタ
 //	【役割】ウェーブ1、敵10体、準備時間3秒でスタート
 WaveManager::WaveManager() :
-	m_currentWave(3),
+	m_currentWave(5),
 	m_enemiesKilledThisWave(0),
 	m_totalEnemiesThisWave(10),		//	Wave1は10体
 	m_betweenWaves(true),
 	m_waveStartTimer(3.0f),			//	3秒の準備時間
 	m_enemySpawnTimer(0.0f),
-	m_baseEnemyCount(10),			//	基本敵数: 10体
-	m_difficultyScale(1.2f)			//	難易度スケール: 1.2倍ずつ増加
+	m_baseEnemyCount(30),			//	基本敵数: 10体
+	m_difficultyScale(1.3f)			//	難易度スケール: 1.2倍ずつ増加
 {
 }
 
 //	Update	-	ウェーブ進行管理
 void WaveManager::Update(float deltaTime, DirectX::XMFLOAT3 playerPos, EnemySystem* enemySystem)
 {
+	// 一時停止中はスポーンしない
+	if (m_paused) return;
+
 	if (m_betweenWaves)
 	{
 		//	===	ウェーブ間の準備時間	===
@@ -60,13 +63,15 @@ void WaveManager::Update(float deltaTime, DirectX::XMFLOAT3 playerPos, EnemySyst
 			if (isMidBossWave)
 			{
 				enemySystem->SpawnMidBoss(playerPos);
+				m_midBossJustSpawned = true;
 			}
 			if (isBossWave)
 			{
 				enemySystem->SpawnBoss(playerPos);
+				m_bossJustSpawned = true;
 			}
 
-			int initialSpawn = std::min(5, m_totalEnemiesThisWave);
+			int initialSpawn = std::min(12, m_totalEnemiesThisWave);
 
 			for (int i = 0; i < initialSpawn; i++)
 			{
@@ -100,7 +105,11 @@ void WaveManager::Update(float deltaTime, DirectX::XMFLOAT3 playerPos, EnemySyst
 
 			if (m_enemySpawnTimer >= spawnInterval)
 			{
-				enemySystem->SpawnEnemy(playerPos);
+				int spawnCount = std::min(5, m_totalEnemiesThisWave - (m_enemiesKilledThisWave + currentEnemyCount));
+				for (int i = 0; i < spawnCount; i++)
+				{
+					enemySystem->SpawnEnemy(playerPos);
+				}
 				m_enemySpawnTimer = 0.0f;
 			}
 		}
@@ -161,4 +170,14 @@ float WaveManager::GetDifficultyMultiplier() const
 bool WaveManager::IsVictoryWave() const
 {
 	return (m_currentWave % 10 == 0);
+}
+
+void WaveManager::Reset()
+{
+	m_currentWave = 1;
+	m_enemiesKilledThisWave = 0;
+	m_totalEnemiesThisWave = 10;
+	m_betweenWaves = true;
+	m_waveStartTimer = 3.0f;
+	m_enemySpawnTimer = 0.0f;
 }

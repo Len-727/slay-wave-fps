@@ -52,7 +52,19 @@ public:
 	//	【例】Wave10, Wave20, Wave30... → true
 	bool IsVictoryWave() const;
 
+	void Reset();
+
+
+	void SetPaused(bool paused) { m_paused = paused; }
+	bool IsPaused() const { return m_paused; }
+
+	// game.cpp から確認＆リセット用
+	bool DidMidBossSpawn() { bool r = m_midBossJustSpawned; m_midBossJustSpawned = false; return r; }
+	bool DidBossSpawn() { bool r = m_bossJustSpawned;    m_bossJustSpawned = false;    return r; }
+
 private:
+	bool m_paused = false;
+
 	//	===	ウェーブ状態	===
 	int	m_currentWave;				//	現在のウェーブ番号
 	int m_enemiesKilledThisWave;	//	このウェーブで倒した数
@@ -62,5 +74,10 @@ private:
 	float m_enemySpawnTimer;		//	敵スポーン用タイマー
 
 	int m_baseEnemyCount;			//	基本敵数（Wave1の敵数）
+
+	// ボススポーン通知フラグ
+	bool m_midBossJustSpawned = false;
+	bool m_bossJustSpawned = false;
+
 	float m_difficultyScale;		//	難易度スケール（Wave増加率）
 };

@@ -201,8 +201,17 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 	{
 		if (enemy.currentAnimation != "Attack")
 		{
+			//	モーションが同時にならないように
 			enemy.currentAnimation = "Attack";
-			enemy.animationTime = 0.0f;   // 最初から再生
+			float maxOffset;
+			switch (enemy.type)
+			{
+			case EnemyType::RUNNER:  maxOffset = m_runnerAttackHitTime * 0.5f; break;
+			case EnemyType::TANK:    maxOffset = m_tankAttackHitTime * 0.5f;   break;
+			default:                 maxOffset = m_normalAttackHitTime * 0.5f;  break;
+			}
+			enemy.animationTime = ((float)rand() / RAND_MAX) * maxOffset;
+
 			enemy.attackJustLanded = false; // まだ殴ってない
 		}
 
@@ -211,9 +220,29 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 		enemy.velocity.z = 0.0f;
 
 		// アニメが「殴る瞬間」に達したらダメージ発生
-		float attackHitTime = 0.4f;  // ★Mixamoアニメの打撃タイミング（後で調整）
+		// === タイプ別あったっくタイミング==
+		float attackHitTime;
+		switch (enemy.type)
+		{
+		case EnemyType::RUNNER:
+			attackHitTime = m_runnerAttackHitTime;
+			break;
+		case EnemyType::TANK:
+			attackHitTime = m_tankAttackHitTime;
+			break;
+		default:
+			attackHitTime = m_normalAttackHitTime;
+			break;
+		}
+		float attackAnimSpeed;
+		switch (enemy.type)
+		{
+		case EnemyType::RUNNER:  attackAnimSpeed = m_animSpeed_Attack[1]; break;
+		case EnemyType::TANK:    attackAnimSpeed = m_animSpeed_Attack[2]; break;
+		default:                 attackAnimSpeed = m_animSpeed_Attack[0]; break;
+		}
 		float prevTime = enemy.animationTime;
-		enemy.animationTime += deltaTime;
+		enemy.animationTime += deltaTime * attackAnimSpeed;
 
 		// prevTime < hitTime <= currentTime → 殴る瞬間を通過した！
 		if (prevTime < attackHitTime && enemy.animationTime >= attackHitTime)
@@ -231,7 +260,19 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 		}
 
 		// アタックアニメのループ（終了→最初に戻る）
-		float attackDuration = 1.2f;  // アニメの長さ（後で調整）
+		float attackDuration;
+		switch (enemy.type)
+		{
+		case EnemyType::RUNNER:
+			attackDuration = m_runnerAttackDuration;
+			break;
+		case EnemyType::TANK:
+			attackDuration = m_tankAttackDuration;
+			break;
+		default:
+			attackDuration = m_normalAttackDuration;
+			break;
+		}
 		if (enemy.animationTime >= attackDuration)
 		{
 			enemy.animationTime = 0.0f;
@@ -251,15 +292,15 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 		switch (enemy.type)
 		{
 		case EnemyType::NORMAL:
-			speedMultiplier = 1.0f;	//	通常速度
+			speedMultiplier = 2.5f;	//	通常速度
 			break;
 
 		case EnemyType::RUNNER:
-			speedMultiplier = 2.0f;	//	2倍速い
+			speedMultiplier = 3.0f;	//	2倍速い
 			break;
 
 		case EnemyType::TANK:
-			speedMultiplier = 0.5f;	//	半分遅い
+			speedMultiplier = 1.5f;	//	半分遅い
 			break;
 		}
 
@@ -369,21 +410,24 @@ void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 	}
 
 	// === 初期速度 ===
-	enemy.velocity.x = ((float)rand() / RAND_MAX - 0.5f) * 4.0f;
+	enemy.velocity.x = 0.0f;
 	enemy.velocity.y = 0.0f;
-	enemy.velocity.z = ((float)rand() / RAND_MAX - 0.5f) * 4.0f;
+	enemy.velocity.z = 0.0f;
 
 	// === ステータス ===
 	enemy.isAlive = true;
 
 	// === アニメーション ===
 	enemy.currentAnimation = "Idle";
-	enemy.animationTime = 0.0f;
+	// 歩きアニメがバラけるようにランダムオフセット
+	enemy.animationTime = ((float)rand() / RAND_MAX) * 1.0f;
 
 	// === その他 ===
 	enemy.isDying = false;
 	enemy.corpseTimer = 0.0f;  // ← 既存メンバー
 	enemy.rotationY = 0.0f;    // ← 既存メンバー（rotation ではない！）
+
+	enemy.justSpawned = true;
 
 	m_enemies.push_back(enemy);
 }
@@ -419,7 +463,11 @@ void EnemySystem::SpawnMidBoss(DirectX::XMFLOAT3 playerPos)
 	enemy.corpseTimer = 0.0f;
 	enemy.rotationY = 0.0f;
 
+
+	enemy.justSpawned = true;
+
 	m_enemies.push_back(enemy);
+
 
 	char buf[128];
 	sprintf_s(buf, "[MIDBOSS] Spawned! ID:%d, HP:%d\n", enemy.id, enemy.health);
@@ -455,6 +503,8 @@ void EnemySystem::SpawnBoss(DirectX::XMFLOAT3 playerPos)
 	enemy.animationTime = 0.0f;
 	enemy.corpseTimer = 0.0f;
 	enemy.rotationY = 0.0f;
+
+	enemy.justSpawned = true;
 
 	m_enemies.push_back(enemy);
 
@@ -702,8 +752,8 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 		// プレイヤーに向かって歩く
 		if (dist > 3.0f)
 		{
-			float speed = 0.4f;  // ボスの歩行速度
-			if (enemy.type == EnemyType::MIDBOSS) speed = 0.5f;
+			float speed = 1.5f;  // ボスの歩行速度
+			if (enemy.type == EnemyType::MIDBOSS) speed = 2.5f;
 
 			float nx = dx / dist;  // 正規化
 			float nz = dz / dist;
@@ -732,7 +782,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 
 		// --- 攻撃選択 ---
 		// クールダウンが終わっていて、ある程度近い
-		if (enemy.bossAttackCooldown <= 0.0f && dist < 12.0f)
+		if (enemy.bossAttackCooldown <= 0.0f && dist < 30.0f)
 		{
 			enemy.bossTargetPos = playerPos;  // 攻撃時のターゲット位置を記録
 			enemy.bossAttackCount++;
@@ -1048,4 +1098,53 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 	if (enemy.position.x > 50.0f) enemy.position.x = 50.0f;
 	if (enemy.position.z < -50.0f) enemy.position.z = -50.0f;
 	if (enemy.position.z > 50.0f) enemy.position.z = 50.0f;
+}
+
+
+// デバッグ用：指定タイプの敵を1体スポーン
+void EnemySystem::SpawnEnemyOfType(EnemyType type, DirectX::XMFLOAT3 playerPos)
+{
+	Enemy enemy;
+	enemy.id = m_nextEnemyID++;
+	enemy.type = type;
+
+	// タイプ別ステータス
+	switch (type)
+	{
+	case EnemyType::RUNNER:
+		enemy.health = 50;
+		enemy.maxHealth = 50;
+		break;
+	case EnemyType::TANK:
+		enemy.health = 300;
+		enemy.maxHealth = 300;
+		break;
+	default: // NORMAL
+		enemy.health = 100;
+		enemy.maxHealth = 100;
+		break;
+	}
+
+	enemy.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+
+	// プレイヤーの正面5mにスポーン
+	float angle = (float)rand() / RAND_MAX * 2.0f * 3.14159f;
+	float distance = 5.0f;
+	enemy.position.x = playerPos.x + cosf(angle) * distance;
+	enemy.position.y = 0.0f;
+	enemy.position.z = playerPos.z + sinf(angle) * distance;
+
+	enemy.velocity = { 0.0f, 0.0f, 0.0f };
+	enemy.isAlive = true;
+
+	enemy.currentAnimation = "Idle";
+	enemy.animationTime = ((float)rand() / RAND_MAX) * 1.0f;
+
+	enemy.justSpawned = true;
+
+	m_enemies.push_back(enemy);
+
+	char buf[128];
+	sprintf_s(buf, "[DEBUG SPAWN] Type:%d ID:%d\n", (int)type, enemy.id);
+	OutputDebugStringA(buf);
 }
