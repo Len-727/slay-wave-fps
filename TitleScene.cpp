@@ -1218,7 +1218,7 @@ void TitleScene::RenderMenu(
     float blinkAlpha = (sinf(m_menuGlowTime * 3.0f) + 1.0f) / 2.0f;
     DirectX::XMVECTORF32 hintColor = { 0.5f, 0.08f, 0.05f, m_menuAlpha * blinkAlpha * 0.6f };
 
-    const wchar_t* hint = L"- PRESS ENTER -";
+    const wchar_t* hint = L"- PRESS SPACE -";
     DirectX::XMVECTOR hintSize = m_menuFont->MeasureString(hint);
     float hintX = m_screenWidth - DirectX::XMVectorGetX(hintSize) * 0.6f - 30.0f;
     float hintY = m_screenHeight * 0.92f;

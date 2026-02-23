@@ -14,7 +14,7 @@ WaveManager::WaveManager() :
 	m_betweenWaves(true),
 	m_waveStartTimer(3.0f),			//	3•b‚Ì€”õŠÔ
 	m_enemySpawnTimer(0.0f),
-	m_baseEnemyCount(30),			//	Šî–{“G”: 10‘Ì
+	m_baseEnemyCount(20),			//	Šî–{“G”: 10‘Ì
 	m_difficultyScale(1.3f)			//	“ïˆÕ“xƒXƒP[ƒ‹: 1.2”{‚¸‚Â‘‰Á
 {
 }
@@ -174,7 +174,7 @@ bool WaveManager::IsVictoryWave() const
 
 void WaveManager::Reset()
 {
-	m_currentWave = 1;
+	m_currentWave = 5;
 	m_enemiesKilledThisWave = 0;
 	m_totalEnemiesThisWave = 10;
 	m_betweenWaves = true;

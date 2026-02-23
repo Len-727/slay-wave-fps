@@ -734,7 +734,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 	{
 		enemy.rotationY = atan2f(dx, dz) + 3.14159f;
 	}
-
+	
 	// --- フェーズタイマー進行 ---
 	enemy.bossPhaseTimer += deltaTime;
 

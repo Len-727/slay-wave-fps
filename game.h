@@ -234,6 +234,14 @@ private:
     float m_weaponLandingImpact = 0.0f;
     float m_prevWeaponBobSin = 0.0f;
     bool  m_isPlayerMoving = false;
+
+    // === 発砲リコイル ===
+    float m_weaponKickBack = 0.0f;     // 銃が後ろに下がる量（発砲で増加→戻る）
+    float m_weaponKickUp = 0.0f;       // 銃が上に跳ねる量
+    float m_weaponKickRot = 0.0f;      // 銃が回転する量（傾き）
+
+    float m_cameraRecoilX = 0.0f;      // カメラの上方向への反動（累積）
+    float m_cameraRecoilVelocity = 0.0f; // カメラ反動の速度（滑らかに戻す用）
     
     bool m_showMuzzleFlash;
     float m_muzzleFlashTimer;
@@ -509,6 +517,17 @@ private:
     bool m_chargeHasTarget = false;          // ロックオン対象がいるか
     int m_chargeTargetEnemyID = -1;          // ロックオン対象の敵ID
 
+    // --- 近接チャージシステム（Dark Ages式） ---
+    int   m_meleeCharges = 3;          // 現在のチャージ数
+    int   m_meleeMaxCharges = 3;       // 最大チャージ数
+    float m_meleeRechargeTimer = 0.0f; // 自動回復タイマー
+    float m_meleeRechargeTime = 5.0f;  // 1チャージ回復に5秒
+    int   m_meleeAmmoRefill = 5;       // 1パンチで弾5発補充
+
+    // 近接チャージUI
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_meleeIconTexture;  // 拳アイコン
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_whitePixel;
+
     // --- シールドスロー（盾投げ） ---
     DirectX::XMFLOAT3 m_thrownShieldPos = { 0,0,0 };    // 飛んでる盾の位置
     DirectX::XMFLOAT3 m_thrownShieldDir = { 0,0,0 };    // 飛ぶ方向
@@ -569,6 +588,9 @@ private:
         DirectX::XMFLOAT3 start;
         DirectX::XMFLOAT3 end;
         float lifetime;
+        float maxLifetime;             // 初期寿命（フェード計算用）
+        DirectX::XMFLOAT4 color;      // 武器ごとの色
+        float width;                   // トレーサーの太さ
     };
     std::vector<BulletTrace> m_bulletTraces;
 
@@ -580,6 +602,7 @@ private:
     void ShutdownImGui();
     void DrawDebugUI();
     void DrawHitboxes();
+    void DrawBulletTracers();  // ビルボード弾道トレーサー描画
     void DrawCapsule(
         DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
         const DirectX::XMFLOAT3& center,
@@ -623,6 +646,8 @@ private:
         float size;                 // サイズ（スケール）
         DirectX::XMFLOAT4 color;   // 色（肉片の色）
         bool hasLanded = false;
+        DirectX::XMFLOAT3 finalPos;
+        DirectX::XMFLOAT4 finalRot;
     };
     std::vector<Gib> m_gibs;                            // 全肉片
 

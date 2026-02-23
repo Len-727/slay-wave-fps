@@ -419,6 +419,20 @@ void Game::AddEnemyPhysicsBody(Enemy& enemy)
 // ??? SpawnGibs: 肉片をBullet物理で生成 ???
 void Game::SpawnGibs(DirectX::XMFLOAT3 position, int count, float power)
 {
+    // 上限100個 ? 超えたら古いのを削除
+    while (m_gibs.size() > 100)
+    {
+        auto& old = m_gibs.front();
+        if (old.body)
+        {
+            m_dynamicsWorld->removeRigidBody(old.body);
+            delete old.body->getMotionState();
+            delete old.body;
+            delete old.shape;
+        }
+        m_gibs.erase(m_gibs.begin());
+    }
+
     // 肉片の色パターン（血の赤?暗い肉色）
     DirectX::XMFLOAT4 gibColors[] = {
         { 0.85f, 0.10f, 0.05f, 1.0f },  // 暗い赤
@@ -517,16 +531,18 @@ void Game::UpdateGibs(float deltaTime)
 
         if (it->lifetime <= 0.0f)
         {
-            // Bulletワールドから除去
-            m_dynamicsWorld->removeRigidBody(it->body);
-            delete it->body->getMotionState();
-            delete it->body;
-            delete it->shape;
+            if (it->body)
+            {
+                m_dynamicsWorld->removeRigidBody(it->body);
+                delete it->body->getMotionState();
+                delete it->body;
+                delete it->shape;
+            }
             it = m_gibs.erase(it);
         }
         else
         {
-            // 着地検出：地面に近い＋速度が遅い＝着地
+            // 着地したら物理シミュレーションから外す（GPUに任せるだけ）
             if (!it->hasLanded)
             {
                 btTransform t;
@@ -535,22 +551,28 @@ void Game::UpdateGibs(float deltaTime)
                 btVector3 vel = it->body->getLinearVelocity();
                 float speed = vel.length();
 
-                // 地面付近(y < 0.5) かつ 速度低い、または一度バウンドした
                 if (y < 0.5f && speed < 3.0f)
                 {
                     it->hasLanded = true;
 
-                    // 着地点に血しぶき
-                    DirectX::XMFLOAT3 landPos = {
-                        t.getOrigin().getX(),
-                        t.getOrigin().getY(),
-                        t.getOrigin().getZ()
-                    };
+                    // 最終位置を保存
+                    it->finalPos = { t.getOrigin().getX(), t.getOrigin().getY(), t.getOrigin().getZ() };
+                    btQuaternion rot = t.getRotation();
+                    it->finalRot = { rot.x(), rot.y(), rot.z(), rot.w() };
+
+                    // 物理ワールドから除去（CPU負荷激減）
+                    m_dynamicsWorld->removeRigidBody(it->body);
+                    delete it->body->getMotionState();
+                    delete it->body;
+                    delete it->shape;
+                    it->body = nullptr;
+                    it->shape = nullptr;
+
+                    DirectX::XMFLOAT3 landPos = it->finalPos;
                     DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
-                    m_particleSystem->CreateBloodEffect(landPos, upDir, 30);
+                    m_particleSystem->CreateBloodEffect(landPos, upDir, 5);
                 }
             }
-
             ++it;
         }
     }
@@ -559,24 +581,37 @@ void Game::UpdateGibs(float deltaTime)
 // ??? DrawGibs: 肉片キューブをBullet位置で描画 ???
 void Game::DrawGibs(DirectX::XMMATRIX view, DirectX::XMMATRIX proj)
 {
+    if (m_gibs.empty()) return;
+
+    // 全gibのワールド行列を一括計算、m_cubeで1体ずつ描画
+    // ※ 着地済みは保存した位置を使う（物理不要）
     for (const auto& gib : m_gibs)
     {
-        // Bulletから位置と回転を取得
-        btTransform transform;
-        gib.body->getMotionState()->getWorldTransform(transform);
-        btVector3 pos = transform.getOrigin();
-        btQuaternion rot = transform.getRotation();
-
-        // ワールド行列を構築
         DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(gib.size, gib.size, gib.size);
-        DirectX::XMMATRIX rotation = DirectX::XMMatrixRotationQuaternion(
-            DirectX::XMVectorSet(rot.x(), rot.y(), rot.z(), rot.w())
-        );
-        DirectX::XMMATRIX translation = DirectX::XMMatrixTranslation(pos.x(), pos.y(), pos.z());
+        DirectX::XMMATRIX rotation;
+        DirectX::XMMATRIX translation;
+
+        if (gib.body != nullptr)
+        {
+            // まだ飛んでる → 物理から取得
+            btTransform transform;
+            gib.body->getMotionState()->getWorldTransform(transform);
+            btVector3 pos = transform.getOrigin();
+            btQuaternion rot = transform.getRotation();
+            rotation = DirectX::XMMatrixRotationQuaternion(
+                DirectX::XMVectorSet(rot.x(), rot.y(), rot.z(), rot.w()));
+            translation = DirectX::XMMatrixTranslation(pos.x(), pos.y(), pos.z());
+        }
+        else
+        {
+            // 着地済み → 保存した位置を使用
+            rotation = DirectX::XMMatrixRotationQuaternion(
+                DirectX::XMVectorSet(gib.finalRot.x, gib.finalRot.y, gib.finalRot.z, gib.finalRot.w));
+            translation = DirectX::XMMatrixTranslation(gib.finalPos.x, gib.finalPos.y, gib.finalPos.z);
+        }
 
         DirectX::XMMATRIX world = scale * rotation * translation;
 
-        // フェードアウト（残り1秒から透明に）
         DirectX::XMFLOAT4 color = gib.color;
         if (gib.lifetime < 1.0f)
             color.w = gib.lifetime;
@@ -1129,6 +1164,46 @@ void Game::CreateRenderResources()
             }
         }
 
+        // 近接アイコン（なくてもHUDは動く）
+        {
+            HRESULT hr = DirectX::CreateWICTextureFromFile(
+                m_d3dDevice.Get(),
+                L"Assets/Texture/HUD/melee_icon.png",
+                nullptr,
+                m_meleeIconTexture.ReleaseAndGetAddressOf());
+            if (FAILED(hr))
+                OutputDebugStringA("[HUD_TEX] melee_icon not found (optional)\n");
+            else
+                OutputDebugStringA("[HUD_TEX] Loaded: melee_icon OK\n");
+        }
+
+        // === 汎用白ピクセルテクスチャ作成 ===
+        {
+            uint32_t whiteData = 0xFFFFFFFF;  // RGBA全部255 = 白
+            D3D11_TEXTURE2D_DESC desc = {};
+            desc.Width = 1;
+            desc.Height = 1;
+            desc.MipLevels = 1;
+            desc.ArraySize = 1;
+            desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            desc.SampleDesc.Count = 1;
+            desc.Usage = D3D11_USAGE_DEFAULT;
+            desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+            D3D11_SUBRESOURCE_DATA initData = {};
+            initData.pSysMem = &whiteData;
+            initData.SysMemPitch = 4;
+
+            Microsoft::WRL::ComPtr<ID3D11Texture2D> tex;
+            HRESULT hr = m_d3dDevice->CreateTexture2D(&desc, &initData, &tex);
+            if (SUCCEEDED(hr))
+            {
+                hr = m_d3dDevice->CreateShaderResourceView(tex.Get(), nullptr, &m_whitePixel);
+                if (SUCCEEDED(hr))
+                    OutputDebugStringA("[HUD_TEX] White pixel created OK\n");
+            }
+        }
+
         if (m_shieldHudLoaded)
             OutputDebugStringA("[HUD_TEX] All HUD textures loaded OK!\n");
     }
@@ -1528,7 +1603,7 @@ void Game::CreateRenderResources()
 
     // 雑魚スポーンエフェクト
     m_effectEnemySpawn = Effekseer::Effect::Create(
-        m_effekseerManager, u"Assets/Effects/EnemySpawn.efkefc");
+        m_effekseerManager, u"Assets/Effects/SpawnEnemy.efkefc");
     if (m_effectEnemySpawn == nullptr)
         OutputDebugStringA("[EFFECT] EnemySpawn.efkefc FAILED\n");
     else
@@ -2597,6 +2672,43 @@ void Game::DrawDebugUI()
 
         }
 
+        if (ImGui::CollapsingHeader("Melee Charge System"))
+        {
+            // 現在の状態表示
+            ImGui::Text("Charges: %d / %d", m_meleeCharges, m_meleeMaxCharges);
+
+            // チャージゲージ（視覚的）
+            float chargeRatio = (float)m_meleeCharges / (float)m_meleeMaxCharges;
+            ImGui::ProgressBar(chargeRatio, ImVec2(-1, 20),
+                m_meleeCharges > 0 ? "READY" : "EMPTY");
+
+            // リチャージタイマー
+            if (m_meleeCharges < m_meleeMaxCharges)
+            {
+                float rechargeProgress = m_meleeRechargeTimer / m_meleeRechargeTime;
+                ImGui::ProgressBar(rechargeProgress, ImVec2(-1, 14), "Recharging...");
+            }
+
+            ImGui::Separator();
+
+            // 調整パラメータ
+            ImGui::SliderInt("Max Charges", &m_meleeMaxCharges, 1, 6);
+            ImGui::SliderFloat("Recharge Time (sec)", &m_meleeRechargeTime, 1.0f, 15.0f);
+            ImGui::SliderInt("Ammo per Punch", &m_meleeAmmoRefill, 1, 20);
+
+            // 即リセットボタン
+            if (ImGui::Button("Refill Charges"))
+            {
+                m_meleeCharges = m_meleeMaxCharges;
+                m_meleeRechargeTimer = 0.0f;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Empty Charges"))
+            {
+                m_meleeCharges = 0;
+            }
+        }
+
         ImGui::End();
     }
 
@@ -3030,6 +3142,167 @@ void Game::DrawHitboxes()
     //);
 
     primitiveBatch->End();
+}
+
+
+void Game::DrawBulletTracers()
+{
+    if (m_bulletTraces.empty())
+        return;
+
+    // --- カメラ情報の取得 ---
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+    DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+
+    DirectX::XMVECTOR camPos = DirectX::XMLoadFloat3(&playerPos);
+    DirectX::XMVECTOR camTarget = DirectX::XMVectorSet(
+        playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
+        playerPos.y - sinf(playerRot.x),
+        playerPos.z + cosf(playerRot.y) * cosf(playerRot.x),
+        0.0f
+    );
+    DirectX::XMVECTOR upVec = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixLookAtLH(camPos, camTarget, upVec);
+
+    float aspectRatio = (float)m_outputWidth / (float)m_outputHeight;
+    DirectX::XMMATRIX projMatrix = DirectX::XMMatrixPerspectiveFovLH(
+        DirectX::XMConvertToRadians(70.0f), aspectRatio, 0.1f, 1000.0f
+    );
+
+    auto context = m_d3dContext.Get();
+
+    // --- 加算ブレンドを設定（光が重なって明るくなる） ---
+    context->OMSetBlendState(m_states->Additive(), nullptr, 0xFFFFFFFF);
+
+    // --- 深度書き込みOFF（他のオブジェクトに隠れるが、自分は深度を汚さない） ---
+    context->OMSetDepthStencilState(m_states->DepthRead(), 0);
+
+    m_effect->SetView(viewMatrix);
+    m_effect->SetProjection(projMatrix);
+    m_effect->SetWorld(DirectX::XMMatrixIdentity());
+    m_effect->SetVertexColorEnabled(true);
+    m_effect->Apply(context);
+    context->IASetInputLayout(m_inputLayout.Get());
+
+    auto batch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
+    batch->Begin();
+
+    for (const auto& trace : m_bulletTraces)
+    {
+        // --- フェード率（1.0=生まれた瞬間 → 0.0=消える瞬間） ---
+        float alpha = trace.lifetime / trace.maxLifetime;
+        alpha = alpha * alpha;  // 二乗で急速にフェード
+
+        if (alpha < 0.01f)
+            continue;
+
+        // --- ビルボード計算 ---
+        // 弾道の方向ベクトル
+        DirectX::XMVECTOR vStart = DirectX::XMLoadFloat3(&trace.start);
+        DirectX::XMVECTOR vEnd = DirectX::XMLoadFloat3(&trace.end);
+        DirectX::XMVECTOR dir = DirectX::XMVectorSubtract(vEnd, vStart);
+        DirectX::XMVECTOR dirNorm = DirectX::XMVector3Normalize(dir);
+
+        // FPS視点用：始点を銃口位置（カメラの右下前方）にオフセット
+        // カメラの右方向を計算
+        DirectX::XMVECTOR camDir = DirectX::XMVectorSubtract(camTarget, camPos);
+        camDir = DirectX::XMVector3Normalize(camDir);
+        DirectX::XMVECTOR camRight = DirectX::XMVector3Cross(upVec, camDir);
+        camRight = DirectX::XMVector3Normalize(camRight);
+
+        // 銃口 = カメラから右に0.3m、下に0.2m、前に1.5m
+        vStart = DirectX::XMVectorAdd(camPos, DirectX::XMVectorScale(camDir, 1.5f));
+        vStart = DirectX::XMVectorAdd(vStart, DirectX::XMVectorScale(camRight, 0.3f));
+        vStart = DirectX::XMVectorAdd(vStart, DirectX::XMVectorScale(upVec, -0.2f));
+
+        // 弾道の中点からカメラへのベクトル
+        DirectX::XMVECTOR midpoint = DirectX::XMVectorScale(
+            DirectX::XMVectorAdd(vStart, vEnd), 0.5f
+        );
+        DirectX::XMVECTOR toCam = DirectX::XMVectorSubtract(camPos, midpoint);
+        toCam = DirectX::XMVector3Normalize(toCam);
+
+        // 外積で「幅の方向」を求める（カメラに正対する板になる）
+        DirectX::XMVECTOR right = DirectX::XMVector3Cross(dirNorm, toCam);
+        float rightLen = DirectX::XMVectorGetX(DirectX::XMVector3Length(right));
+
+        // カメラが弾道と一直線の場合のフォールバック
+        if (rightLen < 0.001f)
+        {
+            right = DirectX::XMVector3Cross(dirNorm, upVec);
+        }
+        right = DirectX::XMVector3Normalize(right);
+
+        // 幅のオフセット
+        float halfW = trace.width * 0.5f;
+        DirectX::XMVECTOR offset = DirectX::XMVectorScale(right, halfW);
+
+        // --- 4頂点を計算 ---
+        DirectX::XMFLOAT3 v0, v1, v2, v3;
+        DirectX::XMStoreFloat3(&v0, DirectX::XMVectorSubtract(vStart, offset));
+        DirectX::XMStoreFloat3(&v1, DirectX::XMVectorAdd(vStart, offset));
+        DirectX::XMStoreFloat3(&v2, DirectX::XMVectorAdd(vEnd, offset));
+        DirectX::XMStoreFloat3(&v3, DirectX::XMVectorSubtract(vEnd, offset));
+
+        // --- 色（加算ブレンドなのでRGBが直接明るさ） ---
+        DirectX::XMFLOAT4 coreColor = {
+            trace.color.x,       // フル明るさ（加算で重なる）
+            trace.color.y,
+            trace.color.z,
+            alpha                // フェードはalphaだけで制御
+        };
+        DirectX::XMFLOAT4 tailColor = {
+            trace.color.x * 0.3f,
+            trace.color.y * 0.3f,
+            trace.color.z * 0.3f,
+            alpha * 0.5f
+        };
+
+        // --- クワッド描画（三角形2枚） ---
+        // 三角形1: v0(始点左) - v1(始点右) - v2(終点右)
+        batch->DrawTriangle(
+            DirectX::VertexPositionColor(v0, tailColor),
+            DirectX::VertexPositionColor(v1, tailColor),
+            DirectX::VertexPositionColor(v2, coreColor)
+        );
+        // 三角形2: v0(始点左) - v2(終点右) - v3(終点左)
+        batch->DrawTriangle(
+            DirectX::VertexPositionColor(v0, tailColor),
+            DirectX::VertexPositionColor(v2, coreColor),
+            DirectX::VertexPositionColor(v3, coreColor)
+        );
+
+        // --- 中央にもう1枚明るいコア線（さらに細い白い芯） ---
+        float coreHalfW = halfW * 0.3f;
+        DirectX::XMVECTOR coreOffset = DirectX::XMVectorScale(right, coreHalfW);
+
+        DirectX::XMFLOAT3 c0, c1, c2, c3;
+        DirectX::XMStoreFloat3(&c0, DirectX::XMVectorSubtract(vStart, coreOffset));
+        DirectX::XMStoreFloat3(&c1, DirectX::XMVectorAdd(vStart, coreOffset));
+        DirectX::XMStoreFloat3(&c2, DirectX::XMVectorAdd(vEnd, coreOffset));
+        DirectX::XMStoreFloat3(&c3, DirectX::XMVectorSubtract(vEnd, coreOffset));
+
+        // 芯は白く明るい
+        DirectX::XMFLOAT4 whiteCore = { 1.0f, 1.0f, 1.0f, alpha };
+        DirectX::XMFLOAT4 whiteTail = { 0.3f, 0.3f, 0.3f, alpha * 0.5f };
+
+        batch->DrawTriangle(
+            DirectX::VertexPositionColor(c0, whiteTail),
+            DirectX::VertexPositionColor(c1, whiteTail),
+            DirectX::VertexPositionColor(c2, whiteCore)
+        );
+        batch->DrawTriangle(
+            DirectX::VertexPositionColor(c0, whiteTail),
+            DirectX::VertexPositionColor(c2, whiteCore),
+            DirectX::VertexPositionColor(c3, whiteCore)
+        );
+    }
+
+    batch->End();
+
+    // --- ブレンド状態を元に戻す ---
+    context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
+    context->OMSetDepthStencilState(nullptr, 0);
 }
 
 
@@ -3903,54 +4176,235 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
     m_effect->Apply(context);
     context->IASetInputLayout(m_inputLayout.Get());
 
+    // 両面描画（ビルボードの裏表問題を回避）
+    D3D11_RASTERIZER_DESC rsDesc = {};
+    rsDesc.FillMode = D3D11_FILL_SOLID;
+    rsDesc.CullMode = D3D11_CULL_NONE;  // カリングしない
+    rsDesc.DepthClipEnable = TRUE;
+    Microsoft::WRL::ComPtr<ID3D11RasterizerState> noCullRS;
+    m_d3dDevice->CreateRasterizerState(&rsDesc, &noCullRS);
+    context->RSSetState(noCullRS.Get());
+
     auto primitiveBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
     primitiveBatch->Begin();
+
+    // カメラの右方向・上方向を計算（ビルボード用）
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+    DirectX::XMVECTOR camPos = DirectX::XMLoadFloat3(&playerPos);
+    DirectX::XMFLOAT3 pRot = m_player->GetRotation();
+    DirectX::XMVECTOR camDir = DirectX::XMVectorSet(
+        sinf(pRot.y) * cosf(pRot.x),
+        -sinf(pRot.x),
+        cosf(pRot.y) * cosf(pRot.x), 0.0f
+    );
+    DirectX::XMVECTOR worldUp = DirectX::XMVectorSet(0, 1, 0, 0);
+    DirectX::XMVECTOR camRight = DirectX::XMVector3Normalize(
+        DirectX::XMVector3Cross(worldUp, camDir)
+    );
+    DirectX::XMVECTOR camUp = DirectX::XMVector3Normalize(
+        DirectX::XMVector3Cross(camDir, camRight)
+    );
 
     for (const auto& enemy : m_enemySystem->GetEnemies())
     {
         if (!enemy.isAlive || enemy.isDying || enemy.health >= enemy.maxHealth)
             continue;
-
         if (enemy.isExploded)
             continue;
 
         float barWidth = 1.0f;
+        float barHeight = 0.08f;
         float healthPercent = (float)enemy.health / enemy.maxHealth;
 
-        DirectX::XMFLOAT3 barCenter = enemy.position;
-        barCenter.y += 2.5f;
-
-        //	背景
-        DirectX::XMFLOAT4 bgColor(0.5f, 0.0f, 0.0f, 1.0f);
-        primitiveBatch->DrawLine(
-            DirectX::VertexPositionColor(
-                DirectX::XMFLOAT3(barCenter.x - barWidth / 2, barCenter.y, barCenter.z),
-                bgColor
-            ),
-            DirectX::VertexPositionColor(
-                DirectX::XMFLOAT3(barCenter.x + barWidth / 2, barCenter.y, barCenter.z),
-                bgColor
-            )
+        // バーの中心（敵の頭上）
+        DirectX::XMVECTOR center = DirectX::XMVectorSet(
+            enemy.position.x, enemy.position.y + 2.5f, enemy.position.z, 0.0f
         );
 
-        //	HP部分
-        DirectX::XMFLOAT4 hpColor(1.0f, 0.0f, 0.0f, 1.0f);
-        float currentBarWidth = barWidth * healthPercent;
-        primitiveBatch->DrawLine(
-            DirectX::VertexPositionColor(
-                DirectX::XMFLOAT3(barCenter.x - barWidth / 2, barCenter.y + 0.05f, barCenter.z),
-                hpColor
-            ),
-            DirectX::VertexPositionColor(
-                DirectX::XMFLOAT3(barCenter.x - barWidth / 2 + currentBarWidth, barCenter.y + 0.05f, barCenter.z),
-                hpColor
-            )
+        // 右方向と上方向のオフセット
+        DirectX::XMVECTOR halfRight = DirectX::XMVectorScale(camRight, barWidth * 0.5f);
+        DirectX::XMVECTOR halfUp = DirectX::XMVectorScale(camUp, barHeight * 0.5f);
+
+        // === 背景バー（暗い赤、全幅）===
+        DirectX::XMFLOAT3 bg0, bg1, bg2, bg3;
+        DirectX::XMStoreFloat3(&bg0, DirectX::XMVectorSubtract(DirectX::XMVectorSubtract(center, halfRight), halfUp));
+        DirectX::XMStoreFloat3(&bg1, DirectX::XMVectorSubtract(DirectX::XMVectorAdd(center, halfRight), halfUp));
+        DirectX::XMStoreFloat3(&bg2, DirectX::XMVectorAdd(DirectX::XMVectorAdd(center, halfRight), halfUp));
+        DirectX::XMStoreFloat3(&bg3, DirectX::XMVectorAdd(DirectX::XMVectorSubtract(center, halfRight), halfUp));
+
+        DirectX::XMFLOAT4 bgColor(0.2f, 0.0f, 0.0f, 0.8f);
+        primitiveBatch->DrawTriangle(
+            DirectX::VertexPositionColor(bg0, bgColor),
+            DirectX::VertexPositionColor(bg1, bgColor),
+            DirectX::VertexPositionColor(bg2, bgColor)
         );
+        primitiveBatch->DrawTriangle(
+            DirectX::VertexPositionColor(bg0, bgColor),
+            DirectX::VertexPositionColor(bg2, bgColor),
+            DirectX::VertexPositionColor(bg3, bgColor)
+        );
+
+        // === HPバー（赤→黄→緑のグラデ、HP割合分の幅）===
+       // 背景より手前に描画（Zファイティング回避）
+        DirectX::XMVECTOR hpCenter = DirectX::XMVectorSubtract(center, DirectX::XMVectorScale(camDir, 0.01f));
+
+        DirectX::XMVECTOR hpLeftBottom = DirectX::XMVectorSubtract(DirectX::XMVectorSubtract(hpCenter, halfRight), halfUp);
+        DirectX::XMVECTOR hpRightBottom = DirectX::XMVectorSubtract(DirectX::XMVectorAdd(DirectX::XMVectorSubtract(hpCenter, halfRight), DirectX::XMVectorScale(camRight, barWidth * healthPercent)), halfUp);
+        DirectX::XMVECTOR hpRightTop = DirectX::XMVectorAdd(DirectX::XMVectorAdd(DirectX::XMVectorSubtract(hpCenter, halfRight), DirectX::XMVectorScale(camRight, barWidth * healthPercent)), halfUp);
+        DirectX::XMVECTOR hpLeftTop = DirectX::XMVectorAdd(DirectX::XMVectorSubtract(hpCenter, halfRight), halfUp);
+
+        DirectX::XMFLOAT3 hp0, hp1, hp2, hp3;
+        DirectX::XMStoreFloat3(&hp0, hpLeftBottom);
+        DirectX::XMStoreFloat3(&hp1, hpRightBottom);
+        DirectX::XMStoreFloat3(&hp2, hpRightTop);
+        DirectX::XMStoreFloat3(&hp3, hpLeftTop);
+
+        // HP割合で色を変える（高=緑、中=黄、低=赤）
+        DirectX::XMFLOAT4 hpColor;
+        if (healthPercent > 0.5f)
+        {
+            float t = (healthPercent - 0.5f) * 2.0f;
+            hpColor = { 1.0f - t, 1.0f, 0.0f, 1.0f };  // 黄→緑
+        }
+        else
+        {
+            float t = healthPercent * 2.0f;
+            hpColor = { 1.0f, t, 0.0f, 1.0f };  // 赤→黄
+        }
+
+        primitiveBatch->DrawTriangle(
+            DirectX::VertexPositionColor(hp0, hpColor),
+            DirectX::VertexPositionColor(hp1, hpColor),
+            DirectX::VertexPositionColor(hp2, hpColor)
+        );
+        primitiveBatch->DrawTriangle(
+            DirectX::VertexPositionColor(hp0, hpColor),
+            DirectX::VertexPositionColor(hp2, hpColor),
+            DirectX::VertexPositionColor(hp3, hpColor)
+        );
+
+        // === 枠線（白） ===
+        DirectX::XMFLOAT4 frameColor(0.8f, 0.8f, 0.8f, 0.6f);
+        primitiveBatch->DrawLine(
+            DirectX::VertexPositionColor(bg0, frameColor),
+            DirectX::VertexPositionColor(bg1, frameColor)
+        );
+        primitiveBatch->DrawLine(
+            DirectX::VertexPositionColor(bg1, frameColor),
+            DirectX::VertexPositionColor(bg2, frameColor)
+        );
+        primitiveBatch->DrawLine(
+            DirectX::VertexPositionColor(bg2, frameColor),
+            DirectX::VertexPositionColor(bg3, frameColor)
+        );
+        primitiveBatch->DrawLine(
+            DirectX::VertexPositionColor(bg3, frameColor),
+            DirectX::VertexPositionColor(bg0, frameColor)
+        );    
+    }
+
+    // === 攻撃予告エフェクト（全敵対象、HP関係なく表示） ===
+    for (const auto& enemy : m_enemySystem->GetEnemies())
+    {
+        if (!enemy.isAlive || enemy.isDying)
+            continue;
+        if (enemy.isExploded)
+            continue;
+
+        if (enemy.currentAnimation == "Attack" && !enemy.attackJustLanded)
+        {
+            float hitTime;
+            switch (enemy.type)
+            {
+            case EnemyType::RUNNER: hitTime = m_enemySystem->m_runnerAttackHitTime; break;
+            case EnemyType::TANK:   hitTime = m_enemySystem->m_tankAttackHitTime;   break;
+            default:                hitTime = m_enemySystem->m_normalAttackHitTime;  break;
+            }
+
+            float timeToHit = hitTime - enemy.animationTime;
+            float warningWindow = 0.8f;
+
+            if (timeToHit > 0.0f && timeToHit < warningWindow)
+            {
+                float urgency = 1.0f - (timeToHit / warningWindow);
+                float flashSpeed = 4.0f + urgency * 12.0f;
+                float flash = (sinf(m_gameTime * flashSpeed * 6.28f) + 1.0f) * 0.5f;
+
+                float markSize = 0.15f + urgency * 0.15f;
+                if (timeToHit < 0.25f) markSize *= 1.8f;  // パリィ圏内でデカく
+                DirectX::XMVECTOR markCenter = DirectX::XMVectorSet(
+                    enemy.position.x, enemy.position.y + 2.8f, enemy.position.z, 0.0f
+                );
+
+                DirectX::XMVECTOR mUp = DirectX::XMVectorAdd(markCenter, DirectX::XMVectorScale(camUp, markSize));
+                DirectX::XMVECTOR mDown = DirectX::XMVectorSubtract(markCenter, DirectX::XMVectorScale(camUp, markSize));
+                DirectX::XMVECTOR mLeft = DirectX::XMVectorSubtract(markCenter, DirectX::XMVectorScale(camRight, markSize * 0.6f));
+                DirectX::XMVECTOR mRight = DirectX::XMVectorAdd(markCenter, DirectX::XMVectorScale(camRight, markSize * 0.6f));
+
+                DirectX::XMFLOAT3 mu, md, ml, mr;
+                DirectX::XMStoreFloat3(&mu, mUp);
+                DirectX::XMStoreFloat3(&md, mDown);
+                DirectX::XMStoreFloat3(&ml, mLeft);
+                DirectX::XMStoreFloat3(&mr, mRight);
+
+                float alpha = (0.5f + urgency * 0.5f) * (0.4f + flash * 0.6f);
+
+                // 色を段階で変える
+                DirectX::XMFLOAT4 warnColor;
+                if (timeToHit < 0.25f)
+                {
+                    // 緑 = 「今パリィしろ！」（ヒット直前0.25秒）
+                    warnColor = { 0.0f, 1.0f, 0.2f, alpha * 1.5f };  // 明るく強調
+                }
+                else if (timeToHit < 0.5f)
+                {
+                    // 赤 = 「もうすぐ来る！」
+                    warnColor = { 1.0f, 0.1f, 0.0f, alpha };
+                }
+                else
+                {
+                    // 黄色 = 「準備しろ」
+                    warnColor = { 1.0f, 0.8f, 0.0f, alpha * 0.6f };
+                }
+
+                primitiveBatch->DrawTriangle(
+                    DirectX::VertexPositionColor(mu, warnColor),
+                    DirectX::VertexPositionColor(mr, warnColor),
+                    DirectX::VertexPositionColor(md, warnColor)
+                );
+                primitiveBatch->DrawTriangle(
+                    DirectX::VertexPositionColor(mu, warnColor),
+                    DirectX::VertexPositionColor(md, warnColor),
+                    DirectX::VertexPositionColor(ml, warnColor)
+                );
+
+                DirectX::XMFLOAT4 outlineColor = {
+                    warnColor.x * 0.8f + 0.2f,
+                    warnColor.y * 0.8f + 0.2f,
+                    warnColor.z * 0.8f + 0.2f,
+                    alpha * 0.9f
+                };
+                primitiveBatch->DrawLine(
+                    DirectX::VertexPositionColor(mr, outlineColor),
+                    DirectX::VertexPositionColor(md, outlineColor)
+                );
+                primitiveBatch->DrawLine(
+                    DirectX::VertexPositionColor(md, outlineColor),
+                    DirectX::VertexPositionColor(ml, outlineColor)
+                );
+                primitiveBatch->DrawLine(
+                    DirectX::VertexPositionColor(ml, outlineColor),
+                    DirectX::VertexPositionColor(mu, outlineColor)
+                );
+            }
+        }
     }
 
 
-
     primitiveBatch->End();
+
+    // ラスタライザを元に戻す
+    context->RSSetState(nullptr);
 }
 
 void Game::DrawSingleEnemy(const Enemy& enemy, DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix)
@@ -4290,7 +4744,7 @@ void Game::UpdateTitle()
     UpdateFade();
 
     // タイトル画面：Spaceキーでゲーム開始
-    if (GetAsyncKeyState(VK_RETURN) & 0x8000)
+    if (GetAsyncKeyState(VK_SPACE) & 0x8000)
     {
         ResetGame();
         m_gameState = GameState::PLAYING;
@@ -4354,10 +4808,14 @@ void Game::DrawWeapon()
     DirectX::XMVECTOR up = DirectX::XMVector3Cross(forward, right);
 
     // === FPS風の位置（右下）===
-    DirectX::XMVECTOR rightOffset = XMVectorScale(right, m_weaponOffsetRight + m_weaponSwayX * 0.1f);
+    DirectX::XMVECTOR rightOffset = XMVectorScale(right,
+        m_weaponOffsetRight + m_weaponSwayX * 0.1f);
     DirectX::XMVECTOR upOffset = XMVectorScale(up,
-        m_weaponOffsetUp + m_weaponSwayY * 0.1f + m_weaponBobAmount + m_weaponLandingImpact);
-    DirectX::XMVECTOR forwardOffset = XMVectorScale(forward, m_weaponOffsetForward);
+        m_weaponOffsetUp + m_weaponSwayY * 0.1f
+        + m_weaponBobAmount + m_weaponLandingImpact
+        + m_weaponKickUp);
+    DirectX::XMVECTOR forwardOffset = XMVectorScale(forward,
+        m_weaponOffsetForward - m_weaponKickBack);
 
     DirectX::XMVECTOR weaponPos = cameraPosition;
     weaponPos = XMVectorAdd(weaponPos, rightOffset);
@@ -4369,7 +4827,8 @@ void Game::DrawWeapon()
 
     // === 回転（シンプル3軸） ===
     DirectX::XMMATRIX modelRotation = DirectX::XMMatrixRotationRollPitchYaw(
-        m_weaponRotX, m_weaponRotY, m_weaponRotZ
+        m_weaponRotX - m_weaponKickRot,
+        m_weaponRotY, m_weaponRotZ
     );
     DirectX::XMMATRIX cameraRotation = DirectX::XMMatrixRotationRollPitchYaw(
         playerRot.x, playerRot.y, 0.0f
@@ -4715,6 +5174,8 @@ void Game::RenderPlaying()
 
         //DrawWeaponSpawns();
 
+        DrawGibs(viewMatrix, projectionMatrix);
+
         // グローリーキル腕・ナイフ描画（FBXモデル版）
         if ((m_gloryKillArmAnimActive || m_debugShowGloryKillArm) && m_gloryKillArmModel)
         {
@@ -4984,6 +5445,8 @@ void Game::RenderPlaying()
 
         //DrawWeaponSpawns();
 
+        DrawGibs(viewMatrix, projectionMatrix);
+
         // グローリーキル腕・ナイフ描画（FBXモデル版）
         if ((m_gloryKillArmAnimActive || m_debugShowGloryKillArm) && m_gloryKillArmModel)
         {
@@ -5114,6 +5577,7 @@ void Game::RenderPlaying()
 
     // デバッグ描画
     DrawHitboxes();
+    DrawBulletTracers();
     DrawDebugUI();
 }
 
@@ -5485,10 +5949,144 @@ void Game::DrawUI()
                     }
                 }
 
+                // =============================================
+                // 近接チャージゲージ（シールドバー横 + 縦ストック）
+                // =============================================
+                if (m_whitePixel)
+                {
+                    float meleeW = 28.0f;
+                    float meleeFullH = 44.0f;
+                    float meleeX = barX + barW + 12.0f;
+                    float meleeY = shieldBarY + barH - meleeFullH;
+
+                    // === 背景（真っ黒） ===
+                    RECT meleeBgRect = {
+                        (LONG)meleeX, (LONG)meleeY,
+                        (LONG)(meleeX + meleeW), (LONG)(meleeY + meleeFullH)
+                    };
+                    DirectX::XMVECTORF32 bgColor2 = { 0.06f, 0.06f, 0.06f, 0.85f };
+                    m_spriteBatch->Draw(m_whitePixel.Get(), meleeBgRect, bgColor2);
+
+                    // === ゲージ中身 ===
+                    float gaugePercent = 1.0f;
+                    if (m_meleeCharges < m_meleeMaxCharges && m_meleeRechargeTime > 0.0f)
+                    {
+                        gaugePercent = m_meleeRechargeTimer / m_meleeRechargeTime;
+                    }
+
+                    if (m_meleeCharges > 0)
+                    {
+                        RECT meleeFillRect = {
+                            (LONG)(meleeX + 2), (LONG)meleeY,
+                            (LONG)(meleeX + meleeW - 2), (LONG)(meleeY + meleeFullH)
+                        };
+                        float pulse = 0.8f + sinf(m_gameTime * 4.0f) * 0.2f;
+                        DirectX::XMVECTORF32 fullColor = { pulse, 0.6f * pulse, 0.1f, 1.0f };
+                        m_spriteBatch->Draw(m_whitePixel.Get(), meleeFillRect, fullColor);
+
+                        // リチャージ中なら白っぽい進捗を重ねる
+                        if (m_meleeCharges < m_meleeMaxCharges && m_meleeRechargeTime > 0.0f)
+                        {
+                            float progress = m_meleeRechargeTimer / m_meleeRechargeTime;
+                            float fillH = meleeFullH * progress;
+                            RECT progRect = {
+                                (LONG)(meleeX + 2), (LONG)(meleeY + meleeFullH - fillH),
+                                (LONG)(meleeX + meleeW - 2), (LONG)(meleeY + meleeFullH)
+                            };
+                            DirectX::XMVECTORF32 progColor = { 1.0f, 0.9f, 0.6f, 0.3f };
+                            m_spriteBatch->Draw(m_whitePixel.Get(), progRect, progColor);
+                        }
+                    }
+                    else
+                    {
+                        if (gaugePercent > 0.0f)
+                        {
+                            float fillH = meleeFullH * gaugePercent;
+                            RECT meleeFillRect = {
+                                (LONG)(meleeX + 2), (LONG)(meleeY + meleeFullH - fillH),
+                                (LONG)(meleeX + meleeW - 2), (LONG)(meleeY + meleeFullH)
+                            };
+                            DirectX::XMVECTORF32 fillColor2 = { 1.0f, 0.6f, 0.1f, 0.4f };
+                            m_spriteBatch->Draw(m_whitePixel.Get(), meleeFillRect, fillColor2);
+                        }
+                    }
+
+                    // === スキルアイコン ===
+                    if (m_meleeIconTexture)
+                    {
+                        float mIconSize = 32.0f;
+                        float iconX = meleeX + (meleeW - mIconSize) * 0.5f;
+                        float iconY = meleeY + (meleeFullH - mIconSize) * 0.5f;
+                        RECT iconRect = {
+                            (LONG)iconX, (LONG)iconY,
+                            (LONG)(iconX + mIconSize), (LONG)(iconY + mIconSize)
+                        };
+                        float iconAlpha = (m_meleeCharges > 0) ? 1.0f : 0.3f;
+                        DirectX::XMVECTORF32 iconColor = { iconAlpha, iconAlpha, iconAlpha, iconAlpha };
+                        m_spriteBatch->Draw(m_meleeIconTexture.Get(), iconRect, iconColor);
+                    }
+
+                    // === 外枠（白ピクセルで薄いグレー枠） ===
+                    {
+                        DirectX::XMVECTORF32 frameColor = { 0.4f, 0.4f, 0.4f, 0.6f };
+                        // 上辺
+                        RECT top = { (LONG)meleeX, (LONG)meleeY, (LONG)(meleeX + meleeW), (LONG)(meleeY + 1) };
+                        m_spriteBatch->Draw(m_whitePixel.Get(), top, frameColor);
+                        // 下辺
+                        RECT bot = { (LONG)meleeX, (LONG)(meleeY + meleeFullH - 1), (LONG)(meleeX + meleeW), (LONG)(meleeY + meleeFullH) };
+                        m_spriteBatch->Draw(m_whitePixel.Get(), bot, frameColor);
+                        // 左辺
+                        RECT lft = { (LONG)meleeX, (LONG)meleeY, (LONG)(meleeX + 1), (LONG)(meleeY + meleeFullH) };
+                        m_spriteBatch->Draw(m_whitePixel.Get(), lft, frameColor);
+                        // 右辺
+                        RECT rgt = { (LONG)(meleeX + meleeW - 1), (LONG)meleeY, (LONG)(meleeX + meleeW), (LONG)(meleeY + meleeFullH) };
+                        m_spriteBatch->Draw(m_whitePixel.Get(), rgt, frameColor);
+                    }
+
+                    // === ストックバー ===
+                    {
+                        float stockX = meleeX + meleeW + 4.0f;
+                        float stockW = 6.0f;
+                        float stockH = meleeFullH;
+                        float divider = 1.0f;
+
+                        RECT stockBgRect = {
+                            (LONG)stockX, (LONG)meleeY,
+                            (LONG)(stockX + stockW), (LONG)(meleeY + stockH)
+                        };
+                        DirectX::XMVECTORF32 bgColor3 = { 0.06f, 0.06f, 0.06f, 0.7f };
+                        m_spriteBatch->Draw(m_whitePixel.Get(), stockBgRect, bgColor3);
+
+                        float sectionH = (stockH - divider * (m_meleeMaxCharges - 1)) / (float)m_meleeMaxCharges;
+
+                        for (int i = 0; i < m_meleeMaxCharges; i++)
+                        {
+                            float sy = meleeY + stockH - (i + 1) * sectionH - i * divider;
+                            RECT secRect = {
+                                (LONG)(stockX + 1), (LONG)sy,
+                                (LONG)(stockX + stockW - 1), (LONG)(sy + sectionH)
+                            };
+
+                            if (i < m_meleeCharges)
+                            {
+                                DirectX::XMVECTORF32 stockColor = { 1.0f, 0.6f, 0.1f, 1.0f };
+                                m_spriteBatch->Draw(m_whitePixel.Get(), secRect, stockColor);
+                            }
+                            else
+                            {
+                                DirectX::XMVECTORF32 emptyColor = { 0.15f, 0.15f, 0.15f, 0.4f };
+                                m_spriteBatch->Draw(m_whitePixel.Get(), emptyColor, emptyColor);
+                            }
+                        }
+                    }
+                }
+
             }
 
         m_spriteBatch->End();
     }
+
+
 
 }
 
@@ -5570,7 +6168,7 @@ void Game::UpdatePlaying()
     //  --- ヒットストップ処理   ---
     if (m_hitStopTimer > 0.0f)
     {
-        m_hitStopTimer -= deltaTime;
+        m_hitStopTimer -= m_deltaTime;  // timeScaleに影響されない実時間
 
         if (m_hitStopTimer <= 0.0f)
         {
@@ -5817,6 +6415,10 @@ void Game::UpdatePlaying()
             // スコア換算
             m_score += 100;
 
+            // 弾補充（マガジン満タン + 予備弾追加）
+            /*m_weaponSystem->SetCurrentAmmo(m_weaponSystem->GetMaxAmmo());
+            m_weaponSystem->SetReserveAmmo(m_weaponSystem->GetReserveAmmo() + 30);*/
+
             // 4. デバッグログ
             /*char buffer[256];
             sprintf_s(buffer, "[GLORY KILL] Enemy ID:%d killed! HP: %d→%d, Score: +100\n",
@@ -5855,7 +6457,7 @@ void Game::UpdatePlaying()
     //  --- スローモーション更新  ---
     if (m_slowMoTimer > 0.0f)
     {
-        m_slowMoTimer -= deltaTime;
+        m_slowMoTimer -= m_deltaTime;
         if (m_slowMoTimer <= 0.0f)
         {
             m_timeScale = 1.0f;
@@ -5866,7 +6468,7 @@ void Game::UpdatePlaying()
     //  --- カメラシェイク減衰   ---
     if (m_cameraShakeTimer > 0.0f)
     {
-        m_cameraShakeTimer -= deltaTime;
+        m_cameraShakeTimer -= m_deltaTime;
         m_cameraShake *= 0.9f;
     }
 
@@ -5970,16 +6572,17 @@ void Game::UpdatePlaying()
     
     //  === 近接攻撃の入力処理   ===
     static bool lastFKeyState = false;  //  前フレームのFキー状態
-    bool isMeleeKeyDown = (GetAsyncKeyState('F') & 0x8000) != 0;   //  現在Fキーの状態
+    bool isMeleeKeyDown = (GetAsyncKeyState(VK_XBUTTON1) & 0x8000) != 0;
 
     //  Fキーが押された瞬間(前フレームは話されていて、今フレームは押されている)
     if (isMeleeKeyDown && !lastFKeyState)
     {
         //  クールダウン中でなければ近接攻撃を実行
-        if (m_player->CanMeleeAttack())
+        if (m_player->CanMeleeAttack() && m_meleeCharges > 0)
         {
-            PerformMeleeAttack();   //  近接攻撃実行
-            m_player->StartMeleeAttackCooldown();   //  クールダウン開始
+            PerformMeleeAttack();
+            m_player->StartMeleeAttackCooldown();
+            m_meleeCharges--;  // チャージ消費
 
             OutputDebugStringA("[MELEE] Melee attack executed!\n");
         }
@@ -6132,6 +6735,29 @@ void Game::UpdatePlaying()
     m_weaponSwayX *= 0.9f;
     m_weaponSwayY *= 0.9f;
 
+    // === 発砲リコイル減衰（バネ式で滑らかに戻る） ===
+    m_weaponKickBack *= 0.85f;   // 後退 → 元に戻る
+    m_weaponKickUp *= 0.85f;   // 跳ね上がり → 元に戻る
+    m_weaponKickRot *= 0.85f;   // 回転 → 元に戻る
+
+    //// === カメラ反動（上方向にキックしてゆっくり戻る） ===
+    //if (fabsf(m_cameraRecoilVelocity) > 0.0001f || fabsf(m_cameraRecoilX) > 0.0001f)
+    //{
+    //    // カメラを上に動かす
+    //    m_cameraRecoilX += m_cameraRecoilVelocity;
+
+    //    // 速度を減衰（反動の勢いが収まる）
+    //    m_cameraRecoilVelocity *= 0.8f;
+
+    //    // 元の位置に戻すバネ力
+    //    m_cameraRecoilX *= 0.88f;
+
+    //    // 実際にカメラの角度を変更
+    //    DirectX::XMFLOAT3 rot = m_player->GetRotation();
+    //    rot.x -= m_cameraRecoilX * 0.3f;  // X回転 = 上下（マイナスで上を向く）
+    //    m_player->SetRotation(rot);
+    //}
+
     //  前フレームの回転を保持
     m_lastCameraRotX = m_player->GetRotation().x;
     m_lastCameraRotY = m_player->GetRotation().y;
@@ -6172,30 +6798,37 @@ void Game::UpdatePlaying()
             switch (currentWeapon)
             {
             case WeaponType::PISTOL:
-                //m_player->AddCameraRecoil(0.0, 0.0);
                 m_cameraShake = 0.03f;
                 m_cameraShakeTimer = 0.1f;
+                m_weaponKickBack = 0.15f;
+                m_weaponKickUp = 0.06f;
+                m_weaponKickRot = 0.08f;
                 break;
 
             case WeaponType::SHOTGUN:
-                //m_player->AddCameraRecoil(0.08f, 0.03f);
                 m_cameraShake = 0.15f;
                 m_cameraShakeTimer = 0.2f;
+                m_weaponKickBack = 0.4f;
+                m_weaponKickUp = 0.15f;
+                m_weaponKickRot = 0.2f;
                 break;
 
             case WeaponType::RIFLE:
-                //m_player->AddCameraRecoil(0.03f, 0.015f);
                 m_cameraShake = 0.05f;
                 m_cameraShakeTimer = 0.12f;
+                m_weaponKickBack = 0.1f;
+                m_weaponKickUp = 0.04f;
+                m_weaponKickRot = 0.06f;
                 break;
 
             case WeaponType::SNIPER:
-                //m_player->AddCameraRecoil(0.1f, 0.04f);
                 m_cameraShake = 0.2f;
                 m_cameraShakeTimer = 0.25f;
+                m_weaponKickBack = 0.5f;
+                m_weaponKickUp = 0.2f;
+                m_weaponKickRot = 0.25f;
                 break;
             }
-
 
             
             //  銃口位置を「カメラ基準」で計算する（DrawWeaponと同じ方式）
@@ -6296,13 +6929,36 @@ void Game::UpdatePlaying()
                 if (rayResult.hit)
                 {
                     // === ヒット成功！ ===
-
-                    // 弾道を記録
+                    
                     // 弾道を記録
                     BulletTrace trace;
                     trace.start = rayStart;
-                    trace.end = rayResult.hitPoint;  // ← rayResult.hitPoint
-                    trace.lifetime = 0.5f;
+                    trace.end = rayResult.hitPoint;
+                    trace.lifetime = 0.3f;
+                    trace.maxLifetime = 0.3f;
+                    trace.width = 0.15f;
+
+                    switch (currentWeapon)
+                    {
+                    case WeaponType::PISTOL:
+                        trace.color = { 1.0f, 0.8f, 0.2f, 1.0f };
+                        break;
+                    case WeaponType::SHOTGUN:
+                        trace.color = { 1.0f, 0.5f, 0.1f, 1.0f };
+                        break;
+                    case WeaponType::RIFLE:
+                        trace.color = { 0.3f, 0.8f, 1.0f, 1.0f };
+                        break;
+                    case WeaponType::SNIPER:
+                        trace.color = { 1.0f, 0.2f, 0.2f, 1.0f };
+                        trace.lifetime = 0.5f;
+                        trace.maxLifetime = 0.5f;
+                        trace.width = 0.25f;
+                        break;
+                    default:
+                        trace.color = { 1.0f, 0.6f, 0.0f, 1.0f };
+                        break;
+                    }
                     m_bulletTraces.push_back(trace);
 
                     // UserPointer から敵を取得
@@ -6423,6 +7079,8 @@ void Game::UpdatePlaying()
                                 hitEnemy->velocity.x = shotDir.x * 15.0f;
                                 hitEnemy->velocity.y = 8.0f;
                                 hitEnemy->velocity.z = shotDir.z * 15.0f;
+
+                                SpawnGibs(hitEnemy->position, 8, 15.0f);
                             }
 
                             // Effekseer エフェクト
@@ -6437,13 +7095,11 @@ void Game::UpdatePlaying()
                                 m_effekseerManager->SetScale(handle, 2.0f, 2.0f, 2.0f);
                             }*/
 
-                            // ヒットストップ
-                            m_timeScale = 0.0f;
-                            m_hitStopTimer = 0.15f;
-
-                            // スローモーション
-                            m_timeScale = 0.15f;
-                            m_slowMoTimer = 0.05f;
+                            //  完全停止からスロー
+                            m_timeScale = 0.0f;          // 完全停止
+                            m_hitStopTimer = 0.04f;      // 0.08秒間フリーズ
+                            m_slowMoTimer = 0.0f;
+                            
 
                             // カメラシェイク
                             m_cameraShake = 0.3f;
@@ -6475,13 +7131,10 @@ void Game::UpdatePlaying()
                                 hitEnemy->id, hitEnemy->health);
                             OutputDebugStringA(debugHP2);*/
 
-                            //// ヒットストップ（軽め）
-                            //m_timeScale = 0.1f;
-                            //m_hitStopTimer = 0.03f;
 
-                            // カメラシェイク（軽め）
-                            m_cameraShake = 0.05f;
-                            m_cameraShakeTimer = 0.1f;
+                            // カメラシェイク（強化）
+                            m_cameraShake = 0.15f;
+                            m_cameraShakeTimer = 0.15f;
 
                             // 死亡時の吹っ飛ばし
                             if (hitEnemy->health <= 0.0f)
@@ -6490,6 +7143,10 @@ void Game::UpdatePlaying()
                                 //OutputDebugStringA("[DEBUG] Entering ragdoll processing (HP <= 0.0f)\n");
 
                                 hitEnemy->isRagdoll = true;
+
+                                //  カメラシェイク
+                                m_cameraShake = 0.25f;
+                                m_cameraShakeTimer = 0.2;
 
 
                                 // 胴体キルでも爆散エフェクト
@@ -6502,6 +7159,8 @@ void Game::UpdatePlaying()
                                     m_particleSystem->CreateBloodEffect(rayResult.hitPoint, randomDir, 30);
                                 }
                                 m_particleSystem->CreateExplosion(rayResult.hitPoint);
+
+                                SpawnGibs(hitEnemy->position, 5, 10.0f);
 
                                 float knockbackPower = 10.0f;
 
@@ -6614,6 +7273,20 @@ void Game::UpdatePlaying()
                     //OutputDebugStringA("[BULLET] Complete miss\n");
                     //// === デバッグ: 死亡判定に入らなかった ===
                     //OutputDebugStringA("[DEBUG] NOT entering death check (HP > 0)\n");
+
+                    // 何にも当たらなかった → 100m先まで
+                    BulletTrace trace;
+                    trace.start = rayStart;
+                    trace.end = {
+                        rayStart.x + shotDir.x * 100.0f,
+                        rayStart.y + shotDir.y * 100.0f,
+                        rayStart.z + shotDir.z * 100.0f
+                    };
+                    trace.lifetime = 0.1f;
+                    trace.maxLifetime = 0.1f;
+                    trace.width = 0.04f;
+                    trace.color = { 1.0f, 0.6f, 0.0f, 0.5f };
+                    m_bulletTraces.push_back(trace);
                 }
             }
 }
@@ -7174,6 +7847,9 @@ void Game::UpdatePlaying()
             {
                 m_timeScale = 0.15f;
                 m_slowMoTimer = 0.02f + killCount * 0.02f;
+
+                m_weaponSystem->SetCurrentAmmo(m_weaponSystem->GetMaxAmmo());
+                m_weaponSystem->SetReserveAmmo(m_weaponSystem->GetReserveAmmo() + killCount * 10);
             }
 
             //  FOVを戻す
@@ -7418,6 +8094,15 @@ void Game::UpdatePlaying()
                         // ジャンプ叩きはパリィ可能
                         m_shieldState = ShieldState::Idle;
                         m_parrySuccess = true;
+                        // パリィ時ヒットストップ
+                        m_hitStopTimer = 0.06f;
+                        m_timeScale = 0.0f;
+                        m_slowMoTimer = 0.0f;   // 残留slowMo防止
+                        
+                        // パリィ成功→近接チャージ回復
+                        if (m_meleeCharges < m_meleeMaxCharges)
+                            m_meleeCharges++;
+
                         m_lastParryResultTime = m_gameTime;
                         m_lastParryWasSuccess = true;
                         m_parrySuccessCount++;
@@ -7632,6 +8317,15 @@ void Game::UpdatePlaying()
                         // 緑ビーム → パリィ成功！
                         m_shieldState = ShieldState::Idle;
                         m_parrySuccess = true;
+                        // パリィ時ヒットストップ
+                        m_hitStopTimer = 0.06f;
+                        m_timeScale = 0.0f;
+                        m_slowMoTimer = 0.0f;   // 残留slowMo防止
+
+                        // パリィ成功→近接チャージ回復
+                        if (m_meleeCharges < m_meleeMaxCharges)
+                            m_meleeCharges++;
+
                         m_parryFlashTimer = 0.3f;
 
                         // パリィエフェクト再生
@@ -7720,6 +8414,15 @@ void Game::UpdatePlaying()
                 // パリィ成功 → シールドHP消費なし
                 m_shieldState = ShieldState::Idle;
                 m_parrySuccess = true;
+                // パリィ時ヒットストップ
+                m_hitStopTimer = 0.06f;
+                m_timeScale = 0.0f;
+                m_slowMoTimer = 0.0f;   // 残留slowMo防止
+
+                // パリィ成功→近接チャージ回復
+                if (m_meleeCharges < m_meleeMaxCharges)
+                    m_meleeCharges++;
+
                 m_lastParryResultTime = m_gameTime;
                 m_lastParryWasSuccess = true;
                 m_parrySuccessCount++;
@@ -7911,6 +8614,15 @@ void Game::UpdatePlaying()
                 {
                     m_shieldState = ShieldState::Idle;
                     m_parrySuccess = true;
+                    // パリィ時ヒットストップ
+                    m_hitStopTimer = 0.06f;
+                    m_timeScale = 0.0f;
+                    m_slowMoTimer = 0.0f;   // 残留slowMo防止
+
+                    // パリィ成功→近接チャージ回復
+                    if (m_meleeCharges < m_meleeMaxCharges)
+                        m_meleeCharges++;
+
                     m_lastParryResultTime = m_gameTime;
                     m_lastParryWasSuccess = true;
                     m_parrySuccessCount++;
@@ -8112,6 +8824,9 @@ void Game::ResetGame()
     // === スローモーション ===
     m_timeScale = 1.0f;
     m_slowMoTimer = 0.0f;
+
+    m_meleeCharges = m_meleeMaxCharges;
+    m_meleeRechargeTimer = 0.0f;
 
     // === タイマー類 ===
     m_typeWalkTimer[0] = m_typeWalkTimer[1] = m_typeWalkTimer[2] = m_typeWalkTimer[3] = m_typeWalkTimer[4] = 0.0f;
@@ -8535,6 +9250,19 @@ void Game::UpdatePhysics(float deltaTime)
         // これにより、手動で動かしたKinematic ObjectのAABB(境界ボックス)も更新されます
         m_dynamicsWorld->stepSimulation(deltaTime, 10);
         UpdateGibs(deltaTime);
+
+
+        // 近接チャージ自動回復
+        if (m_meleeCharges < m_meleeMaxCharges)
+        {
+            m_meleeRechargeTimer += deltaTime;
+            if (m_meleeRechargeTimer >= m_meleeRechargeTime)
+            {
+                m_meleeCharges++;
+                m_meleeRechargeTimer = 0.0f;
+            }
+        }
+
     }
 }
 
@@ -8714,6 +9442,10 @@ void Game::PerformMeleeAttack()
 
             int oldHealth = hitEnemy->health;
             hitEnemy->health -= (int)normalMeleeDamage;
+
+            // 弾補充
+            int currentAmmo = m_weaponSystem->GetReserveAmmo();
+            m_weaponSystem->SetReserveAmmo(currentAmmo + m_meleeAmmoRefill);
 
             char buffer[128];
             sprintf_s(buffer, "[MELEE] Normal hit! Damage:%.0f HP:%d->%d\n",

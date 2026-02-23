@@ -78,6 +78,8 @@ public:
     //  プレイヤー位置設定
     void SetPosition(DirectX::XMFLOAT3 pos) { m_position = pos; }
 
+    void SetRotation(DirectX::XMFLOAT3 rot) { m_rotation = rot; }
+
     DirectX::XMMATRIX GetWorldMatrix() const
     {
         return DirectX::XMMatrixScaling(1.0f, 1.0f, 1.0f) *
