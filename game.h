@@ -424,7 +424,7 @@ private:
     // 斬撃プロジェクタイル
     float m_slashSpeed = 15.0f;          // 弾速
     float m_slashDamage = 30.0f;         // ダメージ
-    float m_slashHitRadius = 1.2f;       // 当たり判定幅
+    float m_slashHitRadius = 2.0f;       // 当たり判定幅
     float m_slashStunOnParry = 50.0f;    // パリィ時スタン量
 
     // ビーム
@@ -451,6 +451,8 @@ private:
     int   m_parrySuccessCount = 0;         // パリィ成功回数
     int   m_parryFailCount = 0;            // パリィ失敗回数
     float m_gameTime = 0.0f;              // ゲーム経過時間
+
+   
 
     ////  読み込んだエフェクトデータ
     //Effekseer::EffectRef m_effectBlood; //  血のエフェクト用(テスト)
@@ -561,6 +563,52 @@ private:
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_hpHudFillCritical;
     bool m_shieldHudLoaded = false;
 
+    bool m_showTutorial = true;
+
+    // === ボスHPバー演出 ===
+    float m_bossHpDisplay = 1.0f;      // 表示用HP（なめらかに減る）
+    float m_bossHpTrail = 1.0f;        // 残像HP（遅れて減る）
+
+    // === リロードアニメーション ===
+    float m_reloadAnimProgress = 0.0f;  // 0.0?1.0（リロード進行度）
+    float m_reloadAnimOffset = 0.0f;    // 武器の下方向オフセット
+    float m_reloadAnimTilt = 0.0f;      // 武器の傾き
+
+    // === ゲームオーバー演出 ===
+    float m_gameOverTimer = 0.0f;       // 死んでからの経過時間（演出タイミング制御）
+    int   m_gameOverWave = 0;           // やられた時のウェーブ番号（リザルト表示用）
+    int   m_gameOverScore = 0;          // やられた時のスコア（リザルト表示用）
+    float m_gameOverCountUp = 0.0f;     // スコアカウントアップ用（0.0→1.0で最終スコアに到達）
+    
+    // === ランク＆演出 ===
+    int   m_gameOverRank = 0;           // 0=C, 1=B, 2=A, 3=S
+    float m_gameOverNoiseT = 0.0f;      // ノイズトランジション用（0→1で画面遷移）
+
+    // ===== プレイ中スタッツ（リアルタイム記録用） =====
+    int   m_statKills = 0;              // 総キル数
+    int   m_statHeadshots = 0;          // ヘッドショットキル数
+    int   m_statMeleeKills = 0;         // 近接キル数
+    int   m_statMaxCombo = 0;           // 最高コンボ数
+    int   m_statDamageDealt = 0;        // 与ダメージ合計
+    int   m_statDamageTaken = 0;        // 被ダメージ合計
+    int   m_statMaxStyleRank = 0;       // 最高スタイルランク（0=D ～ 6=SSS）
+    float m_statSurvivalTime = 0.0f;    // 生存時間（秒）
+
+    // ===== ゲームオーバー時のスタッツ保存用 =====
+    int   m_goKills = 0;
+    int   m_goHeadshots = 0;
+    int   m_goMeleeKills = 0;
+    int   m_goMaxCombo = 0;
+    int   m_goParryCount = 0;
+    int   m_goDamageDealt = 0;
+    int   m_goDamageTaken = 0;
+    int   m_goMaxStyleRank = 0;
+    float m_goSurvivalTime = 0.0f;
+
+    // ===== リザルトスコア =====
+    int   m_goStatScores[9] = {};       // 各スタッツのボーナスポイント
+    int   m_goTotalScore = 0;           // 合計スコア
+    float m_goStatCountUp[9] = {};      // 各行のカウントアップ進行（0→1）
 
 
     //  ==========================

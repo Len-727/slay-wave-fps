@@ -144,6 +144,8 @@ public:
 
 private:
 
+	std::vector<DirectX::XMMATRIX> m_cachedBoneTransforms;  //  事前確保キャッシュ
+
 	std::unique_ptr<DirectX::CommonStates> m_states;
 
 	std::vector<Node> m_nodes;	//	全ノードリスト

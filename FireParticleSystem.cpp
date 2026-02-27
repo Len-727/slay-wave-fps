@@ -225,7 +225,7 @@ void FireParticleSystem::CreateBuffers(ID3D11Device* device)
         throw std::runtime_error("Failed to create matrix buffer");
     }
 
-    OutputDebugStringA("[FIRE] Buffers created\n");
+    //OutputDebugStringA("[FIRE] Buffers created\n");
 }
 
 // ========================================
@@ -254,9 +254,9 @@ void FireParticleSystem::CreateShaders(ID3D11Device* device)
     {
         if (errorBlob)
         {
-            OutputDebugStringA("[FIRE VS] ");
-            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-            OutputDebugStringA("\n");
+            //OutputDebugStringA("[FIRE VS] ");
+            //OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+            //OutputDebugStringA("\n");
         }
         throw std::runtime_error("Failed to compile FireParticleVS_Standalone.hlsl");
     }
@@ -291,9 +291,9 @@ void FireParticleSystem::CreateShaders(ID3D11Device* device)
     {
         if (errorBlob)
         {
-            OutputDebugStringA("[FIRE PS] ");
-            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-            OutputDebugStringA("\n");
+            //OutputDebugStringA("[FIRE PS] ");
+            //OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+            //OutputDebugStringA("\n");
         }
         throw std::runtime_error("Failed to compile FireParticlePS_Standalone.hlsl");
     }
@@ -331,7 +331,7 @@ void FireParticleSystem::CreateShaders(ID3D11Device* device)
         throw std::runtime_error("Failed to create input layout");
     }
 
-    OutputDebugStringA("[FIRE] Shaders created successfully\n");
+    //OutputDebugStringA("[FIRE] Shaders created successfully\n");
 }
 
 void FireParticleSystem::CreateTexture(ID3D11Device* device)
@@ -397,7 +397,7 @@ void FireParticleSystem::CreateTexture(ID3D11Device* device)
         throw std::runtime_error("Failed to create sampler state");
     }
 
-    OutputDebugStringA("[FIRE] Texture created\n");
+    //OutputDebugStringA("[FIRE] Texture created\n");
 }
 
 // ========================================
@@ -422,7 +422,7 @@ void FireParticleSystem::CreateBlendState(ID3D11Device* device)
         throw std::runtime_error("Failed to create blend state");
     }
 
-    OutputDebugStringA("[FIRE] Blend state created\n");
+    //OutputDebugStringA("[FIRE] Blend state created\n");
 }
 
 // ========================================
@@ -446,7 +446,7 @@ void FireParticleSystem::Render(ID3D11DeviceContext* context, XMMATRIX view, XMM
     HRESULT hr = context->Map(m_vertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
     if (FAILED(hr))
     {
-        OutputDebugStringA("[FIRE] Failed to map vertex buffer\n");
+        //OutputDebugStringA("[FIRE] Failed to map vertex buffer\n");
         return;
     }
 

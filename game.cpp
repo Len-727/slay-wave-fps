@@ -105,6 +105,7 @@ Game::Game() noexcept :
    //   パフォーマンスカウンターの初期化
     QueryPerformanceFrequency(&m_performanceFrequency);
     QueryPerformanceCounter(&m_lastFrameTime);
+    m_gibs.reserve(200);
 }
 
 Game::~Game()
@@ -160,7 +161,7 @@ void Game::InitPhysics()
         m_collisionConfiguration.get()
     );
 
-    OutputDebugStringA("Bullet Physics initialized!\n");
+    // [PERF] //OutputDebugStringA("Bullet Physics initialized!\n");
 }
 
 void Game::CleanupPhysics()
@@ -187,7 +188,7 @@ void Game::CleanupPhysics()
     }
     m_enemyPhysicsBodies.clear();
 
-    OutputDebugStringA("[BULLET] All enemy physics bodies cleaned up\n");
+    // [PERF] //OutputDebugStringA("[BULLET] All enemy physics bodies cleaned up\n");
 
     // Bullet Physics ワールドをクリーンアップ
     m_dynamicsWorld.reset();
@@ -196,7 +197,7 @@ void Game::CleanupPhysics()
     m_dispatcher.reset();
     m_collisionConfiguration.reset();
 
-    OutputDebugStringA("Bullet Physics cleaned up!\n");
+    // [PERF] //OutputDebugStringA("Bullet Physics cleaned up!\n");
 }
 
 //  === RayPhysics  ===
@@ -217,7 +218,7 @@ Game::RaycastResult Game::RaycastPhysics(
         start.x, start.y, start.z,
         direction.x, direction.y, direction.z,
         maxDistance);
-    //OutputDebugStringA(debugBuffer);
+    ////OutputDebugStringA(debugBuffer);
 
     //  方向を正規化
     float length = sqrtf(
@@ -278,13 +279,13 @@ Game::RaycastResult Game::RaycastPhysics(
             // === デバッグ: UserPointerから取得したIDを出力 ===
             char debugID[256];
             sprintf_s(debugID, "[DEBUG] UserPointer EnemyID: %d\n", enemyID);
-           // OutputDebugStringA(debugID);
+           // //OutputDebugStringA(debugID);
 
             // === デバッグ: 現在の敵リストを出力 ===
             const auto& enemies = m_enemySystem->GetEnemies();
             char debugCount[256];
             sprintf_s(debugCount, "[DEBUG] Total enemies in system: %zu\n", enemies.size());
-            //OutputDebugStringA(debugCount);
+            ////OutputDebugStringA(debugCount);
 
             // IDから敵を検索
             bool found = false;
@@ -295,7 +296,7 @@ Game::RaycastResult Game::RaycastPhysics(
                 sprintf_s(debugEnemy, "[DEBUG] Checking enemy ID:%d, isAlive:%d, position:(%.2f, %.2f, %.2f)\n",
                     enemy.id, enemy.isAlive ? 1 : 0,
                     enemy.position.x, enemy.position.y, enemy.position.z);
-                //OutputDebugStringA(debugEnemy);
+                ////OutputDebugStringA(debugEnemy);
 
                 if (enemy.id == enemyID && enemy.isAlive)
                 {
@@ -309,7 +310,7 @@ Game::RaycastResult Game::RaycastPhysics(
                         enemyID,
                         result.hitPoint.x, result.hitPoint.y, result.hitPoint.z,
                         enemy.position.x, enemy.position.y, enemy.position.z);
-                    //OutputDebugStringA(buffer);
+                    ////OutputDebugStringA(buffer);
                     break;
                 }
             }
@@ -319,7 +320,7 @@ Game::RaycastResult Game::RaycastPhysics(
                 // IDが見つからない = 死んだ敵か壁
                 char buffer[256];
                 sprintf_s(buffer, "[BULLET] Hit dead enemy or wall (ID:%d) - Enemy not found or not alive\n", enemyID);
-                //OutputDebugStringA(buffer);
+                ////OutputDebugStringA(buffer);
             }
         }
         else
@@ -329,12 +330,12 @@ Game::RaycastResult Game::RaycastPhysics(
             sprintf_s(buffer,
                 "[BULLET] Raycast HIT WALL at (%.2f, %.2f, %.2f)\n",
                 result.hitPoint.x, result.hitPoint.y, result.hitPoint.z);
-            //OutputDebugStringA(buffer);
+            ////OutputDebugStringA(buffer);
         }
     }
     else
     {
-        //OutputDebugStringA("[BULLET] Raycast MISS\n");
+        ////OutputDebugStringA("[BULLET] Raycast MISS\n");
     }
 
     return result;
@@ -413,10 +414,10 @@ void Game::AddEnemyPhysicsBody(Enemy& enemy)
     char buffer[256];
     sprintf_s(buffer, "[BULLET] Added body for enemy ID:%d at (%.2f, %.2f, %.2f)\n",
         enemy.id, enemy.position.x, enemy.position.y, enemy.position.z);
-    //OutputDebugStringA(buffer);
+    ////OutputDebugStringA(buffer);
 }
 
-// ??? SpawnGibs: 肉片をBullet物理で生成 ???
+//  SpawnGibs: 肉片をBullet物理で生成 
 void Game::SpawnGibs(DirectX::XMFLOAT3 position, int count, float power)
 {
     // 上限100個 ? 超えたら古いのを削除
@@ -578,7 +579,7 @@ void Game::UpdateGibs(float deltaTime)
     }
 }
 
-// ??? DrawGibs: 肉片キューブをBullet位置で描画 ???
+//  DrawGibs: 肉片キューブをBullet位置で描画 
 void Game::DrawGibs(DirectX::XMMATRIX view, DirectX::XMMATRIX proj)
 {
     if (m_gibs.empty()) return;
@@ -622,34 +623,9 @@ void Game::DrawGibs(DirectX::XMMATRIX view, DirectX::XMMATRIX proj)
 
 void Game::UpdateEnemyPhysicsBody(Enemy& enemy)
 {
-    // === デバッグ: 物理ボディの検索 ===
-    char debugSearch[256];
-    sprintf_s(debugSearch, "[PHYSICS UPDATE] Searching for enemy ID:%d physics body\n", enemy.id);
-    //OutputDebugStringA(debugSearch);
-
     auto it = m_enemyPhysicsBodies.find(enemy.id);
     if (it == m_enemyPhysicsBodies.end())
-    {
-        // === デバッグ: 物理ボディが見つからない ===
-        char debugNotFound[256];
-        sprintf_s(debugNotFound, "[PHYSICS UPDATE] ? Physics body NOT FOUND for enemy ID:%d\n", enemy.id);
-        //OutputDebugStringA(debugNotFound);
-
-        // === デバッグ: 登録されている物理ボディのIDを表示 ===
-        //OutputDebugStringA("[PHYSICS UPDATE] Registered physics bodies:\n");
-        for (const auto& pair : m_enemyPhysicsBodies)
-        {
-            char debugRegistered[256];
-            sprintf_s(debugRegistered, "  - Enemy ID:%d\n", pair.first);
-            //OutputDebugStringA(debugRegistered);
-        }
         return;
-    }
-
-    // === デバッグ: 物理ボディが見つかった ===
-    char debugFound[256];
-    sprintf_s(debugFound, "[PHYSICS UPDATE] ? Found physics body for enemy ID:%d\n", enemy.id);
-    //OutputDebugStringA(debugFound);
 
     btRigidBody* body = it->second;
 
@@ -673,22 +649,6 @@ void Game::UpdateEnemyPhysicsBody(Enemy& enemy)
 
     float totalHeight = config.bodyHeight;
 
-    // === デバッグ: 更新前の位置 ===
-    btTransform oldTransform;
-    body->getMotionState()->getWorldTransform(oldTransform);
-    btVector3 oldPos = oldTransform.getOrigin();
-
-    char debugOldPos[256];
-    sprintf_s(debugOldPos, "[PHYSICS UPDATE] Old position: (%.2f, %.2f, %.2f)\n",
-        oldPos.x(), oldPos.y(), oldPos.z());
-    //OutputDebugStringA(debugOldPos);
-
-    // === デバッグ: 新しい位置 ===
-    char debugNewPos[256];
-    sprintf_s(debugNewPos, "[PHYSICS UPDATE] New position: (%.2f, %.2f, %.2f)\n",
-        enemy.position.x, totalHeight / 2.0f, enemy.position.z);
-    //OutputDebugStringA(debugNewPos);
-
     btTransform transform;
     transform.setIdentity();
     transform.setOrigin(btVector3(
@@ -703,9 +663,6 @@ void Game::UpdateEnemyPhysicsBody(Enemy& enemy)
     {
         body->getMotionState()->setWorldTransform(transform);
     }
-
-    // === デバッグ: 更新完了 ===
-    //OutputDebugStringA("[PHYSICS UPDATE] ? Physics body updated successfully\n\n");
 }
 
 void Game::RemoveEnemyPhysicsBody(int enemyID)
@@ -746,7 +703,7 @@ void Game::Tick()
         float currentFPS = 1.0f / m_deltaTime;
         char debugBuffer[256];
         sprintf_s(debugBuffer, "[DEBUG] deltaTime: %.4f, FPS: %.1f\n", m_deltaTime, currentFPS);
-        //OutputDebugStringA(debugBuffer);
+        ////OutputDebugStringA(debugBuffer);
         debugTimer = 0.0f;
     }
 
@@ -901,7 +858,7 @@ void Game::CreateResources()
         // === ガウシアンブラー用リソース作成 ===
         CreateBlurResources();
 
-        OutputDebugStringA("[GAME] All resources created successfully\n");
+        // [PERF] //OutputDebugStringA("[GAME] All resources created successfully\n");
     }
 
     // レンダーターゲット作成
@@ -959,7 +916,7 @@ void Game::CreateResources()
     // デバッグログ
     char debugDepth[256];
     sprintf_s(debugDepth, "[DEPTH] SRV created: %p\n", m_depthSRV.Get());
-    OutputDebugStringA(debugDepth);
+    // [PERF] //OutputDebugStringA(debugDepth);
 }
 
 void Game::CreateRenderResources()
@@ -994,7 +951,7 @@ void Game::CreateRenderResources()
     m_weaponModel = std::make_unique<Model>();
     if (!m_weaponModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Gun/SHOTGUN.fbx"))
     {
-        OutputDebugStringA("Failed to load SHOTGUN model\n");
+        ////OutputDebugStringA("Failed to load SHOTGUN model\n");
     }
     else
     {
@@ -1009,11 +966,11 @@ void Game::CreateRenderResources()
         if (SUCCEEDED(hr))
         {
             m_weaponModel->SetTexture(shotgunTexture.Get());
-            OutputDebugStringA("SHOTGUN texture loaded!\n");
+            ////OutputDebugStringA("SHOTGUN texture loaded!\n");
         }
         else
         {
-            OutputDebugStringA("Failed to load SHOTGUN texture\n");
+            ////OutputDebugStringA("Failed to load SHOTGUN texture\n");
         }
     }
 
@@ -1021,12 +978,14 @@ void Game::CreateRenderResources()
     m_pistolModel = std::make_unique<Model>();
     if (!m_pistolModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Gun/PISTOL.fbx"))
     {
-        OutputDebugStringA("Failed to load M1911 model for wall weapon\n");
+        ////OutputDebugStringA("Failed to load M1911 model for wall weapon\n");
     }
 
 
+    // フォント初期化
     m_spriteBatch = std::make_unique<DirectX::SpriteBatch>(m_d3dContext.Get());
-
+    m_font = std::make_unique<DirectX::SpriteFont>(m_d3dDevice.Get(), L"Assets/Fonts/segoeUI.spritefont");
+    m_fontLarge = std::make_unique<DirectX::SpriteFont>(m_d3dDevice.Get(), L"Assets/Fonts/segoeUI_large.spritefont");
 
     //  ランクテクスチャ読み込み
     {
@@ -1055,13 +1014,13 @@ void Game::CreateRenderResources()
             if (FAILED(hr))
             {
                 sprintf_s(buf, "[RANK_TEX] FAILED index=%d\n", i);
-                OutputDebugStringA(buf);
+                ////OutputDebugStringA(buf);
                 m_rankTexturesLoaded = false;
             }
             else
             {
                 sprintf_s(buf, "[RANK_TEX] Loaded index=%d OK\n", i);
-                OutputDebugStringA(buf);
+                ////OutputDebugStringA(buf);
             }
         }
     }
@@ -1094,7 +1053,7 @@ void Game::CreateRenderResources()
             {
                 char buf[256];
                 sprintf_s(buf, "[COMBO_TEX] FAILED digit=%d\n", i);
-                OutputDebugStringA(buf);
+                ////OutputDebugStringA(buf);
                 m_comboTexturesLoaded = false;
             }
         }
@@ -1107,12 +1066,12 @@ void Game::CreateRenderResources()
         );
         if (FAILED(hr))
         {
-            OutputDebugStringA("[COMBO_TEX] FAILED COMBO label\n");
+            ////OutputDebugStringA("[COMBO_TEX] FAILED COMBO label\n");
             m_comboTexturesLoaded = false;
         }
 
-        if (m_comboTexturesLoaded)
-            OutputDebugStringA("[COMBO_TEX] All 11 textures loaded OK\n");
+        //if (m_comboTexturesLoaded)
+            ////OutputDebugStringA("[COMBO_TEX] All 11 textures loaded OK\n");
     }
 
     // ==============================================
@@ -1154,13 +1113,13 @@ void Game::CreateRenderResources()
             if (FAILED(hr))
             {
                 sprintf_s(buf, "[HUD_TEX] FAILED: %s\n", tex.name);
-                OutputDebugStringA(buf);
+                ////OutputDebugStringA(buf);
                 m_shieldHudLoaded = false;
             }
             else
             {
                 sprintf_s(buf, "[HUD_TEX] Loaded: %s OK\n", tex.name);
-                OutputDebugStringA(buf);
+               // //OutputDebugStringA(buf);
             }
         }
 
@@ -1171,10 +1130,10 @@ void Game::CreateRenderResources()
                 L"Assets/Texture/HUD/melee_icon.png",
                 nullptr,
                 m_meleeIconTexture.ReleaseAndGetAddressOf());
-            if (FAILED(hr))
-                OutputDebugStringA("[HUD_TEX] melee_icon not found (optional)\n");
-            else
-                OutputDebugStringA("[HUD_TEX] Loaded: melee_icon OK\n");
+           // if (FAILED(hr))
+                ////OutputDebugStringA("[HUD_TEX] melee_icon not found (optional)\n");
+            //else
+                ////OutputDebugStringA("[HUD_TEX] Loaded: melee_icon OK\n");
         }
 
         // === 汎用白ピクセルテクスチャ作成 ===
@@ -1199,13 +1158,13 @@ void Game::CreateRenderResources()
             if (SUCCEEDED(hr))
             {
                 hr = m_d3dDevice->CreateShaderResourceView(tex.Get(), nullptr, &m_whitePixel);
-                if (SUCCEEDED(hr))
-                    OutputDebugStringA("[HUD_TEX] White pixel created OK\n");
+                //if (SUCCEEDED(hr))
+                    //////OutputDebugStringA("[HUD_TEX] White pixel created OK\n");
             }
         }
 
-        if (m_shieldHudLoaded)
-            OutputDebugStringA("[HUD_TEX] All HUD textures loaded OK!\n");
+        //if (m_shieldHudLoaded)
+            ////OutputDebugStringA("[HUD_TEX] All HUD textures loaded OK!\n");
     }
 
   /*  m_testModel = std::make_unique<Model>();*/
@@ -1213,56 +1172,56 @@ void Game::CreateRenderResources()
     ////  プレイヤーモデルファイルを読み込む
     //if (!m_testModel->LoadFromFile(m_d3dDevice.Get(), "Assets/X_Bot.fbx"))
     //{
-    //    OutputDebugStringA("Game::CreateRenderResources - Failed to load model!\n");
+    //    //OutputDebugStringA("Game::CreateRenderResources - Failed to load model!\n");
     //}
     //else
     //{
-    //    OutputDebugStringA("Game::CreateRenderResources - Model loaded successfully!\n");
+    //    //OutputDebugStringA("Game::CreateRenderResources - Model loaded successfully!\n");
     //}
 
     //  === 敵NORMALモデル   ===
     m_enemyModel = std::make_unique<Model>();
     if (!m_enemyModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Normal/Normal.fbx"))
     {
-        OutputDebugStringA("Failed to load enemy model!\n");
+        ////OutputDebugStringA("Failed to load enemy model!\n");
         //throw std::runtime_error("Failed to load enemy model");
     }
     else
     {
-        OutputDebugStringA("Enemy model loaded successfully!\n");
+        ////OutputDebugStringA("Enemy model loaded successfully!\n");
     }
 
     //  === 敵RUNNERモデル  ===
     m_runnerModel = std::make_unique<Model>();
     if (!m_runnerModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Runner/Runner.fbx"))
     {
-        OutputDebugStringA("Failed to load Runner model!\n");
+        ////OutputDebugStringA("Failed to load Runner model!\n");
     }
     else
     {
-        OutputDebugStringA("Runner model loaded successfully!\n");
+        ////OutputDebugStringA("Runner model loaded successfully!\n");
     }
 
     //  === 敵TANK   ===
     m_tankModel = std::make_unique<Model>();
     if (!m_tankModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Tank/Tank.fbx"))
     {
-        OutputDebugStringA("Failed to load Tank model");
+        ////OutputDebugStringA("Failed to load Tank model");
     }
     else
     {
-        OutputDebugStringA("Tank model loaded successfully!\n");
+        ////OutputDebugStringA("Tank model loaded successfully!\n");
     }
 
     //  アームモデル
     m_gloryKillArmModel = std::make_unique<Model>();
     if (!m_gloryKillArmModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/GloryKill/fps_armsKnife.fbx"))
     {
-        OutputDebugStringA("Failed to load FPS arms model!\n");
+        ////OutputDebugStringA("Failed to load FPS arms model!\n");
     }
     else
     {
-        OutputDebugStringA("FPS arms model loaded!\n");
+        ////OutputDebugStringA("FPS arms model loaded!\n");
 
         m_gloryKillArmModel->PrintBoneNames();
 
@@ -1278,18 +1237,18 @@ void Game::CreateRenderResources()
         if (SUCCEEDED(hr))
         {
             m_gloryKillArmModel->SetTexture(m_armDiffuseTexture.Get());
-            OutputDebugStringA("Arm texture loaded!\n");
+            ////OutputDebugStringA("Arm texture loaded!\n");
         }
         else
         {
-            OutputDebugStringA("Failed to load arm texture!\n");
+            ////OutputDebugStringA("Failed to load arm texture!\n");
         }
     }
 
     m_gloryKillKnifeModel = std::make_unique<Model>();
     if (!m_gloryKillKnifeModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/GloryKill/Knife.fbx"))
     {
-        OutputDebugStringA("Failed to load knife model!\n");
+        ////OutputDebugStringA("Failed to load knife model!\n");
     }
     
 
@@ -1297,36 +1256,36 @@ void Game::CreateRenderResources()
     //  === NORMALモデルのアニメーション   ===
     //  ====================================
     {
-        OutputDebugStringA("=== Loading Y_Bot animations  ===\n");
+        ////OutputDebugStringA("=== Loading Y_Bot animations  ===\n");
 
         //  --- 歩行アニメーション   ---
         if (!m_enemyModel->LoadAnimation("Assets/Models/Normal/Normal_Walk.fbx", "Walk"))
         {
-            OutputDebugStringA("Failed to load Walk animation\n");
+            ////OutputDebugStringA("Failed to load Walk animation\n");
         }
 
         //  --- 待機アニメーション   ---
         if (!m_enemyModel->LoadAnimation("Assets/Models/Normal/Normal_Idle.fbx", "Idle"))
         {
-            OutputDebugStringA("Failed to load Idle animation\n");
+            ////OutputDebugStringA("Failed to load Idle animation\n");
         }
 
         //  --- 走りアニメーション   ---
         if (!m_enemyModel->LoadAnimation("Assets/Models/Normal/Normal_Run.fbx", "Run"))
         {
-            OutputDebugStringA("Failed to load Run animation\n");
+            ////OutputDebugStringA("Failed to load Run animation\n");
         }
 
         //  --- 攻撃アニメーション   ---
         if (!m_enemyModel->LoadAnimation("Assets/Models/Normal/Normal_Attack.fbx", "Attack"))
         {
-            OutputDebugStringA("Failed to load Attack animation");
+            ////OutputDebugStringA("Failed to load Attack animation");
         }
 
         //  --- 死亡アニメーション   ---
         if (!m_enemyModel->LoadAnimation("Assets/Models/Normal/Normal_Death.fbx", "Death"))
         {
-            OutputDebugStringA("Failed to load Death Animation");
+            ////OutputDebugStringA("Failed to load Death Animation");
         }
     }
 
@@ -1335,31 +1294,31 @@ void Game::CreateRenderResources()
     //  ===================================
     {
         //  === RUNNERアニメーション読み込み   ===
-        OutputDebugStringA("=== Loading Runner animations ===\n");
+        ////OutputDebugStringA("=== Loading Runner animations ===\n");
 
         if (!m_runnerModel->LoadAnimation("Assets/Models/Runner/Runner_Walk.fbx", "Walk"))
         {
-            OutputDebugStringA("Failed to load Runner Walk animation\n");
+            //OutputDebugStringA("Failed to load Runner Walk animation\n");
         }
 
         if (!m_runnerModel->LoadAnimation("Assets/Models/Runner/Runner_Run.fbx", "Run"))
         {
-            OutputDebugStringA("Failed to load Runner Run animation\n");
+            //OutputDebugStringA("Failed to load Runner Run animation\n");
         }
 
         if (!m_runnerModel->LoadAnimation("Assets/Models/Runner/Runner_Attack.fbx", "Attack"))
         {
-            OutputDebugStringA("Failed to load Runner Attack animation\n");
+            //OutputDebugStringA("Failed to load Runner Attack animation\n");
         }
 
         if (!m_runnerModel->LoadAnimation("Assets/Models/Runner/Runner_Idle.fbx", "Idle"))
         {
-            OutputDebugStringA("Failed to load Runner Idle animation\n");
+            //OutputDebugStringA("Failed to load Runner Idle animation\n");
         }
 
         if (!m_runnerModel->LoadAnimation("Assets/Models/Runner/Runner_Death.fbx", "Death"))
         {
-            OutputDebugStringA("Failed to load Runner Death animation\n");
+            //OutputDebugStringA("Failed to load Runner Death animation\n");
         }
     }
 
@@ -1368,26 +1327,26 @@ void Game::CreateRenderResources()
     //  =========================
     {
         //  === Tank アニメーション読み込み ===
-        OutputDebugStringA("=== Loading Tank animations ===\n");
+        //OutputDebugStringA("=== Loading Tank animations ===\n");
 
         if (!m_tankModel->LoadAnimation("Assets/Models/Tank/Tank_Walk.fbx", "Walk"))
         {
-            OutputDebugStringA("Failed to load Tank Walk animation\n");
+            //OutputDebugStringA("Failed to load Tank Walk animation\n");
         }
 
         if (!m_tankModel->LoadAnimation("Assets/Models/Tank/Tank_Attack.fbx", "Attack"))
         {
-            OutputDebugStringA("Failed to load Tank Attack animation\n");
+            //OutputDebugStringA("Failed to load Tank Attack animation\n");
         }
 
         if (!m_tankModel->LoadAnimation("Assets/Models/Tank/Tank_Idle.fbx", "Idle"))
         {
-            OutputDebugStringA("Failed to load Tank Idle animation\n");
+            //OutputDebugStringA("Failed to load Tank Idle animation\n");
         }
 
         if (!m_tankModel->LoadAnimation("Assets/Models/Tank/Tank_Death.fbx", "Death"))
         {
-            OutputDebugStringA("Failed to load Tank Death animation\n");
+            //OutputDebugStringA("Failed to load Tank Death animation\n");
         }
 
     // ====================================================================
@@ -1400,7 +1359,7 @@ void Game::CreateRenderResources()
         }
         else
         {
-            OutputDebugStringA("[MODEL] MIDBOSS model loaded OK\n");
+            //OutputDebugStringA("[MODEL] MIDBOSS model loaded OK\n");
 
             if (!m_midBossModel->LoadAnimation("Assets/Models/MidBoss/midboss_walking.fbx", "Walk"))
                 OutputDebugStringA("[ANIM] MIDBOSS Walk FAILED\n");
@@ -1420,10 +1379,10 @@ void Game::CreateRenderResources()
     // === BOSSモデル読み込み ===
     m_bossModel = std::make_unique<Model>();
     if (!m_bossModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Boss/boss.fbx")) {
-        OutputDebugStringA("[MODEL] BOSS model load FAILED\n");
+        //OutputDebugStringA("[MODEL] BOSS model load FAILED\n");
     }
     else {
-        OutputDebugStringA("[MODEL] BOSS model loaded OK\n");
+        //OutputDebugStringA("[MODEL] BOSS model loaded OK\n");
         m_bossModel->LoadAnimation("Assets/Models/Boss/boss_walk.fbx", "Walk");
         m_bossModel->LoadAnimation("Assets/Models/Boss/boss_attack_jump.fbx", "AttackJump");
         m_bossModel->LoadAnimation("Assets/Models/Boss/boss_attack_roundingup.fbx", "AttackSlash");
@@ -1435,11 +1394,11 @@ void Game::CreateRenderResources()
     m_shieldModel = std::make_unique<Model>();
     if (!m_shieldModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Shield/02_Shield.fbx"))
     {
-        OutputDebugStringA("[SHIELD] Failed to load shield model!\n");
+        //OutputDebugStringA("[SHIELD] Failed to load shield model!\n");
     }
     else
     {
-        OutputDebugStringA("[SHIELD] Shield model loaded successfully!\n");
+        //OutputDebugStringA("[SHIELD] Shield model loaded successfully!\n");
 
         // テクスチャ読み込み（BaseColor）
         Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> shieldTex;
@@ -1452,7 +1411,7 @@ void Game::CreateRenderResources()
         if (SUCCEEDED(hr))
         {
             m_shieldModel->SetTexture(shieldTex.Get());
-            OutputDebugStringA("[SHIELD] Texture loaded!\n");
+            //OutputDebugStringA("[SHIELD] Texture loaded!\n");
         }
     }
 
@@ -1460,19 +1419,19 @@ void Game::CreateRenderResources()
     m_mapSystem = std::make_unique<MapSystem>();
     if (!m_mapSystem->Initialize(m_d3dContext.Get(), m_d3dDevice.Get()))
     {
-        OutputDebugStringA("Game::CreateRenderResources - Failed to initialize MapSystem\n");
+        //OutputDebugStringA("Game::CreateRenderResources - Failed to initialize MapSystem\n");
     }
     else
     {
         m_mapSystem->CreateDefaultMap();
-        OutputDebugStringA("Game::CreateRenderResources - MapSystem initialized successfully\n");
+        //OutputDebugStringA("Game::CreateRenderResources - MapSystem initialized successfully\n");
     }
 
     m_furRenderer = std::make_unique<FurRenderer>();
     m_furReady = m_furRenderer->Initialize(m_d3dDevice.Get());
     if (!m_furReady)
     {
-        OutputDebugStringA("[FUR] FurRenderer init FAILED\n");
+        //OutputDebugStringA("[FUR] FurRenderer init FAILED\n");
     }
 
     //  === WeaponSystem 初期化    2025/11/14  ===
@@ -1482,18 +1441,18 @@ void Game::CreateRenderResources()
     //  --- テクスチャ読み込み   2025/11/19  ---
     if (!m_weaponSpawnSystem->InitializeTextures(m_d3dDevice.Get(), m_d3dContext.Get()))
     {
-        OutputDebugStringA("Game::CreateRenderResources - Failed to initialize weapon textures\n");
+        //OutputDebugStringA("Game::CreateRenderResources - Failed to initialize weapon textures\n");
     }
 
     m_nearbyWeaponSpawn = nullptr;
 
-    OutputDebugStringA("Game::CreateRenderResources - WeaponSpawnSystem initialized\n");
+    //OutputDebugStringA("Game::CreateRenderResources - WeaponSpawnSystem initialized\n");
     
     //  === Shadow を初期化  ===
     m_shadow = std::make_unique<Shadow>();
     if (!m_shadow->Initialize(m_d3dDevice.Get()))
     {
-        OutputDebugStringA("Game::CreateRenderResources - Failed to initialize Shadow System!\n");
+        //OutputDebugStringA("Game::CreateRenderResources - Failed to initialize Shadow System!\n");
         // エラー処理
     }
     else
@@ -1532,90 +1491,52 @@ void Game::CreateRenderResources()
 
     if (m_effectShieldTrail == nullptr)
     {
-        OutputDebugStringA("[EFFEKSEER] Failed to load ShieldTrail effect!\n");
+        //OutputDebugStringA("[EFFEKSEER] Failed to load ShieldTrail effect!\n");
     }
     else
     {
-        OutputDebugStringA("[EFFEKSEER] ShieldTrail loaded successfully!\n");
+        //OutputDebugStringA("[EFFEKSEER] ShieldTrail loaded successfully!\n");
     }
 
 
     // === ボスエフェクト読み込み ===
     m_effectSlashRed = Effekseer::Effect::Create(
         m_effekseerManager, u"Assets/Effects/SlashRed.efkefc");
-    if (m_effectSlashRed == nullptr)
-        OutputDebugStringA("[EFFECT] SlashRed.efkefc FAILED\n");
-    else
-        OutputDebugStringA("[EFFECT] SlashRed.efkefc loaded OK\n");
+    // === ボスエフェクト読み込み ===
+    m_effectSlashRed = Effekseer::Effect::Create(
+        m_effekseerManager, u"Assets/Effects/SlashRed.efkefc");
 
     m_effectSlashGreen = Effekseer::Effect::Create(
         m_effekseerManager, u"Assets/Effects/SlashGreen.efkefc");
-    if (m_effectSlashGreen == nullptr)
-        OutputDebugStringA("[EFFECT] SlashGreen.efkefc FAILED\n");
-    else
-        OutputDebugStringA("[EFFECT] SlashGreen.efkefc loaded OK\n");
 
     m_effectGroundSlam = Effekseer::Effect::Create(
         m_effekseerManager, u"Assets/Effects/GroundSlam.efkefc");
-    if (m_effectGroundSlam == nullptr)
-        OutputDebugStringA("[EFFECT] GroundSlam.efkefc FAILED\n");
-    else
-        OutputDebugStringA("[EFFECT] GroundSlam.efkefc loaded OK\n");
 
     m_effectBeamRed = Effekseer::Effect::Create(
         m_effekseerManager, u"Assets/Effects/BeamRed.efkefc");
-    if (m_effectBeamRed == nullptr)
-        OutputDebugStringA("[EFFECT] BeamRed.efkefc FAILED\n");
-    else
-        OutputDebugStringA("[EFFECT] BeamRed.efkefc loaded OK\n");
 
     m_effectBeamGreen = Effekseer::Effect::Create(
         m_effekseerManager, u"Assets/Effects/BeamGreen.efkefc");
-    if (m_effectBeamGreen == nullptr)
-        OutputDebugStringA("[EFFECT] BeamGreen.efkefc FAILED\n");
-    else
-        OutputDebugStringA("[EFFECT] BeamGreen.efkefc loaded OK\n");
-
 
     // 銃発射エフェクト
     m_effectGunFire = Effekseer::Effect::Create(
         m_effekseerManager, u"Assets/Effects/GunFire.efkefc");
-    if (m_effectGunFire == nullptr)
-        OutputDebugStringA("[EFFECT] GunFire2.efkefc FAILED\n");
-    else
-        OutputDebugStringA("[EFFECT] GunFire2.efkefc loaded OK\n");
 
     // 弾丸ヒットエフェクト
     m_effectAttackImpact = Effekseer::Effect::Create(
         m_effekseerManager, u"Assets/Effects/AttackImpact.efkefc");
-    if (m_effectAttackImpact == nullptr)
-        OutputDebugStringA("[EFFECT] AttackImpact.efkefc FAILED\n");
-    else
-        OutputDebugStringA("[EFFECT] AttackImpact.efkefc loaded OK\n");
 
     // ボススポーンエフェクト
     m_effectBossSpawn = Effekseer::Effect::Create(
         m_effekseerManager, u"Assets/Effects/BossSpawn.efkefc");
-    if (m_effectBossSpawn == nullptr)
-        OutputDebugStringA("[EFFECT] BossSpawn.efkefc FAILED\n");
-    else
-        OutputDebugStringA("[EFFECT] BossSpawn.efkefc loaded OK\n");
 
     // 雑魚スポーンエフェクト
     m_effectEnemySpawn = Effekseer::Effect::Create(
         m_effekseerManager, u"Assets/Effects/SpawnEnemy.efkefc");
-    if (m_effectEnemySpawn == nullptr)
-        OutputDebugStringA("[EFFECT] EnemySpawn.efkefc FAILED\n");
-    else
-        OutputDebugStringA("[EFFECT] EnemySpawn.efkefc loaded OK\n");
 
     // パリィエフェクト
     m_effectParry = Effekseer::Effect::Create(
         m_effekseerManager, u"Assets/Effects/Parry.efkefc");
-    if (m_effectParry == nullptr)
-        OutputDebugStringA("[EFFECT] Parry.efkefc FAILED\n");
-    else
-        OutputDebugStringA("[EFFECT] Parry.efkefc loaded OK\n");
 
 
     //  === Imgui   ===
@@ -1822,7 +1743,7 @@ void Game::DrawDebugUI()
                         m_normalConfigDebug.headRadius
                     );
                     ImGui::SetClipboardText(buffer);
-                    OutputDebugStringA("NORMAL config copied to clipboard!\n");
+                    //OutputDebugStringA("NORMAL config copied to clipboard!\n");
                 }
 
                 ImGui::TreePop();
@@ -1859,7 +1780,7 @@ void Game::DrawDebugUI()
                         m_runnerConfigDebug.headRadius
                     );
                     ImGui::SetClipboardText(buffer);
-                    OutputDebugStringA("RUNNER config copied to clipboard!\n");
+                    //OutputDebugStringA("RUNNER config copied to clipboard!\n");
                 }
 
 
@@ -1898,7 +1819,7 @@ void Game::DrawDebugUI()
                         m_tankConfigDebug.headRadius
                     );
                     ImGui::SetClipboardText(buffer);
-                    OutputDebugStringA("TANK config copied to clipboard!\n");
+                    //OutputDebugStringA("TANK config copied to clipboard!\n");
                 }
 
                 ImGui::TreePop();
@@ -1969,7 +1890,7 @@ void Game::DrawDebugUI()
                     RemoveEnemyPhysicsBody(enemy.id);
                     AddEnemyPhysicsBody(enemy);
                 }
-                OutputDebugStringA("[DEBUG] Rebuilt all physics bodies with current hitbox values!\n");
+                //OutputDebugStringA("[DEBUG] Rebuilt all physics bodies with current hitbox values!\n");
             }
 
             // リセットボタン
@@ -1980,7 +1901,7 @@ void Game::DrawDebugUI()
                 m_tankConfigDebug = GetEnemyConfig(EnemyType::TANK);
                 m_midbossConfigDebug = GetEnemyConfig(EnemyType::MIDBOSS);
                 m_bossConfigDebug = GetEnemyConfig(EnemyType::BOSS);
-                OutputDebugStringA("Reset all hitbox configs to default\n");
+                //OutputDebugStringA("Reset all hitbox configs to default\n");
             }
 
             ImGui::Separator();
@@ -2666,7 +2587,7 @@ void Game::DrawDebugUI()
                         m_roarWindupTime, m_roarFireTime, m_roarRecoveryTime,
                         m_parryWindowDuration, m_bossAttackCooldownBase);
                     ImGui::SetClipboardText(buf);
-                    OutputDebugStringA("[DEBUG] Boss timing values copied!\n");
+                    //OutputDebugStringA("[DEBUG] Boss timing values copied!\n");
                 }
             }
 
@@ -3318,7 +3239,7 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
 
     //    char debugMsg[512];
     //    sprintf_s(debugMsg, "=== Enemies: %zu ===\n", enemies.size());
-    //    OutputDebugStringA(debugMsg);
+    //    //OutputDebugStringA(debugMsg);
     //}
 
     //  深度書き込みを強制的に有効化
@@ -3331,25 +3252,25 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
     //	========================================================================
 
     // === Normal（Y_Bot）用 ===
-    std::vector<InstanceData> normalWalking;
-    std::vector<InstanceData> normalAttacking;
-    std::vector<InstanceData> normalWalkingHeadless;
-    std::vector<InstanceData> normalAttackingHeadless;
+    //std::vector<InstanceData> normalWalking;
+    //std::vector<InstanceData> normalAttacking;
+    //std::vector<InstanceData> normalWalkingHeadless;
+    //std::vector<InstanceData> normalAttackingHeadless;
     std::vector<InstanceData> normalDead;
     std::vector<InstanceData> normalDeadHeadless;
 
     // === Runner用 ===
-    std::vector<InstanceData> runnerWalking;
-    std::vector<InstanceData> runnerAttacking;
-    std::vector<InstanceData> runnerWalkingHeadless;
-    std::vector<InstanceData> runnerAttackingHeadless;
+    //std::vector<InstanceData> runnerWalking;
+    //std::vector<InstanceData> runnerAttacking;
+    //std::vector<InstanceData> runnerWalkingHeadless;
+    //std::vector<InstanceData> runnerAttackingHeadless;
     std::vector<InstanceData> runnerDead;
     std::vector<InstanceData> runnerDeadHeadless;
 
     // === Tank用 ===
-    std::vector<InstanceData> tankWalking;
-    std::vector<InstanceData> tankAttacking;
-    std::vector<InstanceData> tankWalkingHeadless;
+    //std::vector<InstanceData> tankWalking;
+    //std::vector<InstanceData> tankAttacking;
+    //std::vector<InstanceData> tankWalkingHeadless;
     std::vector<InstanceData> tankAttackingHeadless;
     std::vector<InstanceData> tankDead;
     std::vector<InstanceData> tankDeadHeadless;
@@ -3374,6 +3295,8 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
 
     //  === 死亡アニメーション再生時間の取得    ===
     float deathDuration = m_enemyModel->GetAnimationDuration("Death");
+
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
 
     for (const auto& enemy : m_enemySystem->GetEnemies())
     {
@@ -3408,50 +3331,66 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
 
             if (animationFinished)
             {
-                // ========================================================
-                // アニメーション終了後 → インスタンシングで固定ポーズ
-                // ========================================================
-                InstanceData instance;
-                DirectX::XMStoreFloat4x4(&instance.world, world);
-                instance.color = enemy.color;
-
-                //  === タイプ別に振り分け   ===
-                switch (enemy.type)
+                // MIDBOSS/BOSSだけインスタンスデータが必要
+                if (enemy.type == EnemyType::MIDBOSS || enemy.type == EnemyType::BOSS ||
+                    (enemy.type == EnemyType::TANK && enemy.headDestroyed && enemy.currentAnimation == "Attack"))
                 {
-                case EnemyType::NORMAL:
-                    if (enemy.headDestroyed)
-                        normalDeadHeadless.push_back(instance);
-                    else
-                        normalDead.push_back(instance);
-                    break;
+                    InstanceData instance;
+                    DirectX::XMStoreFloat4x4(&instance.world, world);
 
-                case EnemyType::RUNNER:
-                    if (enemy.headDestroyed)
-                        runnerDeadHeadless.push_back(instance);
+                    if (enemy.isStaggered)
+                    {
+                        float flash = sinf(enemy.staggerFlashTimer);
+                        flash = (flash + 1.0f) * 0.5f;
+                        instance.color = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
+                    }
                     else
-                        runnerDead.push_back(instance);
-                    break;
+                    {
+                        instance.color = enemy.color;
+                    }
 
-                case EnemyType::TANK:
-                    if (enemy.headDestroyed)
-                        tankDeadHeadless.push_back(instance);
-                    else
-                        tankDead.push_back(instance);
-                    break;
-
-                case EnemyType::MIDBOSS:
-                    if (enemy.headDestroyed)
-                        midBossDeadHeadless.push_back(instance);
-                    else
-                        midBossDead.push_back(instance);
-                    break;
-
-                case EnemyType::BOSS:
-                    if (enemy.headDestroyed)
-                        bossDeadHeadless.push_back(instance);
-                    else
-                        bossDead.push_back(instance);
-                    break;
+                    switch (enemy.type)
+                    {
+                    case EnemyType::TANK:
+                        tankAttackingHeadless.push_back(instance);
+                        break;
+                    case EnemyType::MIDBOSS:
+                        if (enemy.headDestroyed)
+                        {
+                            if (enemy.currentAnimation == "Attack")
+                                midBossAttackingHeadless.push_back(instance);
+                            else
+                                midBossWalkingHeadless.push_back(instance);
+                        }
+                        else
+                        {
+                            if (enemy.currentAnimation == "Attack")
+                                midBossAttacking.push_back(instance);
+                            else
+                                midBossWalking.push_back(instance);
+                        }
+                        break;
+                    case EnemyType::BOSS:
+                        if (enemy.headDestroyed)
+                        {
+                            if (enemy.currentAnimation == "AttackJump")
+                                bossAttackingJumpHeadless.push_back(instance);
+                            else if (enemy.currentAnimation == "AttackSlash")
+                                bossAttackingSlashHeadless.push_back(instance);
+                            else
+                                bossWalkingHeadless.push_back(instance);
+                        }
+                        else
+                        {
+                            if (enemy.currentAnimation == "AttackJump")
+                                bossAttackingJump.push_back(instance);
+                            else if (enemy.currentAnimation == "AttackSlash")
+                                bossAttackingSlash.push_back(instance);
+                            else
+                                bossWalking.push_back(instance);
+                        }
+                        break;
+                    }
                 }
 
 
@@ -3477,18 +3416,24 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 m_enemyModel->SetBoneScale("Head", 1.0f);
             }
 
-            // 影を描画
+            // 影を描画（近い敵だけ）
             if (m_shadow)
             {
-                m_shadow->RenderShadow(
-                    m_d3dContext.Get(), //  コンテキスト
-                    enemy.position,     //  位置  
-                    1.5f,               //  サイズ
-                    viewMatrix,         //  ビュー行列
-                    projectionMatrix,   //  projection行列　　
-                    lightDir,           //  光の方向
-                    0.0f                //  地面の高さ
-                );
+                float sdx = enemy.position.x - playerPos.x;
+                float sdz = enemy.position.z - playerPos.z;
+                float shadowDist2 = sdx * sdx + sdz * sdz;
+                if (shadowDist2 < 400.0f)  // 20m以内だけ影描画
+                {
+                    m_shadow->RenderShadow(
+                        m_d3dContext.Get(),
+                        enemy.position,
+                        1.5f,
+                        viewMatrix,
+                        projectionMatrix,
+                        lightDir,
+                        0.0f
+                    );
+                }
             }
 
             continue;  // 生きている敵の処理はスキップ
@@ -3525,16 +3470,16 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
             if (enemy.headDestroyed)
             {
                 if (enemy.currentAnimation == "Attack")
-                    normalAttackingHeadless.push_back(instance);
+                {}//normalAttackingHeadless.push_back(instance);
                 else
-                    normalWalkingHeadless.push_back(instance);
+                {}//}normalWalkingHeadless.push_back(instance);
             }
             else
             {
                 if (enemy.currentAnimation == "Attack")
-                    normalAttacking.push_back(instance);
+                {}//}normalAttacking.push_back(instance);
                 else
-                    normalWalking.push_back(instance);
+                {}//normalWalking.push_back(instance);
             }
             break;
 
@@ -3542,16 +3487,16 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
             if (enemy.headDestroyed)
             {
                 if (enemy.currentAnimation == "Attack")
-                    runnerAttackingHeadless.push_back(instance);
+                {}//runnerAttackingHeadless.push_back(instance);
                 else
-                    runnerWalkingHeadless.push_back(instance);
+                {}//runnerWalkingHeadless.push_back(instance);
             }
             else
             {
                 if (enemy.currentAnimation == "Attack")
-                    runnerAttacking.push_back(instance);
+                {}//runnerAttacking.push_back(instance);
                 else
-                    runnerWalking.push_back(instance);
+                {}//runnerWalking.push_back(instance);
             }
             break;
 
@@ -3561,14 +3506,14 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 if (enemy.currentAnimation == "Attack")
                     tankAttackingHeadless.push_back(instance);
                 else
-                    tankWalkingHeadless.push_back(instance);
+                {}//tankWalkingHeadless.push_back(instance);
             }
             else
             {
                 if (enemy.currentAnimation == "Attack")
-                    tankAttacking.push_back(instance);
+                {}//tankAttacking.push_back(instance);
                 else
-                    tankWalking.push_back(instance);
+                {}//tankWalking.push_back(instance);
             }
             break;
 
@@ -3612,18 +3557,24 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
             break;
         }
 
-        // 影を描画
+        // 影を描画（近い敵だけ）
         if (m_shadow)
         {
-            m_shadow->RenderShadow(
-                m_d3dContext.Get(), //  コンテキスト
-                enemy.position,     //  位置
-                1.5f,               //  サイズ
-                viewMatrix,         //  ビュー行列
-                projectionMatrix,   //  プロジェクション行列
-                lightDir,           //  光の方向
-                0.0f                //  地面の高さ
-            );
+            float sdx = enemy.position.x - playerPos.x;
+            float sdz = enemy.position.z - playerPos.z;
+            float shadowDist2 = sdx * sdx + sdz * sdz;
+            if (shadowDist2 < 400.0f)  // 20m以内だけ影描画
+            {
+                m_shadow->RenderShadow(
+                    m_d3dContext.Get(),
+                    enemy.position,
+                    1.5f,
+                    viewMatrix,
+                    projectionMatrix,
+                    lightDir,
+                    0.0f
+                );
+            }
         }
     }
 
@@ -3636,58 +3587,40 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
 // ====================================================================
     if (m_enemyModel)
     {
+        // ================================================================
+        // [PERF] NORMAL: Head ON - walking+attacking unified loop
+        // Before: 2 separate loops (walking, attacking) = 2N iterations
+        // After:  1 loop = N iterations
+        // ================================================================
         m_enemyModel->SetBoneScale("Head", 1.0f);
-
-        // Walking - 頭あり
-        if (!normalWalking.empty())
+        for (const auto& enemy : m_enemySystem->GetEnemies())
         {
-            for (const auto& enemy : m_enemySystem->GetEnemies())
+            if (!enemy.isAlive || enemy.isDying) continue;
+            if (enemy.type != EnemyType::NORMAL) continue;
+            if (enemy.headDestroyed) continue;
+
+            float s = 0.01f;
+            DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
+                * DirectX::XMMatrixRotationY(enemy.rotationY)
+                * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
+            
+            // [FIX] よろめき中はオレンジ点滅
+            DirectX::XMFLOAT4 finalColor = enemy.color;
+            if (enemy.isStaggered)
             {
-                if (!enemy.isAlive || enemy.isDying) continue;
-                if (enemy.type != EnemyType::NORMAL) continue;
-                if (enemy.currentAnimation == "Attack") continue;
-                if (enemy.headDestroyed) continue;
-
-                float s = 0.01f;
-                DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                    * DirectX::XMMatrixRotationY(enemy.rotationY)
-                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-                DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
-
-                m_enemyModel->DrawAnimated(
-                    m_d3dContext.Get(), world,
-                    viewMatrix, projectionMatrix,
-                    color, enemy.currentAnimation, enemy.animationTime);
+                float flash = sinf(enemy.staggerFlashTimer);
+                flash = (flash + 1.0f) * 0.5f;
+                finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
             }
+            DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&finalColor);
+
+            m_enemyModel->DrawAnimated(
+                m_d3dContext.Get(), world,
+                viewMatrix, projectionMatrix,
+                color, enemy.currentAnimation, enemy.animationTime);
         }
 
-        // Attacking - 頭あり
-        if (!normalAttacking.empty())
-        {
-            for (const auto& enemy : m_enemySystem->GetEnemies())
-            {
-                if (!enemy.isAlive || enemy.isDying) continue;
-                if (enemy.type != EnemyType::NORMAL) continue;
-                if (enemy.currentAnimation != "Attack") continue;
-                if (enemy.headDestroyed) continue;
-
-                float s = 0.01f;
-                DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                    * DirectX::XMMatrixRotationY(enemy.rotationY)
-                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-
-                DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
-
-                m_enemyModel->DrawAnimated(
-                    m_d3dContext.Get(), world,
-                    viewMatrix, projectionMatrix,
-                    color,
-                    "Attack",
-                    enemy.animationTime);
-            }
-        }
-
-        // Dead - 頭あり
+        // Dead - head on (instanced)
         if (!normalDead.empty())
         {
             float finalTime = deathDuration - 0.001f;
@@ -3695,63 +3628,38 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
-        // 頭なし描画
+        // ================================================================
+        // [PERF] NORMAL: Headless - walking+attacking unified loop
+        // ================================================================
         m_enemyModel->SetBoneScale("Head", 0.0f);
-
-        // Walking - 頭なし
-        if (!normalWalkingHeadless.empty())
+        for (const auto& enemy : m_enemySystem->GetEnemies())
         {
-            m_enemyModel->SetBoneScale("Head", 0.0f);
-            for (const auto& enemy : m_enemySystem->GetEnemies())
+            if (!enemy.isAlive || enemy.isDying) continue;
+            if (enemy.type != EnemyType::NORMAL) continue;
+            if (!enemy.headDestroyed) continue;
+
+            float s = 0.01f;
+            DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
+                * DirectX::XMMatrixRotationY(enemy.rotationY)
+                * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
+
+            // [FIX] よろめき中はオレンジ点滅
+            DirectX::XMFLOAT4 finalColor = enemy.color;
+            if (enemy.isStaggered)
             {
-                if (!enemy.isAlive || enemy.isDying) continue;
-                if (enemy.type != EnemyType::NORMAL) continue;
-                if (enemy.currentAnimation == "Attack") continue;
-                if (!enemy.headDestroyed) continue;
-
-                float s = 0.01f;
-                DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                    * DirectX::XMMatrixRotationY(enemy.rotationY)
-                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-                DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
-
-                m_enemyModel->DrawAnimated(
-                    m_d3dContext.Get(), world,
-                    viewMatrix, projectionMatrix,
-                    color, enemy.currentAnimation, enemy.animationTime);
+                float flash = sinf(enemy.staggerFlashTimer);
+                flash = (flash + 1.0f) * 0.5f;
+                finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
             }
-            m_enemyModel->SetBoneScale("Head", 1.0f);
+            DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&finalColor);
+
+            m_enemyModel->DrawAnimated(
+                m_d3dContext.Get(), world,
+                viewMatrix, projectionMatrix,
+                color, enemy.currentAnimation, enemy.animationTime);
         }
 
-        // Attacking - 頭なし
-        if (!normalAttackingHeadless.empty())
-        {
-            m_enemyModel->SetBoneScale("Head", 0.0f);
-            for (const auto& enemy : m_enemySystem->GetEnemies())
-            {
-                if (!enemy.isAlive || enemy.isDying) continue;
-                if (enemy.type != EnemyType::NORMAL) continue;
-                if (enemy.currentAnimation != "Attack") continue;
-                if (!enemy.headDestroyed) continue;
-
-                float s = 0.01f;
-                DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                    * DirectX::XMMatrixRotationY(enemy.rotationY)
-                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-
-                DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
-
-                m_enemyModel->DrawAnimated(
-                    m_d3dContext.Get(), world,
-                    viewMatrix, projectionMatrix,
-                    color,
-                    "Attack",
-                    enemy.animationTime);
-            }
-            m_enemyModel->SetBoneScale("Head", 1.0f);
-        }
-
-        // Dead - 頭なし
+        // Dead - headless (instanced)
         if (!normalDeadHeadless.empty())
         {
             float finalTime = deathDuration - 0.001f;
@@ -3762,60 +3670,44 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
         m_enemyModel->SetBoneScale("Head", 1.0f);
     }
 
+
     // ====================================================================
-    // RUNNER の描画
+    // RUNNER
     // ====================================================================
     if (m_runnerModel)
     {
+        // ================================================================
+        // [PERF] RUNNER: Head ON - walking+attacking unified loop
+        // ================================================================
         m_runnerModel->SetBoneScale("Head", 1.0f);
-
-        // Walking - 頭あり
-        if (!runnerWalking.empty())
+        for (const auto& enemy : m_enemySystem->GetEnemies())
         {
-            for (const auto& enemy : m_enemySystem->GetEnemies())
+            if (!enemy.isAlive || enemy.isDying) continue;
+            if (enemy.type != EnemyType::RUNNER) continue;
+            if (enemy.headDestroyed) continue;
+
+            float s = 0.01f;
+            DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
+                * DirectX::XMMatrixRotationY(enemy.rotationY)
+                * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
+           
+            // [FIX] よろめき中はオレンジ点滅
+            DirectX::XMFLOAT4 finalColor = enemy.color;
+            if (enemy.isStaggered)
             {
-                if (!enemy.isAlive || enemy.isDying) continue;
-                if (enemy.type != EnemyType::RUNNER) continue;
-                if (enemy.currentAnimation == "Attack") continue;
-                if (enemy.headDestroyed) continue;
-
-                float s = 0.01f;
-                DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                    * DirectX::XMMatrixRotationY(enemy.rotationY)
-                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-                DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
-
-                m_runnerModel->DrawAnimated(
-                    m_d3dContext.Get(), world,
-                    viewMatrix, projectionMatrix,
-                    color, enemy.currentAnimation, enemy.animationTime);
+                float flash = sinf(enemy.staggerFlashTimer);
+                flash = (flash + 1.0f) * 0.5f;
+                finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
             }
+            DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&finalColor);
+
+            m_runnerModel->DrawAnimated(
+                m_d3dContext.Get(), world,
+                viewMatrix, projectionMatrix,
+                color, enemy.currentAnimation, enemy.animationTime);
         }
 
-        // Attacking - 頭あり
-        if (!runnerAttacking.empty())
-        {
-            for (const auto& enemy : m_enemySystem->GetEnemies())
-            {
-                if (!enemy.isAlive || enemy.isDying) continue;
-                if (enemy.type != EnemyType::RUNNER) continue;
-                if (enemy.currentAnimation != "Attack") continue;
-                if (enemy.headDestroyed) continue;
-
-                float s = 0.01f;
-                DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                    * DirectX::XMMatrixRotationY(enemy.rotationY)
-                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-                DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
-
-                m_runnerModel->DrawAnimated(
-                    m_d3dContext.Get(), world,
-                    viewMatrix, projectionMatrix,
-                    color, "Attack", enemy.animationTime);
-            }
-        }
-
-        // Dead - 頭あり
+        // Dead - head on (instanced)
         if (!runnerDead.empty())
         {
             float finalTime = m_runnerModel->GetAnimationDuration("Death") - 0.001f;
@@ -3823,60 +3715,38 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
-        // 頭なし描画
+        // ================================================================
+        // [PERF] RUNNER: Headless - walking+attacking unified loop
+        // ================================================================
         m_runnerModel->SetBoneScale("Head", 0.0f);
-
-        // Walking - 頭なし
-        if (!runnerWalkingHeadless.empty())
+        for (const auto& enemy : m_enemySystem->GetEnemies())
         {
-            m_runnerModel->SetBoneScale("Head", 0.0f);
-            for (const auto& enemy : m_enemySystem->GetEnemies())
+            if (!enemy.isAlive || enemy.isDying) continue;
+            if (enemy.type != EnemyType::RUNNER) continue;
+            if (!enemy.headDestroyed) continue;
+
+            float s = 0.01f;
+            DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
+                * DirectX::XMMatrixRotationY(enemy.rotationY)
+                * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
+            
+            // [FIX] よろめき中はオレンジ点滅
+            DirectX::XMFLOAT4 finalColor = enemy.color;
+            if (enemy.isStaggered)
             {
-                if (!enemy.isAlive || enemy.isDying) continue;
-                if (enemy.type != EnemyType::RUNNER) continue;
-                if (enemy.currentAnimation == "Attack") continue;
-                if (!enemy.headDestroyed) continue;
-
-                float s = 0.01f;
-                DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                    * DirectX::XMMatrixRotationY(enemy.rotationY)
-                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-                DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
-
-                m_runnerModel->DrawAnimated(
-                    m_d3dContext.Get(), world,
-                    viewMatrix, projectionMatrix,
-                    color, enemy.currentAnimation, enemy.animationTime);
+                float flash = sinf(enemy.staggerFlashTimer);
+                flash = (flash + 1.0f) * 0.5f;
+                finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
             }
-            m_runnerModel->SetBoneScale("Head", 1.0f);
+            DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&finalColor);
+
+            m_runnerModel->DrawAnimated(
+                m_d3dContext.Get(), world,
+                viewMatrix, projectionMatrix,
+                color, enemy.currentAnimation, enemy.animationTime);
         }
 
-        // Attacking - 頭なし
-        if (!runnerAttackingHeadless.empty())
-        {
-            m_runnerModel->SetBoneScale("Head", 0.0f);
-            for (const auto& enemy : m_enemySystem->GetEnemies())
-            {
-                if (!enemy.isAlive || enemy.isDying) continue;
-                if (enemy.type != EnemyType::RUNNER) continue;
-                if (enemy.currentAnimation != "Attack") continue;
-                if (!enemy.headDestroyed) continue;
-
-                float s = 0.01f;
-                DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                    * DirectX::XMMatrixRotationY(enemy.rotationY)
-                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-                DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
-
-                m_runnerModel->DrawAnimated(
-                    m_d3dContext.Get(), world,
-                    viewMatrix, projectionMatrix,
-                    color, "Attack", enemy.animationTime);
-            }
-            m_runnerModel->SetBoneScale("Head", 1.0f);
-        }
-
-        // Dead - 頭なし
+        // Dead - headless (instanced)
         if (!runnerDeadHeadless.empty())
         {
             float finalTime = m_runnerModel->GetAnimationDuration("Death") - 0.001f;
@@ -3887,60 +3757,44 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
         m_runnerModel->SetBoneScale("Head", 1.0f);
     }
 
+
     // ====================================================================
-    // TANK の描画
+    // TANK
     // ====================================================================
     if (m_tankModel)
     {
+        // ================================================================
+        // [PERF] TANK: Head ON - walking+attacking unified loop
+        // ================================================================
         m_tankModel->SetBoneScale("Head", 1.0f);
-
-        // Walking - 頭あり
-        if (!tankWalking.empty())
+        for (const auto& enemy : m_enemySystem->GetEnemies())
         {
-            for (const auto& enemy : m_enemySystem->GetEnemies())
+            if (!enemy.isAlive || enemy.isDying) continue;
+            if (enemy.type != EnemyType::TANK) continue;
+            if (enemy.headDestroyed) continue;
+
+            float s = 0.01f;
+            DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
+                * DirectX::XMMatrixRotationY(enemy.rotationY)
+                * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
+           
+            // [FIX] よろめき中はオレンジ点滅
+            DirectX::XMFLOAT4 finalColor = enemy.color;
+            if (enemy.isStaggered)
             {
-                if (!enemy.isAlive || enemy.isDying) continue;
-                if (enemy.type != EnemyType::TANK) continue;
-                if (enemy.currentAnimation == "Attack") continue;
-                if (enemy.headDestroyed) continue;
-
-                float s = 0.01f;
-                DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                    * DirectX::XMMatrixRotationY(enemy.rotationY)
-                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-                DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
-
-                m_tankModel->DrawAnimated(
-                    m_d3dContext.Get(), world,
-                    viewMatrix, projectionMatrix,
-                    color, enemy.currentAnimation, enemy.animationTime);
+                float flash = sinf(enemy.staggerFlashTimer);
+                flash = (flash + 1.0f) * 0.5f;
+                finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
             }
+            DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&finalColor);
+
+            m_tankModel->DrawAnimated(
+                m_d3dContext.Get(), world,
+                viewMatrix, projectionMatrix,
+                color, enemy.currentAnimation, enemy.animationTime);
         }
 
-        // Attacking - 頭あり
-        if (!tankAttacking.empty())
-        {
-            for (const auto& enemy : m_enemySystem->GetEnemies())
-            {
-                if (!enemy.isAlive || enemy.isDying) continue;
-                if (enemy.type != EnemyType::TANK) continue;
-                if (enemy.currentAnimation != "Attack") continue;
-                if (enemy.headDestroyed) continue;
-
-                float s = 0.01f;
-                DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                    * DirectX::XMMatrixRotationY(enemy.rotationY)
-                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-                DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
-
-                m_tankModel->DrawAnimated(
-                    m_d3dContext.Get(), world,
-                    viewMatrix, projectionMatrix,
-                    color, "Attack", enemy.animationTime);
-            }
-        }
-
-        // Dead - 頭あり
+        // Dead - head on (instanced)
         if (!tankDead.empty())
         {
             float finalTime = m_tankModel->GetAnimationDuration("Death") - 0.001f;
@@ -3948,35 +3802,39 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
-        // 頭なし描画
+        // ================================================================
+        // [PERF] TANK: Headless - walking unified loop
+        // ================================================================
         m_tankModel->SetBoneScale("Head", 0.0f);
-
-        // Walking - 頭なし
-        if (!tankWalkingHeadless.empty())
+        for (const auto& enemy : m_enemySystem->GetEnemies())
         {
-            m_tankModel->SetBoneScale("Head", 0.0f);
-            for (const auto& enemy : m_enemySystem->GetEnemies())
+            if (!enemy.isAlive || enemy.isDying) continue;
+            if (enemy.type != EnemyType::TANK) continue;
+            if (!enemy.headDestroyed) continue;
+            if (enemy.currentAnimation == "Attack") continue;  // Attacking uses DrawInstanced below
+
+            float s = 0.01f;
+            DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
+                * DirectX::XMMatrixRotationY(enemy.rotationY)
+                * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
+
+            // [FIX] よろめき中はオレンジ点滅
+            DirectX::XMFLOAT4 finalColor = enemy.color;
+            if (enemy.isStaggered)
             {
-                if (!enemy.isAlive || enemy.isDying) continue;
-                if (enemy.type != EnemyType::TANK) continue;
-                if (enemy.currentAnimation == "Attack") continue;
-                if (!enemy.headDestroyed) continue;
-
-                float s = 0.01f;
-                DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                    * DirectX::XMMatrixRotationY(enemy.rotationY)
-                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-                DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&enemy.color);
-
-                m_tankModel->DrawAnimated(
-                    m_d3dContext.Get(), world,
-                    viewMatrix, projectionMatrix,
-                    color, enemy.currentAnimation, enemy.animationTime);
+                float flash = sinf(enemy.staggerFlashTimer);
+                flash = (flash + 1.0f) * 0.5f;
+                finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
             }
-            m_tankModel->SetBoneScale("Head", 1.0f);
+            DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&finalColor);
+
+            m_tankModel->DrawAnimated(
+                m_d3dContext.Get(), world,
+                viewMatrix, projectionMatrix,
+                color, enemy.currentAnimation, enemy.animationTime);
         }
 
-        // Attacking - 頭なし
+        // Attacking headless (instanced with shared timer)
         if (!tankAttackingHeadless.empty())
         {
             float attackTime = fmod(m_typeAttackTimer[2],
@@ -3985,7 +3843,7 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 viewMatrix, projectionMatrix, "Attack", attackTime);
         }
 
-        // Dead - 頭なし
+        // Dead - headless (instanced)
         if (!tankDeadHeadless.empty())
         {
             float finalTime = m_tankModel->GetAnimationDuration("Death") - 0.001f;
@@ -4189,7 +4047,7 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
     primitiveBatch->Begin();
 
     // カメラの右方向・上方向を計算（ビルボード用）
-    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+    //DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
     DirectX::XMVECTOR camPos = DirectX::XMLoadFloat3(&playerPos);
     DirectX::XMFLOAT3 pRot = m_player->GetRotation();
     DirectX::XMVECTOR camDir = DirectX::XMVectorSet(
@@ -4207,7 +4065,8 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
 
     for (const auto& enemy : m_enemySystem->GetEnemies())
     {
-        if (!enemy.isAlive || enemy.isDying || enemy.health >= enemy.maxHealth)
+        if (!enemy.isAlive || enemy.isDying || enemy.health >= enemy.maxHealth
+            || enemy.type == EnemyType::BOSS || enemy.type == EnemyType::MIDBOSS)
             continue;
         if (enemy.isExploded)
             continue;
@@ -4303,12 +4162,10 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
         );    
     }
 
-    // === 攻撃予告エフェクト（全敵対象、HP関係なく表示） ===
+    // === 収縮リング式・攻撃予告 ===
     for (const auto& enemy : m_enemySystem->GetEnemies())
     {
-        if (!enemy.isAlive || enemy.isDying)
-            continue;
-        if (enemy.isExploded)
+        if (!enemy.isAlive || enemy.isDying || enemy.isExploded)
             continue;
 
         if (enemy.currentAnimation == "Attack" && !enemy.attackJustLanded)
@@ -4322,84 +4179,127 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
             }
 
             float timeToHit = hitTime - enemy.animationTime;
-            float warningWindow = 0.8f;
+            float warningWindow = 1.0f;
 
             if (timeToHit > 0.0f && timeToHit < warningWindow)
             {
                 float urgency = 1.0f - (timeToHit / warningWindow);
-                float flashSpeed = 4.0f + urgency * 12.0f;
-                float flash = (sinf(m_gameTime * flashSpeed * 6.28f) + 1.0f) * 0.5f;
 
-                float markSize = 0.15f + urgency * 0.15f;
-                if (timeToHit < 0.25f) markSize *= 1.8f;  // パリィ圏内でデカく
-                DirectX::XMVECTOR markCenter = DirectX::XMVectorSet(
-                    enemy.position.x, enemy.position.y + 2.8f, enemy.position.z, 0.0f
+                // --- リング中心（敵の胸あたり） ---
+                DirectX::XMVECTOR ringCenter = DirectX::XMVectorSet(
+                    enemy.position.x, enemy.position.y + 1.5f, enemy.position.z, 0.0f
                 );
 
-                DirectX::XMVECTOR mUp = DirectX::XMVectorAdd(markCenter, DirectX::XMVectorScale(camUp, markSize));
-                DirectX::XMVECTOR mDown = DirectX::XMVectorSubtract(markCenter, DirectX::XMVectorScale(camUp, markSize));
-                DirectX::XMVECTOR mLeft = DirectX::XMVectorSubtract(markCenter, DirectX::XMVectorScale(camRight, markSize * 0.6f));
-                DirectX::XMVECTOR mRight = DirectX::XMVectorAdd(markCenter, DirectX::XMVectorScale(camRight, markSize * 0.6f));
+                // --- 収縮リングの半径（大→小に縮む） ---
+                float maxRadius = 2.5f;
+                float minRadius = 0.5f;  // 敵の体に重なるサイズ
+                float ringRadius = maxRadius - urgency * (maxRadius - minRadius);
 
-                DirectX::XMFLOAT3 mu, md, ml, mr;
-                DirectX::XMStoreFloat3(&mu, mUp);
-                DirectX::XMStoreFloat3(&md, mDown);
-                DirectX::XMStoreFloat3(&ml, mLeft);
-                DirectX::XMStoreFloat3(&mr, mRight);
+                // --- 色の遷移 ---
+                DirectX::XMFLOAT4 ringColor;
+                float alpha;
+                float parryZone = 0.25f;
 
-                float alpha = (0.5f + urgency * 0.5f) * (0.4f + flash * 0.6f);
-
-                // 色を段階で変える
-                DirectX::XMFLOAT4 warnColor;
-                if (timeToHit < 0.25f)
+                if (timeToHit < parryZone)
                 {
-                    // 緑 = 「今パリィしろ！」（ヒット直前0.25秒）
-                    warnColor = { 0.0f, 1.0f, 0.2f, alpha * 1.5f };  // 明るく強調
+                    // ★ 緑 = 「今パリィ！」
+                    float pulse = (sinf(m_gameTime * 30.0f) + 1.0f) * 0.5f;
+                    alpha = 0.8f + pulse * 0.2f;
+                    ringColor = { 0.0f, 1.0f, 0.3f, alpha };
                 }
                 else if (timeToHit < 0.5f)
                 {
-                    // 赤 = 「もうすぐ来る！」
-                    warnColor = { 1.0f, 0.1f, 0.0f, alpha };
+                    // 赤 = 「もうすぐ！」
+                    float pulse = (sinf(m_gameTime * 16.0f) + 1.0f) * 0.5f;
+                    alpha = 0.5f + urgency * 0.3f + pulse * 0.2f;
+                    ringColor = { 1.0f, 0.1f, 0.0f, alpha };
                 }
                 else
                 {
-                    // 黄色 = 「準備しろ」
-                    warnColor = { 1.0f, 0.8f, 0.0f, alpha * 0.6f };
+                    // 暗い赤 = 「攻撃が来るぞ」
+                    alpha = 0.2f + urgency * 0.3f;
+                    ringColor = { 0.8f, 0.2f, 0.0f, alpha };
                 }
 
-                primitiveBatch->DrawTriangle(
-                    DirectX::VertexPositionColor(mu, warnColor),
-                    DirectX::VertexPositionColor(mr, warnColor),
-                    DirectX::VertexPositionColor(md, warnColor)
-                );
-                primitiveBatch->DrawTriangle(
-                    DirectX::VertexPositionColor(mu, warnColor),
-                    DirectX::VertexPositionColor(md, warnColor),
-                    DirectX::VertexPositionColor(ml, warnColor)
-                );
+                // --- 六角形リング描画（カメラ正対ビルボード） ---
+                const int SEGMENTS = 6;
+                float rotation = m_gameTime * 1.5f;  // ゆっくり回転
 
-                DirectX::XMFLOAT4 outlineColor = {
-                    warnColor.x * 0.8f + 0.2f,
-                    warnColor.y * 0.8f + 0.2f,
-                    warnColor.z * 0.8f + 0.2f,
-                    alpha * 0.9f
-                };
-                primitiveBatch->DrawLine(
-                    DirectX::VertexPositionColor(mr, outlineColor),
-                    DirectX::VertexPositionColor(md, outlineColor)
-                );
-                primitiveBatch->DrawLine(
-                    DirectX::VertexPositionColor(md, outlineColor),
-                    DirectX::VertexPositionColor(ml, outlineColor)
-                );
-                primitiveBatch->DrawLine(
-                    DirectX::VertexPositionColor(ml, outlineColor),
-                    DirectX::VertexPositionColor(mu, outlineColor)
-                );
+                DirectX::XMFLOAT3 ringVerts[SEGMENTS];
+                for (int s = 0; s < SEGMENTS; s++)
+                {
+                    float angle = rotation + (float)s / SEGMENTS * 6.2832f;
+                    DirectX::XMVECTOR pt = ringCenter;
+                    pt = DirectX::XMVectorAdd(pt,
+                        DirectX::XMVectorScale(camRight, cosf(angle) * ringRadius));
+                    pt = DirectX::XMVectorAdd(pt,
+                        DirectX::XMVectorScale(camUp, sinf(angle) * ringRadius));
+                    DirectX::XMStoreFloat3(&ringVerts[s], pt);
+                }
+
+                // 外周リング線
+                for (int s = 0; s < SEGMENTS; s++)
+                {
+                    int next = (s + 1) % SEGMENTS;
+                    primitiveBatch->DrawLine(
+                        DirectX::VertexPositionColor(ringVerts[s], ringColor),
+                        DirectX::VertexPositionColor(ringVerts[next], ringColor)
+                    );
+                }
+
+                // --- 内側固定リング（ターゲットサイズ = パリィタイミング表示）---
+                DirectX::XMFLOAT4 innerColor = { ringColor.x * 0.4f, ringColor.y * 0.4f, ringColor.z * 0.4f, alpha * 0.3f };
+                DirectX::XMFLOAT3 innerVerts[SEGMENTS];
+                for (int s = 0; s < SEGMENTS; s++)
+                {
+                    float angle = rotation + (float)s / SEGMENTS * 6.2832f;
+                    DirectX::XMVECTOR pt = ringCenter;
+                    pt = DirectX::XMVectorAdd(pt,
+                        DirectX::XMVectorScale(camRight, cosf(angle) * minRadius));
+                    pt = DirectX::XMVectorAdd(pt,
+                        DirectX::XMVectorScale(camUp, sinf(angle) * minRadius));
+                    DirectX::XMStoreFloat3(&innerVerts[s], pt);
+                }
+                for (int s = 0; s < SEGMENTS; s++)
+                {
+                    int next = (s + 1) % SEGMENTS;
+                    primitiveBatch->DrawLine(
+                        DirectX::VertexPositionColor(innerVerts[s], innerColor),
+                        DirectX::VertexPositionColor(innerVerts[next], innerColor)
+                    );
+                }
+
+                // --- 収束線（外リング→内リングを繋ぐ6本のガイド線）---
+                DirectX::XMFLOAT4 lineColor = { ringColor.x, ringColor.y, ringColor.z, alpha * 0.15f };
+                for (int s = 0; s < SEGMENTS; s++)
+                {
+                    primitiveBatch->DrawLine(
+                        DirectX::VertexPositionColor(ringVerts[s], lineColor),
+                        DirectX::VertexPositionColor(innerVerts[s], innerColor)
+                    );
+                }
+
+                // --- パリィ圏内：内リングを明るく強調 ---
+                if (timeToHit < parryZone)
+                {
+                    DirectX::XMFLOAT4 glowColor = { 0.0f, 1.0f, 0.3f, 0.6f };
+                    for (int s = 0; s < SEGMENTS; s++)
+                    {
+                        int next = (s + 1) % SEGMENTS;
+                        // 内リングの三角形で塗りつぶし（中心→辺）
+                        DirectX::XMFLOAT3 ctr;
+                        DirectX::XMStoreFloat3(&ctr, ringCenter);
+                        DirectX::XMFLOAT4 centerGlow = { 0.0f, 1.0f, 0.3f, 0.15f };
+                        primitiveBatch->DrawTriangle(
+                            DirectX::VertexPositionColor(ctr, centerGlow),
+                            DirectX::VertexPositionColor(innerVerts[s], glowColor),
+                            DirectX::VertexPositionColor(innerVerts[next], glowColor)
+                        );
+                    }
+                }
             }
         }
     }
-
 
     primitiveBatch->End();
 
@@ -4727,9 +4627,9 @@ void Game::DrawParticles()
 void Game::UpdateTitle()
 {
     // デバッグ：フェード値を表示
-    char debug[256];
-    sprintf_s(debug, "TITLE - Press SPACE - Fade:%.2f", m_fadeAlpha);
-    SetWindowTextA(m_window, debug);
+    /*char debug[256];
+    sprintf_s(debug, "TITLE - Press SPACE - Fade:%.2f", m_fadeAlpha);*/
+    //SetWindowTextA(m_window, debug);
 
     // === TitleScene の更新 ===
     if (m_titleScene)
@@ -4813,7 +4713,7 @@ void Game::DrawWeapon()
     DirectX::XMVECTOR upOffset = XMVectorScale(up,
         m_weaponOffsetUp + m_weaponSwayY * 0.1f
         + m_weaponBobAmount + m_weaponLandingImpact
-        + m_weaponKickUp);
+        + m_weaponKickUp + m_reloadAnimOffset);
     DirectX::XMVECTOR forwardOffset = XMVectorScale(forward,
         m_weaponOffsetForward - m_weaponKickBack);
 
@@ -4827,7 +4727,7 @@ void Game::DrawWeapon()
 
     // === 回転（シンプル3軸） ===
     DirectX::XMMATRIX modelRotation = DirectX::XMMatrixRotationRollPitchYaw(
-        m_weaponRotX - m_weaponKickRot,
+        m_weaponRotX - m_weaponKickRot + m_reloadAnimTilt,
         m_weaponRotY, m_weaponRotZ
     );
     DirectX::XMMATRIX cameraRotation = DirectX::XMMatrixRotationRollPitchYaw(
@@ -5047,7 +4947,7 @@ void Game::RenderPlaying()
    /* char debugRender[256];
     sprintf_s(debugRender, "[RENDER] DOFActive=%d, Intensity=%.2f, OffscreenRTV=%p\n",
         m_gloryKillDOFActive, m_gloryKillDOFIntensity, m_offscreenRTV.Get());
-    OutputDebugStringA(debugRender);*/
+    //OutputDebugStringA(debugRender);*/
 
     if (m_gloryKillDOFActive && m_offscreenRTV)
     {
@@ -5136,7 +5036,7 @@ void Game::RenderPlaying()
         }
 
         //  地面の苔を描画
-            if (m_furRenderer && m_furReady)
+           /* if (m_furRenderer && m_furReady)
             {
                 m_furRenderer->DrawGroundMoss(
                     m_d3dContext.Get(),
@@ -5144,7 +5044,7 @@ void Game::RenderPlaying()
                     projectionMatrix,
                     m_accumulatedAnimTime 
                 );
-            }
+            }*/
 
         //  深度テストと深度書き込みを有効化
         m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
@@ -5396,16 +5296,16 @@ void Game::RenderPlaying()
             m_mapSystem->Draw(m_d3dContext.Get(), viewMatrix, projectionMatrix);
         }
 
-        //  地面の苔を描画
-            if (m_furRenderer && m_furReady)
-            {
-                m_furRenderer->DrawGroundMoss(
-                    m_d3dContext.Get(),
-                    viewMatrix,
-                    projectionMatrix,
-                    m_accumulatedAnimTime  // 経過時間（風の揺れ用）
-                );
-            }
+        ////  地面の苔を描画
+        //    if (m_furRenderer && m_furReady)
+        //    {
+        //        m_furRenderer->DrawGroundMoss(
+        //            m_d3dContext.Get(),
+        //            viewMatrix,
+        //            projectionMatrix,
+        //            m_accumulatedAnimTime  // 経過時間（風の揺れ用）
+        //        );
+        //    }
 
         //// 武器スポーンのテクスチャ描画
         //if (m_weaponSpawnSystem)
@@ -5630,7 +5530,7 @@ void Game::DrawUI()
 
     primitiveBatch->End();
 
-    {
+    /*{
         char debugStyle[512];
         sprintf_s(debugStyle, "[STYLE_HUD] m_styleRank=%s, m_spriteBatch=%s, m_fontLarge=%s, m_font=%s, m_states=%s\n",
             m_styleRank ? "OK" : "NULL",
@@ -5638,7 +5538,7 @@ void Game::DrawUI()
             m_fontLarge ? "OK" : "NULL",
             m_font ? "OK" : "NULL",
             m_states ? "OK" : "NULL");
-        OutputDebugStringA(debugStyle);
+        //OutputDebugStringA(debugStyle);
 
         if (m_styleRank)
         {
@@ -5646,14 +5546,14 @@ void Game::DrawUI()
                 m_styleRank->GetRankName(),
                 m_styleRank->GetStylePoints(),
                 m_styleRank->GetComboCount());
-            OutputDebugStringA(debugStyle);
+            //OutputDebugStringA(debugStyle);
         }
 
         sprintf_s(debugStyle, "[STYLE_HUD] Screen: %d x %d, RankPos: (%.0f, %.0f)\n",
             m_outputWidth, m_outputHeight,
             (float)m_outputWidth - 120.0f, 30.0f);
-        OutputDebugStringA(debugStyle);
-    }
+        //OutputDebugStringA(debugStyle);
+    }*/
 
 
     // =============================================
@@ -6083,6 +5983,157 @@ void Game::DrawUI()
 
             }
 
+            // =============================================
+            // チュートリアル操作説明（常時表示）
+            // =============================================
+            if (m_showTutorial && m_font)
+            {
+                float screenW = (float)m_outputWidth;
+                float screenH = (float)m_outputHeight;
+
+                float panelW = 320.0f;
+                float panelH = 260.0f;
+                float panelX = screenW - panelW - 20.0f;
+                float panelY = screenH - panelH - 80.0f;
+
+                // 半透明の黒背景
+                RECT bgRect = {
+                    (LONG)panelX, (LONG)panelY,
+                    (LONG)(panelX + panelW), (LONG)(panelY + panelH)
+                };
+                DirectX::XMVECTORF32 bgColor = { 0.0f, 0.0f, 0.0f, 0.6f };
+                m_spriteBatch->Draw(m_whitePixel.Get(), bgRect, bgColor);
+
+                // 枠線（上）
+                RECT borderTop = { (LONG)panelX, (LONG)panelY, (LONG)(panelX + panelW), (LONG)(panelY + 2) };
+                DirectX::XMVECTORF32 borderColor = { 0.8f, 0.15f, 0.0f, 0.8f };
+                m_spriteBatch->Draw(m_whitePixel.Get(), borderTop, borderColor);
+                // 枠線（下）
+                RECT borderBot = { (LONG)panelX, (LONG)(panelY + panelH - 2), (LONG)(panelX + panelW), (LONG)(panelY + panelH) };
+                m_spriteBatch->Draw(m_whitePixel.Get(), borderBot, borderColor);
+                // 枠線（左）
+                RECT borderLeft = { (LONG)panelX, (LONG)panelY, (LONG)(panelX + 2), (LONG)(panelY + panelH) };
+                m_spriteBatch->Draw(m_whitePixel.Get(), borderLeft, borderColor);
+                // 枠線（右）
+                RECT borderRight = { (LONG)(panelX + panelW - 2), (LONG)panelY, (LONG)(panelX + panelW), (LONG)(panelY + panelH) };
+                m_spriteBatch->Draw(m_whitePixel.Get(), borderRight, borderColor);
+
+                // テキスト色
+                DirectX::XMVECTORF32 titleColor = { 0.9f, 0.3f, 0.0f, 1.0f };
+                DirectX::XMVECTORF32 keyColor = { 1.0f, 0.85f, 0.2f, 1.0f };
+                DirectX::XMVECTORF32 descColor = { 0.85f, 0.85f, 0.85f, 1.0f };
+
+                float x = panelX + 15.0f;
+                float y = panelY + 12.0f;
+                float lineH = 26.0f;
+
+                // タイトル
+                m_font->DrawString(m_spriteBatch.get(), L"- CONTROLS -",
+                    DirectX::XMFLOAT2(panelX + panelW * 0.5f - 50.0f, y), titleColor);
+                y += lineH + 6.0f;
+
+                // 操作一覧
+                struct { const wchar_t* key; const wchar_t* desc; } controls[] = {
+                    { L"W A S D",       L"Move" },
+                    { L"Mouse",         L"Look" },
+                    { L"Left Click",    L"Shoot" },
+                    { L"Right Click",   L"Shield / Parry" },
+                    { L"Side Button",   L"Melee" },
+                    { L"E",             L"Shield Throw" },
+                    { L"Space",         L"Jump" },
+                    { L"F1",            L"Debug" },
+                };
+
+                for (const auto& ctrl : controls)
+                {
+                    m_font->DrawString(m_spriteBatch.get(), ctrl.key,
+                        DirectX::XMFLOAT2(x, y), keyColor);
+                    m_font->DrawString(m_spriteBatch.get(), ctrl.desc,
+                        DirectX::XMFLOAT2(x + 150.0f, y), descColor);
+                    y += lineH;
+                }
+            }
+
+            // =============================================
+            // ボスHPバー（画面上部中央）
+            // =============================================
+            {
+                // 生きてるBOSS/MIDBOSSを探す
+                const Enemy* bossEnemy = nullptr;
+                for (const auto& enemy : m_enemySystem->GetEnemies())
+                {
+                    if ((enemy.type == EnemyType::BOSS || enemy.type == EnemyType::MIDBOSS)
+                        && enemy.isAlive && !enemy.isDying)
+                    {
+                        // BOSSを優先（両方いる場合）
+                        if (!bossEnemy || enemy.type == EnemyType::BOSS)
+                            bossEnemy = &enemy;
+                    }
+                }
+
+                if (bossEnemy && m_whitePixel)
+                {
+                    float screenW = (float)m_outputWidth;
+
+                    // バーのサイズと位置
+                    float barW = 500.0f;
+                    float barH = 14.0f;
+                    float barX = (screenW - barW) * 0.5f;  // 画面中央
+                    float barY = 40.0f;                      // 上端から40px
+
+                    // HP割合
+                    float hpPercent = (float)bossEnemy->health / (float)bossEnemy->maxHealth;
+                    if (hpPercent < 0.0f) hpPercent = 0.0f;
+                    if (hpPercent > 1.0f) hpPercent = 1.0f;
+
+                    // 背景（暗い）
+                    RECT bgRect = { (LONG)barX, (LONG)barY, (LONG)(barX + barW), (LONG)(barY + barH) };
+                    DirectX::XMVECTORF32 bgColor = { 0.1f, 0.0f, 0.0f, 0.7f };
+                    m_spriteBatch->Draw(m_whitePixel.Get(), bgRect, bgColor);
+
+                    //  残像バー（白・ゆっくり減る）
+                    float trailW = barW * m_bossHpTrail;
+                    RECT trailRect = { (LONG)barX, (LONG)barY, (LONG)(barX + trailW), (LONG)(barY + barH) };
+                    DirectX::XMVECTORF32 trailColor = { 1.0f, 1.0f, 1.0f, 0.4f };
+                    m_spriteBatch->Draw(m_whitePixel.Get(), trailRect, trailColor);
+
+                    //  表示HPバー（ぬるっと減る）
+                    float fillW = barW * m_bossHpDisplay;
+                    RECT fillRect = { (LONG)barX, (LONG)barY, (LONG)(barX + fillW), (LONG)(barY + barH) };
+
+                    DirectX::XMVECTORF32 fillColor;
+                    if (m_bossHpDisplay > 0.5f)
+                        fillColor = { 0.8f, 0.1f, 0.0f, 0.9f };
+                    else if (m_bossHpDisplay > 0.25f)
+                        fillColor = { 0.9f, 0.4f, 0.0f, 0.9f };
+                    else
+                        fillColor = { 1.0f, 0.8f, 0.0f, 0.9f };
+
+                    m_spriteBatch->Draw(m_whitePixel.Get(), fillRect, fillColor);
+
+                    // 枠線（4辺）
+                    DirectX::XMVECTORF32 frameColor = { 0.6f, 0.6f, 0.6f, 0.8f };
+                    RECT top = { (LONG)barX, (LONG)barY, (LONG)(barX + barW), (LONG)(barY + 1) };
+                    RECT bot = { (LONG)barX, (LONG)(barY + barH - 1), (LONG)(barX + barW), (LONG)(barY + barH) };
+                    RECT lft = { (LONG)barX, (LONG)barY, (LONG)(barX + 1), (LONG)(barY + barH) };
+                    RECT rgt = { (LONG)(barX + barW - 1), (LONG)barY, (LONG)(barX + barW), (LONG)(barY + barH) };
+                    m_spriteBatch->Draw(m_whitePixel.Get(), top, frameColor);
+                    m_spriteBatch->Draw(m_whitePixel.Get(), bot, frameColor);
+                    m_spriteBatch->Draw(m_whitePixel.Get(), lft, frameColor);
+                    m_spriteBatch->Draw(m_whitePixel.Get(), rgt, frameColor);
+
+                    // ボス名テキスト
+                    if (m_font)
+                    {
+                        const wchar_t* bossName = (bossEnemy->type == EnemyType::BOSS) ? L"BOSS" : L"MIDBOSS";
+                        m_font->DrawString(m_spriteBatch.get(), bossName,
+                            DirectX::XMFLOAT2(barX, barY - 22.0f),
+                            DirectX::XMVECTORF32{ 0.9f, 0.2f, 0.0f, 1.0f });
+                    }
+                }
+            }
+
+
         m_spriteBatch->End();
     }
 
@@ -6123,6 +6174,19 @@ void Game::UpdatePlaying()
     //  スタイルランクシ更新
     m_styleRank->Update(deltaTime);
 
+    //  最高コンボ更新
+    int currentCombo = m_styleRank->GetComboCount();
+    if (currentCombo > m_statMaxCombo)
+        m_statMaxCombo = currentCombo;
+
+    //  最高スタイルランク更新
+    int currentStyleRank = static_cast<int>(m_styleRank->GetRank());
+    if (currentStyleRank > m_statMaxStyleRank)
+        m_statMaxStyleRank = currentStyleRank;
+
+    //  生存時間加算
+    m_statSurvivalTime += deltaTime;
+
     // === デバッグ：ウィンドウタイトルにランク表示 ===
     {
         char titleBuf[256];
@@ -6130,7 +6194,7 @@ void Game::UpdatePlaying()
             m_styleRank->GetRankName(),
             m_styleRank->GetStylePoints(), 
             m_styleRank->GetComboCount());
-        SetWindowTextA(m_window, titleBuf);
+        //SetWindowTextA(m_window, titleBuf);
     }
 
     UpdateGloryKillAnimation(deltaTime);
@@ -6139,7 +6203,7 @@ void Game::UpdatePlaying()
     
     if (!m_enemiesInitialized && m_enemySystem->GetEnemies().size() > 0)
     {
-        OutputDebugStringA("Initializing enemy physics bodies...\n");
+        //OutputDebugStringA("Initializing enemy physics bodies...\n");
         for (auto& enemy : m_enemySystem->GetEnemies())
         {
             if (enemy.isAlive)
@@ -6148,7 +6212,7 @@ void Game::UpdatePlaying()
             }
         }
         m_enemiesInitialized = true;
-        OutputDebugStringA("Enemy physics bodies initialized!\n");
+        //OutputDebugStringA("Enemy physics bodies initialized!\n");
     }
 
     // === 弾の軌跡を更新 ===
@@ -6210,9 +6274,9 @@ void Game::UpdatePlaying()
             m_gloryKillDOFActive = false;
             m_gloryKillDOFIntensity = 0.0f;
 
-            char debugDOF[128];
-            sprintf_s(debugDOF, "[DOF] Deactivated! Camera ended.\n");
-            OutputDebugStringA(debugDOF);
+            /*char debugDOF[128];
+            sprintf_s(debugDOF, "[DOF] Deactivated! Camera ended.\n");*/
+            //OutputDebugStringA(debugDOF);
         }
     }
 
@@ -6322,7 +6386,7 @@ void Game::UpdatePlaying()
             // デバッグログ追加
             /*char debugGK[256];
             sprintf_s(debugGK, "[GLORY KILL] Executed! Target ID=%d, DOF will activate next frame\n", m_gloryKillTargetID);
-            OutputDebugStringA(debugGK);*/
+            //OutputDebugStringA(debugGK);*/
 
             // === カメラをターゲット敵に向ける ===
             m_gloryKillCameraActive = false;
@@ -6371,7 +6435,7 @@ void Game::UpdatePlaying()
             /*char debugDOF[256];
             sprintf_s(debugDOF, "[GLORY KILL] DOF Activated! Active=%d, Intensity=%.2f, FocalDepth=%.2f\n",
                 m_gloryKillDOFActive, m_gloryKillDOFIntensity, m_gloryKillFocalDepth);
-            OutputDebugStringA(debugDOF);*/
+            //OutputDebugStringA(debugDOF);*/
 
 
             //  終点距離を計算(プレイヤーから敵までの距離)
@@ -6385,12 +6449,12 @@ void Game::UpdatePlaying()
             // デバッグログ（焦点距離も表示）
             /*char debugFocal[256];
             sprintf_s(debugFocal, "[DOF] Focal depth set to: %.2f meters\n", m_gloryKillFocalDepth);
-            OutputDebugStringA(debugFocal);*/
+            //OutputDebugStringA(debugFocal);*/
 
             /*char cdebugDOF[256];
             sprintf_s(cdebugDOF, "[GLORY KILL] DOF Activated! Active=%d, Intensity=%.2f, Offscreen=%p\n",
                 m_gloryKillDOFActive, m_gloryKillDOFIntensity, m_offscreenRTV.Get());
-            OutputDebugStringA(cdebugDOF);*/
+            //OutputDebugStringA(cdebugDOF);*/
 
             // 敵を即座に倒す
             m_gloryKillTargetEnemy->isDying = true;
@@ -6423,7 +6487,7 @@ void Game::UpdatePlaying()
             /*char buffer[256];
             sprintf_s(buffer, "[GLORY KILL] Enemy ID:%d killed! HP: %d→%d, Score: +100\n",
                 m_gloryKillTargetEnemy->id, currentHP, newHP);
-            OutputDebugStringA(buffer);*/
+            //OutputDebugStringA(buffer);*/
 
 
             // カメラシェイク（強め）
@@ -6491,18 +6555,27 @@ void Game::UpdatePlaying()
     {
         m_currentFPS = (float)m_frameCount / m_fpsTimer;
         //  Output ウィンドウに表示
-        char fpsDebug[128];
+        /*char fpsDebug[128];
         sprintf_s(fpsDebug, "=== FPS: %.1f ===\n", m_currentFPS);
-        OutputDebugStringA(fpsDebug);
+        //OutputDebugStringA(fpsDebug);*/
         m_frameCount = 0;
         m_fpsTimer = 0.0f;
     }
 
-    char debug[256];
-    sprintf_s(debug, "Wave:%d | Points:%d | Health:%d | Reloading:%s",
-        m_waveManager->GetCurrentWave(), m_player->GetPoints(), m_player->GetHealth(),
-        m_weaponSystem->IsReloading() ? "YES" : "NO");  // ← リロード状態を表示
-    SetWindowTextA(m_window, debug);
+    if (m_fpsTimer >= 1.0f)
+    {
+        m_currentFPS = (float)m_frameCount / m_fpsTimer;
+
+        // ウィンドウタイトル更新（1秒に1回だけ）
+        char debug[256];
+        sprintf_s(debug, "FPS:%.0f | Wave:%d | Points:%d | HP:%d",
+            m_currentFPS, m_waveManager->GetCurrentWave(),
+            m_player->GetPoints(), m_player->GetHealth());
+        SetWindowTextA(m_window, debug);
+
+        m_frameCount = 0;
+        m_fpsTimer = 0.0f;
+    }
 
  
     if (!m_gloryKillCameraActive && m_shieldState != ShieldState::Charging)   //  === プレイヤー移動（チャージ中はスキップ）
@@ -6584,15 +6657,15 @@ void Game::UpdatePlaying()
             m_player->StartMeleeAttackCooldown();
             m_meleeCharges--;  // チャージ消費
 
-            OutputDebugStringA("[MELEE] Melee attack executed!\n");
+            //OutputDebugStringA("[MELEE] Melee attack executed!\n");
         }
         else
         {
             // クールダウン中のログ
-            char buffer[64];
+            /*char buffer[64];
             sprintf_s(buffer, "[MELEE] Cooldown: %.2fs\n",
-                m_player->GetMeleeAttackCooldown());
-            OutputDebugStringA(buffer);
+                m_player->GetMeleeAttackCooldown());*/
+            //OutputDebugStringA(buffer);
         }
     }
 
@@ -6615,7 +6688,7 @@ void Game::UpdatePlaying()
             {
                 // 投げてる最中にもう一度E → 呼び戻し
                 m_thrownShieldReturning = true;
-                OutputDebugStringA("[SHIELD] Recall shield!\n");
+                //OutputDebugStringA("[SHIELD] Recall shield!\n");
             }
             else if (m_shieldState != ShieldState::Broken
                 && m_shieldState != ShieldState::Charging)
@@ -6659,7 +6732,7 @@ void Game::UpdatePlaying()
                     );
                 }
 
-                OutputDebugStringA("[SHIELD] Shield thrown!\n");
+                //OutputDebugStringA("[SHIELD] Shield thrown!\n");
             }
             eKeyPressed = true;
         }
@@ -6740,6 +6813,38 @@ void Game::UpdatePlaying()
     m_weaponKickUp *= 0.85f;   // 跳ね上がり → 元に戻る
     m_weaponKickRot *= 0.85f;   // 回転 → 元に戻る
 
+    // === ボスHPバー演出更新 ===
+    {
+        float targetHp = 0.0f;
+        bool bossAlive = false;
+        for (const auto& enemy : m_enemySystem->GetEnemies())
+        {
+            if ((enemy.type == EnemyType::BOSS || enemy.type == EnemyType::MIDBOSS)
+                && enemy.isAlive && !enemy.isDying)
+            {
+                targetHp = (float)enemy.health / (float)enemy.maxHealth;
+                bossAlive = true;
+                break;
+            }
+        }
+
+        if (bossAlive)
+        {
+            if (targetHp < 0.0f) targetHp = 0.0f;
+            float displaySpeed = 3.0f;
+            m_bossHpDisplay += (targetHp - m_bossHpDisplay) * displaySpeed * m_deltaTime;
+            float trailSpeed = 1.0f;
+            m_bossHpTrail += (targetHp - m_bossHpTrail) * trailSpeed * m_deltaTime;
+            if (m_bossHpDisplay < targetHp) m_bossHpDisplay = targetHp;
+            if (m_bossHpTrail < m_bossHpDisplay) m_bossHpTrail = m_bossHpDisplay;
+        }
+        else
+        {
+            m_bossHpDisplay = 1.0f;
+            m_bossHpTrail = 1.0f;
+        }
+    }
+
     //// === カメラ反動（上方向にキックしてゆっくり戻る） ===
     //if (fabsf(m_cameraRecoilVelocity) > 0.0001f || fabsf(m_cameraRecoilX) > 0.0001f)
     //{
@@ -6786,7 +6891,7 @@ void Game::UpdatePlaying()
             /*char debugWeapon[512];
             sprintf_s(debugWeapon, "[DEBUG WEAPON] GetWeaponData returned: damage=%d, maxAmmo=%d, fireRate=%.2f, cost=%d\n",
                 weapon.damage, weapon.maxAmmo, weapon.fireRate, weapon.cost);
-            OutputDebugStringA(debugWeapon);*/
+            //OutputDebugStringA(debugWeapon);*/
 
             //  弾を消費
             m_weaponSystem->SetCurrentAmmo(m_weaponSystem->GetCurrentAmmo() - 1);
@@ -7022,7 +7127,7 @@ void Game::UpdatePlaying()
                         if (isHeadShot && !hitEnemy->headDestroyed)
                         {
                             // === ヘッドショット処理 ===
-                            //OutputDebugStringA("[BULLET] HEADSHOT!\n");
+                            ////OutputDebugStringA("[BULLET] HEADSHOT!\n");
 
                             if (hitEnemy->type != EnemyType::BOSS &&
                                 hitEnemy->type != EnemyType::MIDBOSS &&
@@ -7066,6 +7171,7 @@ void Game::UpdatePlaying()
                             if (hitEnemy->type == EnemyType::BOSS || hitEnemy->type == EnemyType::MIDBOSS || hitEnemy->type == EnemyType::TANK)
                             {
                                 hitEnemy->health -= weapon.damage * 3;
+                                m_statDamageDealt += weapon.damage * 3;  //  与ダメ記録
                             }
                             else
                             {
@@ -7108,28 +7214,29 @@ void Game::UpdatePlaying()
                         else
                         {
                             // === ボディショット処理 ===
-                            //OutputDebugStringA("[BULLET] Body shot\n");
+                            ////OutputDebugStringA("[BULLET] Body shot\n");
 
                             // === デバッグ: ダメージ前のHP ===
                             //char debugHP1[256];
                             //sprintf_s(debugHP1, "[DEBUG] Enemy ID:%d HP BEFORE damage: %df\n",
                             //    hitEnemy->id, hitEnemy->health);
-                            //OutputDebugStringA(debugHP1);
+                            ////OutputDebugStringA(debugHP1);
 
                             //// === デバッグ: 武器のダメージ ===
                             //char debugDamage[256];
                             //sprintf_s(debugDamage, "[DEBUG] Weapon damage: %d (WeaponType:%d)\n",
                             //    weapon.damage, (int)currentWeapon);
-                            //OutputDebugStringA(debugDamage);
+                            ////OutputDebugStringA(debugDamage);
 
                             m_particleSystem->CreateBloodEffect(rayResult.hitPoint, shotDir, 15);
                             hitEnemy->health -= weapon.damage;
+                            m_statDamageDealt += weapon.damage;  //  与ダメ記録
 
                             // === デバッグ: ダメージ後のHP ===
                             /*char debugHP2[256];
                             sprintf_s(debugHP2, "[DEBUG] Enemy ID:%d HP AFTER damage: %d\n",
                                 hitEnemy->id, hitEnemy->health);
-                            OutputDebugStringA(debugHP2);*/
+                            //OutputDebugStringA(debugHP2);*/
 
 
                             // カメラシェイク（強化）
@@ -7140,7 +7247,7 @@ void Game::UpdatePlaying()
                             if (hitEnemy->health <= 0.0f)
                             {
                                 // === デバッグ: ラグドール処理に入った ===
-                                //OutputDebugStringA("[DEBUG] Entering ragdoll processing (HP <= 0.0f)\n");
+                                ////OutputDebugStringA("[DEBUG] Entering ragdoll processing (HP <= 0.0f)\n");
 
                                 hitEnemy->isRagdoll = true;
 
@@ -7187,7 +7294,7 @@ void Game::UpdatePlaying()
                             else
                             {
                                 // === デバッグ: ラグドール処理に入らなかった ===
-                               //OutputDebugStringA("[DEBUG] NOT entering ragdoll (HP > 0.0f)\n");
+                               ////OutputDebugStringA("[DEBUG] NOT entering ragdoll (HP > 0.0f)\n");
                             }
                         }
 
@@ -7200,7 +7307,7 @@ void Game::UpdatePlaying()
                         if (hitEnemy->health <= 0)
                         {
                             // === デバッグ: 死亡判定に入った ===
-                            //OutputDebugStringA("[DEBUG] Entering death check (HP <= 0)\n");
+                            ////OutputDebugStringA("[DEBUG] Entering death check (HP <= 0)\n");
 
                             if (!hitEnemy->isDying)
                             {
@@ -7208,7 +7315,7 @@ void Game::UpdatePlaying()
                                 /*char debugDeath[256];
                                 sprintf_s(debugDeath, "[DEBUG] Setting isDying=true, isAlive=false for enemy ID:%d\n",
                                     hitEnemy->id);*/
-                                /*OutputDebugStringA(debugDeath);*/
+                                /*//OutputDebugStringA(debugDeath);*/
 
                                 hitEnemy->isDying = true;
                                 hitEnemy->isAlive = false;
@@ -7231,7 +7338,7 @@ void Game::UpdatePlaying()
                             else
                             {
                                 // === デバッグ: すでにisDying=true ===
-                                /*OutputDebugStringA("[DEBUG] Enemy already dying (isDying=true)\n");*/
+                                /*//OutputDebugStringA("[DEBUG] Enemy already dying (isDying=true)\n");*/
                             }
 
                             // ポイント加算
@@ -7242,6 +7349,10 @@ void Game::UpdatePlaying()
                             //  スタイルランク：キル通知
                             m_styleRank->NotifyKill(isHeadShot);
 
+                            //  スタッツ記録
+                            m_statKills++;
+                            if (isHeadShot) m_statHeadshots++;
+
                             // ダメージ表示
                             m_showDamageDisplay = true;
                             m_damageDisplayTimer = 2.0f;
@@ -7250,29 +7361,29 @@ void Game::UpdatePlaying()
                             m_damageValue = isHeadShot ? 150 : 60;
 
                             // ウィンドウタイトル更新
-                            char debug[256];
+                            /*char debug[256];
                             sprintf_s(debug, isHeadShot ? "HEADSHOT!! Points:%d" : "Hit! Points:%d",
-                                m_player->GetPoints());
-                            SetWindowTextA(m_window, debug);
+                                m_player->GetPoints());*/
+                            //SetWindowTextA(m_window, debug);
                         }
                         else
                         {
                             // === デバッグ: 死亡判定に入らなかった ===
-                            /*OutputDebugStringA("[DEBUG] NOT entering death check (HP > 0)\n");*/
+                            /*//OutputDebugStringA("[DEBUG] NOT entering death check (HP > 0)\n");*/
                         }
                     }
                     else
                     {
                         // 敵に当たらなかった（壁など）
-                       /* OutputDebugStringA("[BULLET] Hit wall or object\n");*/
+                       /* //OutputDebugStringA("[BULLET] Hit wall or object\n");*/
                     }
                 }
                 else
                 {
                     // 何にも当たらなかった
-                    //OutputDebugStringA("[BULLET] Complete miss\n");
+                    ////OutputDebugStringA("[BULLET] Complete miss\n");
                     //// === デバッグ: 死亡判定に入らなかった ===
-                    //OutputDebugStringA("[DEBUG] NOT entering death check (HP > 0)\n");
+                    ////OutputDebugStringA("[DEBUG] NOT entering death check (HP > 0)\n");
 
                     // 何にも当たらなかった → 100m先まで
                     BulletTrace trace;
@@ -7305,24 +7416,71 @@ void Game::UpdatePlaying()
         m_weaponSystem->SetReloadTimer(weapon.reloadTime);
     }
 
-    // リロードタイマー更新
+    // === リロード中の処理 ===
     if (m_weaponSystem->IsReloading())
     {
+        // リロード残り時間を減らす
         float newTimer = m_weaponSystem->GetReloadTimer() - deltaTime;
         m_weaponSystem->SetReloadTimer(newTimer);
+
+        // 現在の武器のリロード時間を取得して、進行度（0→1）を計算
+        auto& weapon = m_weaponSystem->GetWeaponData(m_weaponSystem->GetCurrentWeapon());
+        float totalTime = weapon.reloadTime;                // 例：ショットガンなら1.0秒
+        float progress = 1.0f - (newTimer / totalTime);     // 0.0（開始）→ 1.0（完了）
+        if (progress < 0.0f) progress = 0.0f;
+        if (progress > 1.0f) progress = 1.0f;
+        m_reloadAnimProgress = progress;
+
+        // --- フェーズアニメーション ---
+        // フェーズ1（0?30%）: 武器を下に下げる
+        if (progress < 0.3f)
+        {
+            float t = progress / 0.3f;    // このフェーズ内の進行度（0→1）
+            t = t * t;                     // イーズイン：最初ゆっくり→だんだん速く
+            m_reloadAnimOffset = t * -0.4f; // 最大0.4m下に下げる
+            m_reloadAnimTilt = t * 0.5f;    // 最大0.5rad手前に傾ける
+        }
+        // フェーズ2（30?70%）: 画面下で停止（マガジン交換中のイメージ）
+        else if (progress < 0.7f)
+        {
+            m_reloadAnimOffset = -0.4f;     // 下がったまま
+            m_reloadAnimTilt = 0.5f;        // 傾いたまま
+        }
+        // フェーズ3（70?100%）: 武器を元の位置に戻す
+        else
+        {
+            float t = (progress - 0.7f) / 0.3f;         // このフェーズ内の進行度（0→1）
+            t = 1.0f - (1.0f - t) * (1.0f - t);         // イーズアウト：最初速い→だんだんゆっくり
+            m_reloadAnimOffset = -0.4f * (1.0f - t);     // 下から元の位置へ
+            m_reloadAnimTilt = 0.5f * (1.0f - t);        // 傾きも元に戻る
+        }
+
+        // リロード完了判定
         if (newTimer <= 0.0f)
         {
-            // リロード完了
+            // 弾を補充する
             int needed = m_weaponSystem->GetMaxAmmo() - m_weaponSystem->GetCurrentAmmo();
             int reload = min(needed, m_weaponSystem->GetReserveAmmo());
-
             m_weaponSystem->SetCurrentAmmo(m_weaponSystem->GetCurrentAmmo() + reload);
             m_weaponSystem->SetReserveAmmo(m_weaponSystem->GetReserveAmmo() - reload);
             m_weaponSystem->SetReloading(false);
             m_weaponSystem->SaveAmmoStatus();
+
+            // アニメーションをリセット
+            m_reloadAnimProgress = 0.0f;
+            m_reloadAnimOffset = 0.0f;
+            m_reloadAnimTilt = 0.0f;
         }
     }
-
+    else
+    {
+        // リロードしてない時：残ってる動きを滑らかにゼロへ戻す
+        // powを使ってフレームレートに依存しない減衰にする
+        float decay = powf(0.85f, m_deltaTime * 60.0f);  // 60FPS基準で同じ速度
+        m_reloadAnimOffset *= decay;
+        m_reloadAnimTilt *= decay;
+    }
+    
 
     if (m_showDamageDisplay)
     {
@@ -7373,6 +7531,7 @@ void Game::UpdatePlaying()
                 enemy.isAlive = false;
                 enemy.isDying = false;
                 RemoveEnemyPhysicsBody(enemy.id);
+
                 continue;
             }
         }
@@ -7563,7 +7722,7 @@ void Game::UpdatePlaying()
             m_parryWindowTimer = m_parryWindowDuration;  // 0.15秒
             m_lastParryAttemptTime = m_gameTime;
             m_shieldBashTimer = m_shieldBashDuration;    // 盾アニメ開始
-            OutputDebugStringA("[SHIELD] State: PARRYING (window open)\n");
+            //OutputDebugStringA("[SHIELD] State: PARRYING (window open)\n");
         }
 
         // 盾を下ろすアニメ（ゆっくり戻す）
@@ -7601,13 +7760,13 @@ void Game::UpdatePlaying()
                 // まだ押してる → ガードに移行
                 m_shieldState = ShieldState::Guarding;
                 m_isGuarding = true;
-                OutputDebugStringA("[SHIELD] State: GUARDING (hold)\n");
+                //OutputDebugStringA("[SHIELD] State: GUARDING (hold)\n");
             }
             else
             {
                 // もう離した → タップだった、Idleに戻る
                 m_shieldState = ShieldState::Idle;
-                OutputDebugStringA("[SHIELD] State: IDLE (parry tap ended)\n");
+                //OutputDebugStringA("[SHIELD] State: IDLE (parry tap ended)\n");
             }
         }
         break;
@@ -7630,7 +7789,7 @@ void Game::UpdatePlaying()
             {
                 m_chargeEnergy = 1.0f;
                 m_chargeReady = true;
-                OutputDebugStringA("[SHIELD] Charge energy FULL! Ready to charge!\n");
+                //OutputDebugStringA("[SHIELD] Charge energy FULL! Ready to charge!\n");
             }
         }
 
@@ -7717,7 +7876,7 @@ void Game::UpdatePlaying()
                 float distToTarget = len;
                 m_chargeDuration = min(0.8f, max(0.2f, distToTarget / m_chargeSpeed));
 
-                OutputDebugStringA("[SHIELD] CHARGE START! Lock-on!\n");
+                //OutputDebugStringA("[SHIELD] CHARGE START! Lock-on!\n");
             }
             else
             {
@@ -7730,7 +7889,7 @@ void Game::UpdatePlaying()
             // 右クリック離す → Idleに戻る
             m_shieldState = ShieldState::Idle;
             m_isGuarding = false;
-            OutputDebugStringA("[SHIELD] State: IDLE (guard released)\n");
+            //OutputDebugStringA("[SHIELD] State: IDLE (guard released)\n");
         }
         break;
     }
@@ -7759,7 +7918,7 @@ void Game::UpdatePlaying()
         if (m_mapSystem && m_mapSystem->CheckCollision(playerPos, 0.5f))
         {
             reachedTarget = true; 
-            OutputDebugStringA("[CHARGE] Hit wall! Exploding here.\n");
+            //OutputDebugStringA("[CHARGE] Hit wall! Exploding here.\n");
         }
 
         if (reachedTarget || timeUp)
@@ -7810,10 +7969,13 @@ void Game::UpdatePlaying()
                     }
 
                     killCount++;
+                    m_statKills++;       //  総キル
+                    m_statMeleeKills++;  //  近接キル
                 }
                 else
                 {
                     enemy.health -= 80;
+                    m_statDamageDealt += 80;  //  与ダメ記録
                     enemy.stunValue = enemy.maxStunValue;
                     if (enemy.health <= 0)
                     {
@@ -7823,6 +7985,8 @@ void Game::UpdatePlaying()
                         enemy.isRagdoll = true;
                         enemy.corpseTimer = 3.0f;
                         RemoveEnemyPhysicsBody(enemy.id);
+                        m_statKills++;       //  総キル
+                        m_statMeleeKills++;  //  近接キル
 
                         int waveBonus = m_waveManager->OnEnemyKilled();
                         m_player->AddPoints(150 + waveBonus);
@@ -7834,9 +7998,9 @@ void Game::UpdatePlaying()
             m_particleSystem->CreateBloodEffect(blastCenter, upDir, 300);
             m_particleSystem->CreateExplosion(blastCenter);
 
-            char buf[128];
-            sprintf_s(buf, "[CHARGE] AOE EXPLOSION! %d grunts obliterated!\n", killCount);
-            OutputDebugStringA(buf);
+            /*char buf[128];
+            sprintf_s(buf, "[CHARGE] AOE EXPLOSION! %d grunts obliterated!\n", killCount);*/
+            //OutputDebugStringA(buf);
 
             // Camera shake (kills数に応じて強さ変化)
             m_cameraShake = 0.3f + killCount * 0.15f;      // 1体:0.45  3体:0.75  5体:1.05
@@ -7888,7 +8052,7 @@ void Game::UpdatePlaying()
             if (m_thrownShieldDist >= m_thrownShieldMaxDist)
             {
                 m_thrownShieldReturning = true;
-                OutputDebugStringA("[SHIELD] Max distance, returning!\n");
+                //OutputDebugStringA("[SHIELD] Max distance, returning!\n");
             }
         }
         else
@@ -7912,7 +8076,7 @@ void Game::UpdatePlaying()
                     m_shieldTrailHandle = -1;
                 }
 
-                OutputDebugStringA("[SHIELD] Shield caught! Back to Idle.\n");
+                //OutputDebugStringA("[SHIELD] Shield caught! Back to Idle.\n");
                 break;
             }
 
@@ -7995,10 +8159,10 @@ void Game::UpdatePlaying()
                     // ヒットストップ（短め）
                     m_hitStopTimer = 0.03f;
 
-                    char msg[128];
+                    /*char msg[128];
                     sprintf_s(msg, "[SHIELD THROW] Hit enemy ID:%d! HP:%d\n",
-                        enemy.id, enemy.health);
-                    OutputDebugStringA(msg);
+                        enemy.id, enemy.health);*/
+                    //OutputDebugStringA(msg);
                 }
             }
         }
@@ -8018,7 +8182,7 @@ void Game::UpdatePlaying()
             // 復帰！
             m_shieldState = ShieldState::Idle;
             m_shieldHP = m_shieldMaxHP * 0.3f;  // 30%で復帰
-            OutputDebugStringA("[SHIELD] State: IDLE (shield restored!)\n");
+            //OutputDebugStringA("[SHIELD] State: IDLE (shield restored!)\n");
         }
         break;
     }
@@ -8134,12 +8298,13 @@ void Game::UpdatePlaying()
                         m_timeScale = 0.2f;
                         m_slowMoTimer = 0.4f;
 
-                        OutputDebugStringA("[BOSS] JUMP SLAM PARRIED!\n");
+                        //OutputDebugStringA("[BOSS] JUMP SLAM PARRIED!\n");
                     }
                     else if (m_shieldState == ShieldState::Guarding)
                     {
                         // ガード：ダメージ軽減
                         float reduced = slamDamage * (1.0f - m_guardDamageReduction);
+                        m_statDamageTaken += (int)reduced;  //  被ダメ記録
                         bool died = m_player->TakeDamage((int)reduced);
                         m_shieldHP -= slamDamage * 0.5f;
                         m_shieldRegenDelayTimer = m_shieldRegenDelay;
@@ -8154,17 +8319,18 @@ void Game::UpdatePlaying()
                         }
                         if (died) m_gameState = GameState::GAMEOVER;
 
-                        OutputDebugStringA("[BOSS] JUMP SLAM GUARDED!\n");
+                        //OutputDebugStringA("[BOSS] JUMP SLAM GUARDED!\n");
                     }
                     else
                     {
                         // ノーガード：フルダメージ
                         bool died = m_player->TakeDamage((int)slamDamage);
+                        m_statDamageTaken += (int)slamDamage;  //  被ダメ記録
                         m_cameraShake = 0.3f;
                         m_cameraShakeTimer = 0.3f;
                         if (died) m_gameState = GameState::GAMEOVER;
 
-                        OutputDebugStringA("[BOSS] JUMP SLAM HIT! (no guard)\n");
+                        //OutputDebugStringA("[BOSS] JUMP SLAM HIT! (no guard)\n");
                     }
                 }
 
@@ -8241,16 +8407,16 @@ void Game::UpdatePlaying()
                             proj.position.x, proj.position.y, proj.position.z);
                         float angle = atan2f(proj.direction.x, proj.direction.z);
                         m_effekseerManager->SetRotation(h, 0.0f, angle, 0.0f);
-                        m_effekseerManager->SetScale(h, 0.3f, 0.3f, 0.3f);
+                        m_effekseerManager->SetScale(h, 0.6f, 0.3f, 0.3f);
                         proj.effectHandle = h;  
                     }
 
                     m_bossProjectiles.push_back(proj);
 
-                    char buf[128];
+                   /* char buf[128];
                     sprintf_s(buf, "[BOSS] Slash projectile %d fired! Parriable: %s\n",
-                        i, proj.isParriable ? "YES(green)" : "NO(red)");
-                    OutputDebugStringA(buf);
+                        i, proj.isParriable ? "YES(green)" : "NO(red)");*/
+                    //OutputDebugStringA(buf);
                 }
 
                 enemy.attackJustLanded = false;
@@ -8363,12 +8529,13 @@ void Game::UpdatePlaying()
                             m_beamHandle = -1;
                         }
 
-                        OutputDebugStringA("[MIDBOSS] BEAM PARRIED!\n");
+                        //OutputDebugStringA("[MIDBOSS] BEAM PARRIED!\n");
                     }
                     else if (m_shieldState == ShieldState::Parrying && !enemy.bossBeamParriable)
                     {
                         // 赤ビーム → パリィ不可、ガードに格下げ
                         float reduced = frameDamage * (1.0f - m_guardDamageReduction);
+                        m_statDamageTaken += (int)(std::max)(1.0f, reduced);  // 被ダメ
                         m_player->TakeDamage((int)(std::max)(1.0f, reduced));
                         m_shieldHP -= frameDamage * 0.3f;
                         m_shieldRegenDelayTimer = m_shieldRegenDelay;
@@ -8376,6 +8543,7 @@ void Game::UpdatePlaying()
                     else if (m_shieldState == ShieldState::Guarding)
                     {
                         float reduced = frameDamage * (1.0f - m_guardDamageReduction);
+                        m_statDamageTaken += (int)(std::max)(1.0f, reduced);  //被ダメ
                         m_player->TakeDamage((int)(std::max)(1.0f, reduced));
                         m_shieldHP -= frameDamage * 0.3f;
                         m_shieldRegenDelayTimer = m_shieldRegenDelay;
@@ -8389,6 +8557,7 @@ void Game::UpdatePlaying()
                     }
                     else
                     {
+                        m_statDamageTaken += (int)(std::max)(1.0f, frameDamage);  //被ダメ
                         bool died = m_player->TakeDamage((int)(std::max)(1.0f, frameDamage));
                         if (died) m_gameState = GameState::GAMEOVER;
                     }
@@ -8444,19 +8613,19 @@ void Game::UpdatePlaying()
                     enemy.isStaggered = true;
                     enemy.staggerFlashTimer = 0.0f;
 
-                    char buf[128];
-                    sprintf_s(buf, "[PARRY] SUCCESS! Enemy ID:%d STAGGERED instantly!\n", enemy.id);
-                    OutputDebugStringA(buf);
+                   /* char buf[128];
+                    sprintf_s(buf, "[PARRY] SUCCESS! Enemy ID:%d STAGGERED instantly!\n", enemy.id);*/
+                    //OutputDebugStringA(buf);
                 }
                 else
                 {
                     float stunDamage = 40.0f;
                     enemy.stunValue += stunDamage;
 
-                    char buf[256];
+                    /*char buf[256];
                     sprintf_s(buf, "[PARRY] SUCCESS! Enemy ID:%d Stun: %.0f/%.0f\n",
-                        enemy.id, enemy.stunValue, enemy.maxStunValue);
-                    OutputDebugStringA(buf);
+                        enemy.id, enemy.stunValue, enemy.maxStunValue);*/
+                    //OutputDebugStringA(buf);
 
                     if (enemy.stunValue >= enemy.maxStunValue)
                     {
@@ -8464,8 +8633,8 @@ void Game::UpdatePlaying()
                         enemy.staggerFlashTimer = 0.0f;
                         enemy.stunValue = 0.0f;
 
-                        sprintf_s(buf, "[PARRY] STUN BREAK! Enemy ID:%d is now STAGGERED!\n", enemy.id);
-                        OutputDebugStringA(buf);
+                        /*sprintf_s(buf, "[PARRY] STUN BREAK! Enemy ID:%d is now STAGGERED!\n", enemy.id);*/
+                        //OutputDebugStringA(buf);
                     }
                 }
 
@@ -8483,7 +8652,7 @@ void Game::UpdatePlaying()
                         enemy.position, sparkDir, 30);
                 }
 
-                OutputDebugStringA("[PARRY] === TIMING PARRY! ===\n");
+                //OutputDebugStringA("[PARRY] === TIMING PARRY! ===\n");
                 break;
             }
             else if(m_shieldState == ShieldState::Guarding)
@@ -8497,6 +8666,7 @@ void Game::UpdatePlaying()
                 }
 
                 float reducedDamage = rawDamage * (1.0f - m_guardDamageReduction);
+                m_statDamageTaken += (int)reducedDamage;  //  被ダメ記録
                 bool died = m_player->TakeDamage((int)reducedDamage);
 
                 // シールドHP消費
@@ -8507,10 +8677,10 @@ void Game::UpdatePlaying()
                 m_cameraShake = 0.05f;
                 m_cameraShakeTimer = 0.1f;
 
-                char buf[128];
+                /*char buf[128];
                 sprintf_s(buf, "[GUARD] Blocked! Damage: %.0f -> %.0f, ShieldHP: %.0f/%.0f\n",
-                    rawDamage, reducedDamage, m_shieldHP, m_shieldMaxHP);
-                OutputDebugStringA(buf);
+                    rawDamage, reducedDamage, m_shieldHP, m_shieldMaxHP);*/
+                //OutputDebugStringA(buf);
 
                 // シールド破壊チェック
                 if (m_shieldHP <= 0.0f)
@@ -8519,7 +8689,7 @@ void Game::UpdatePlaying()
                     m_shieldState = ShieldState::Broken;
                     m_shieldBrokenTimer = m_shieldBrokenDuration;
                     m_isGuarding = false;
-                    OutputDebugStringA("[SHIELD] === SHIELD BROKEN! ===\n");
+                    //OutputDebugStringA("[SHIELD] === SHIELD BROKEN! ===\n");
                 }
 
                 if (died)
@@ -8539,11 +8709,12 @@ void Game::UpdatePlaying()
                 default:                rawDamage = 10.0f; break;
                 }
                 bool died = m_player->TakeDamage((int)rawDamage);
+                m_statDamageTaken += (int)rawDamage;  //  被ダメ記録
 
                 m_cameraShake = 0.1f;
                 m_cameraShakeTimer = 0.15f;
 
-                OutputDebugStringA("[ENEMY] Hit player! No guard - full damage!\n");
+                //OutputDebugStringA("[ENEMY] Hit player! No guard - full damage!\n");
 
                 if (died) m_gameState = GameState::GAMEOVER;
                 break;
@@ -8651,7 +8822,7 @@ void Game::UpdatePlaying()
                                 enemy.isStaggered = true;
                                 enemy.staggerFlashTimer = 0.0f;
                                 enemy.stunValue = 0.0f;
-                                OutputDebugStringA("[PROJECTILE] PARRY -> BOSS STAGGERED!\n");
+                                //OutputDebugStringA("[PROJECTILE] PARRY -> BOSS STAGGERED!\n");
                             }
                             break;
                         }
@@ -8671,7 +8842,7 @@ void Game::UpdatePlaying()
                     }
 
                     proj.isActive = false;
-                    OutputDebugStringA("[PROJECTILE] GREEN SLASH PARRIED!\n");
+                    //OutputDebugStringA("[PROJECTILE] GREEN SLASH PARRIED!\n");
                 }
                 // ========================================
                 // ガード中 → ダメージ軽減（赤もガード可能）
@@ -8679,6 +8850,7 @@ void Game::UpdatePlaying()
                 else if (m_shieldState == ShieldState::Guarding)
                 {
                     float reduced = proj.damage * (1.0f - m_guardDamageReduction);
+                    m_statDamageTaken += (int)reduced;  //  被ダメ記録
                     bool died = m_player->TakeDamage((int)reduced);
                     m_shieldHP -= proj.damage * 0.4f;
                     m_shieldRegenDelayTimer = m_shieldRegenDelay;
@@ -8703,16 +8875,17 @@ void Game::UpdatePlaying()
 
                     proj.isActive = false;
 
-                    char buf[64];
+                   /* char buf[64];
                     sprintf_s(buf, "[PROJECTILE] %s SLASH GUARDED!\n",
-                        proj.isParriable ? "GREEN" : "RED");
-                    OutputDebugStringA(buf);
+                        proj.isParriable ? "GREEN" : "RED");*/
+                    //OutputDebugStringA(buf);
                 }
                 // ========================================
                 // ノーガード → フルダメージ
                 // ========================================
                 else
                 {
+                    m_statDamageTaken += (int)proj.damage;  //  被ダメ記録
                     bool died = m_player->TakeDamage((int)proj.damage);
                     m_cameraShake = 0.15f;
                     m_cameraShakeTimer = 0.2f;
@@ -8727,10 +8900,10 @@ void Game::UpdatePlaying()
 
                     proj.isActive = false;
 
-                    char buf[64];
+                    /*char buf[64];
                     sprintf_s(buf, "[PROJECTILE] %s SLASH HIT! (no guard)\n",
-                        proj.isParriable ? "GREEN" : "RED");
-                    OutputDebugStringA(buf);
+                        proj.isParriable ? "GREEN" : "RED");*/
+                    //OutputDebugStringA(buf);
                 }
             }
         }
@@ -8750,10 +8923,19 @@ void Game::UpdatePlaying()
         m_effekseerManager->Update(1.0f);
     }
 
+    auto& enemies = m_enemySystem->GetEnemies();
+enemies.erase(
+    std::remove_if(enemies.begin(), enemies.end(),
+        [](const Enemy& e) { return !e.isAlive && !e.isDying; }),
+    enemies.end()
+);
+
 }
 
 void Game::ResetGame()
 {
+    m_showTutorial = true;
+
     // === プレイヤー ===
     m_player->SetHealth(100);
     m_player->SetPosition(DirectX::XMFLOAT3(0.0f, 1.8f, 0.0f));
@@ -8777,6 +8959,17 @@ void Game::ResetGame()
     // === スコア・スタイル ===
     m_score = 0;
     m_styleRank->Reset();
+
+    //  スタッツリセット
+    m_statKills = 0;
+    m_statHeadshots = 0;
+    m_statMeleeKills = 0;
+    m_statMaxCombo = 0;
+    m_statDamageDealt = 0;
+    m_statDamageTaken = 0;
+    m_statMaxStyleRank = 0;
+    m_statSurvivalTime = 0.0f;
+    m_parrySuccessCount = 0;
 
     // === 状態リセット ===
     m_shieldState = ShieldState::Idle;
@@ -8832,22 +9025,116 @@ void Game::ResetGame()
     m_typeWalkTimer[0] = m_typeWalkTimer[1] = m_typeWalkTimer[2] = m_typeWalkTimer[3] = m_typeWalkTimer[4] = 0.0f;
     m_typeAttackTimer[0] = m_typeAttackTimer[1] = m_typeAttackTimer[2] = m_typeAttackTimer[3] = m_typeAttackTimer[4] = 0.0f;
 
-    OutputDebugStringA("[GAME] === GAME RESET COMPLETE ===\n");
+    //OutputDebugStringA("[GAME] === GAME RESET COMPLETE ===\n");
 }
 
 
 void Game::UpdateGameOver()
 {
-    // ゲームオーバー画面：Rキーでリスタート
-    if (GetAsyncKeyState('R') & 0x8000)
+    // ゲームオーバーからの経過時間を加算（全演出のタイミングはこれで制御）
+    m_gameOverTimer += 1.0f / 60.0f;
+
+    // 初回だけスコアとウェーブを保存（リザルト表示用）
+    if (m_gameOverWave == 0)
     {
-        ResetGame();
-        m_gameState = GameState::TITLE;
+        m_gameOverScore = m_player->GetPoints();
+        m_gameOverWave = m_waveManager->GetCurrentWave();
+
+        //  スタッツをリザルト用にコピー
+        m_goKills = m_statKills;
+        m_goHeadshots = m_statHeadshots;
+        m_goMeleeKills = m_statMeleeKills;
+        m_goMaxCombo = m_statMaxCombo;
+        m_goParryCount = m_parrySuccessCount;
+        m_goDamageDealt = m_statDamageDealt;
+        m_goDamageTaken = m_statDamageTaken;
+        m_goMaxStyleRank = m_statMaxStyleRank;
+        m_goSurvivalTime = m_statSurvivalTime;
+
+        //  各スタッツにボーナスポイントを計算
+        m_goStatScores[0] = m_goKills * 10;                         // キル × 10pt
+        m_goStatScores[1] = m_goHeadshots * 25;                     // HS × 25pt
+        m_goStatScores[2] = m_goMeleeKills * 30;                    // 近接 × 30pt
+        m_goStatScores[3] = m_goMaxCombo * 20;                      // コンボ × 20pt
+        m_goStatScores[4] = m_goParryCount * 50;                    // パリィ × 50pt
+        m_goStatScores[5] = (int)(m_goSurvivalTime) * 2;            // 生存秒 × 2pt
+        m_goStatScores[6] = m_goDamageDealt / 10;                   // 与ダメ÷10
+        m_goStatScores[7] = (m_goDamageTaken == 0) ? 1000 :         // ノーダメ=1000pt!
+            (int)(5000.0f / (float)(m_goDamageTaken + 1));
+        m_goStatScores[8] = m_goMaxStyleRank * 200;                 // ランク × 200pt
+
+        //  合計スコア
+        m_goTotalScore = 0;
+        for (int i = 0; i < 9; i++)
+            m_goTotalScore += m_goStatScores[i];
+
+        //  合計スコアでランク判定
+        if (m_goTotalScore >= 8000)
+            m_gameOverRank = 3; // S
+        else if (m_goTotalScore >= 5000)
+            m_gameOverRank = 2; // A
+        else if (m_goTotalScore >= 2500)
+            m_gameOverRank = 1; // B
+        else
+            m_gameOverRank = 0; // C
+
+        // カウントアップ初期化
+        for (int i = 0; i < 9; i++)
+            m_goStatCountUp[i] = 0.0f;
     }
 
-    char gameOverText[256];
-    sprintf_s(gameOverText, "GAME OVER - Final Score: %d - Press R to Restart", m_score);
-    SetWindowTextA(m_window, gameOverText);
+    // スコアカウントアップ演出（1.5秒後から2秒かけて0→最終スコア）
+    if (m_gameOverTimer > 1.5f)
+    {
+        float countProgress = (m_gameOverTimer - 1.5f) / 2.0f;
+        if (countProgress > 1.0f) countProgress = 1.0f;
+        m_gameOverCountUp = 1.0f - powf(2.0f, -10.0f * countProgress);
+    }
+
+    //  スタッツの段階的カウントアップ（0.15秒ずつずらして9行）
+    for (int i = 0; i < 9; i++)
+    {
+        float startTime = 1.5f + i * 0.15f;
+        if (m_gameOverTimer > startTime)
+        {
+            float progress = (m_gameOverTimer - startTime) / 0.6f;
+            if (progress > 1.0f) progress = 1.0f;
+            m_goStatCountUp[i] = 1.0f - powf(2.0f, -10.0f * progress);
+        }
+    }
+
+    // スコアカウントアップ演出（1.5秒後から2秒かけて0→最終スコア）
+    if (m_gameOverTimer > 1.5f)
+    {
+        float countProgress = (m_gameOverTimer - 1.5f) / 2.0f;  // 0→1（2秒間）
+        if (countProgress > 1.0f) countProgress = 1.0f;
+        // EaseOutExpo：最初ガーッと上がって、後半タメが効く
+        m_gameOverCountUp = 1.0f - powf(2.0f, -10.0f * countProgress);
+    }
+
+    // ノイズトランジション（死亡直後に画面がザザッとノイズで切り替わる）
+    if (m_gameOverTimer < 0.5f)
+    {
+        // 0→0.5秒で0→1に進行（ノイズが広がる）
+        m_gameOverNoiseT = m_gameOverTimer / 0.5f;
+    }
+    else
+    {
+        m_gameOverNoiseT = 1.0f;  // 完了
+    }
+
+    // 2.5秒経過後にRキーでリスタート可能（誤操作防止）
+    if (m_gameOverTimer > 4.5f && (GetAsyncKeyState('R') & 0x8000))
+    {
+        ResetGame();
+        m_gameOverTimer = 0.0f;
+        m_gameOverScore = 0;
+        m_gameOverWave = 0;
+        m_gameOverCountUp = 0.0f;
+        m_gameOverRank = 0;
+        m_gameOverNoiseT = 0.0f;
+        m_gameState = GameState::TITLE;
+    }
 }
 
 void Game::UpdateFade()
@@ -9053,15 +9340,15 @@ void Game::RenderTitle()
         }
         catch (const std::exception& e)
         {
-            OutputDebugStringA("[RENDER ERROR] TitleScene render failed: ");
-            OutputDebugStringA(e.what());
-            OutputDebugStringA("\n");
+            //OutputDebugStringA("[RENDER ERROR] TitleScene render failed: ");
+            //OutputDebugStringA(e.what());
+            //OutputDebugStringA("\n");
         }
     }
     else
     {
         // TitleScene がない場合はエラーメッセージを表示
-        OutputDebugStringA("[RENDER WARNING] TitleScene is null\n");
+        //OutputDebugStringA("[RENDER WARNING] TitleScene is null\n");
     }
 
     // === UI描画（オプション）===
@@ -9106,7 +9393,714 @@ void Game::RenderTitle()
 
 void Game::RenderGameOver()
 {
+    // =============================================
+    // イージング関数（UI演出の心臓部）
+    // 全部 t=0.0（開始）→ t=1.0（完了）で値を返す
+    // =============================================
 
+    // EaseOutQuad: じわっと減速（オーバーレイ向き）
+    auto EaseOutQuad = [](float t) -> float {
+        return 1.0f - (1.0f - t) * (1.0f - t);
+        };
+
+    // EaseOutCubic: もう少し強い減速（スライドイン向き）
+    auto EaseOutCubic = [](float t) -> float {
+        float u = 1.0f - t;
+        return 1.0f - u * u * u;
+        };
+
+    // EaseOutBack: 目的地を行き過ぎてバネで戻る（装飾線向き）
+    auto EaseOutBack = [](float t) -> float {
+        float c = 1.70158f;   // 行き過ぎ量（大きいほどオーバーシュート）
+        float u = t - 1.0f;
+        return 1.0f + (c + 1.0f) * u * u * u + c * u * u;
+        };
+
+    // EaseOutBounce: バウンド（YOU DIED向き）
+    auto EaseOutBounce = [](float t) -> float {
+        if (t < 1.0f / 2.75f)
+            return 7.5625f * t * t;
+        else if (t < 2.0f / 2.75f) {
+            t -= 1.5f / 2.75f;
+            return 7.5625f * t * t + 0.75f;
+        }
+        else if (t < 2.5f / 2.75f) {
+            t -= 2.25f / 2.75f;
+            return 7.5625f * t * t + 0.9375f;
+        }
+        else {
+            t -= 2.625f / 2.75f;
+            return 7.5625f * t * t + 0.984375f;
+        }
+        };
+
+    // 経過時間のショートカット
+    float timer = m_gameOverTimer;
+    float screenW = (float)m_outputWidth;
+    float screenH = (float)m_outputHeight;
+    float centerX = screenW * 0.5f;
+    float centerY = screenH * 0.5f;
+
+    // =============================================
+    // Layer 0: ノイズトランジション（死亡直後に走査線ノイズ）
+    // =============================================
+    if (m_gameOverNoiseT < 1.0f && m_whitePixel && m_spriteBatch && m_states)
+    {
+        m_spriteBatch->Begin(
+            DirectX::SpriteSortMode_Deferred,
+            m_states->AlphaBlend(),
+            nullptr,
+            m_states->DepthNone()
+        );
+
+        // ランダムな水平ラインを描画（走査線ノイズ風）
+        float noiseAlpha = 1.0f - m_gameOverNoiseT;  // だんだん消える
+        int numLines = (int)(60 * (1.0f - m_gameOverNoiseT));  // ライン数も減る
+
+        for (int i = 0; i < numLines; i++)
+        {
+            // 疑似ランダム（フレームごとに変わる）
+            float seed = sinf((float)i * 127.1f + timer * 311.7f) * 43758.5453f;
+            seed = seed - floorf(seed);  // 0?1に正規化
+
+            float lineY = seed * screenH;
+            float lineH = 1.0f + seed * 3.0f;  // 1?4pxの太さ
+
+            // ランダムなX方向オフセット（画面がズレる感じ）
+            float offsetX = sinf(seed * 100.0f + timer * 50.0f) * 20.0f * noiseAlpha;
+
+            RECT noiseRect = {
+                (LONG)(offsetX), (LONG)lineY,
+                (LONG)(screenW + offsetX), (LONG)(lineY + lineH)
+            };
+
+            // 白い走査線
+            DirectX::XMVECTORF32 noiseColor = { 1.0f, 1.0f, 1.0f, noiseAlpha * 0.3f * seed };
+            m_spriteBatch->Draw(m_whitePixel.Get(), noiseRect, noiseColor);
+        }
+
+        // 画面全体に赤いフラッシュ（一瞬だけ）
+        if (m_gameOverNoiseT < 0.15f)
+        {
+            float flashAlpha = (0.15f - m_gameOverNoiseT) / 0.15f;
+            RECT fullScreen = { 0, 0, (LONG)screenW, (LONG)screenH };
+            DirectX::XMVECTORF32 flashColor = { 0.8f, 0.0f, 0.0f, flashAlpha * 0.5f };
+            m_spriteBatch->Draw(m_whitePixel.Get(), fullScreen, flashColor);
+        }
+
+        m_spriteBatch->End();
+    }
+
+    auto context = m_d3dContext.Get();
+
+    // =============================================
+    // Layer 1: 赤黒ビネット（画面全体を覆う暗幕）
+    // =============================================
+    {
+        // じわっと暗くなる（EaseOutQuadで自然な減速）
+        float overlayT = min(timer / 1.5f, 1.0f);
+        float overlayAlpha = EaseOutQuad(overlayT) * 0.88f;
+
+        DirectX::XMMATRIX view = DirectX::XMMatrixIdentity();
+        DirectX::XMMATRIX projection = DirectX::XMMatrixOrthographicLH(
+            screenW, screenH, 0.1f, 10.0f);
+
+        m_effect->SetView(view);
+        m_effect->SetProjection(projection);
+        m_effect->SetWorld(DirectX::XMMatrixIdentity());
+        m_effect->SetVertexColorEnabled(true);
+        m_effect->Apply(context);
+        context->IASetInputLayout(m_inputLayout.Get());
+
+        auto primBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
+        primBatch->Begin();
+
+        float hw = screenW * 0.5f;
+        float hh = screenH * 0.5f;
+
+        // 中央は赤黒、端はもっと暗い（ビネット効果）
+        // 中央の色（やや赤い）
+        DirectX::XMFLOAT4 centerColor(0.12f, 0.0f, 0.0f, overlayAlpha * 0.7f);
+        // 端の色（ほぼ真っ黒）
+        DirectX::XMFLOAT4 edgeColor(0.03f, 0.0f, 0.0f, overlayAlpha);
+
+        // 中心点
+        DirectX::VertexPositionColor vc(DirectX::XMFLOAT3(0, 0, 1.0f), centerColor);
+
+        // 四隅
+        DirectX::VertexPositionColor vTL(DirectX::XMFLOAT3(-hw, hh, 1.0f), edgeColor);
+        DirectX::VertexPositionColor vTR(DirectX::XMFLOAT3(hw, hh, 1.0f), edgeColor);
+        DirectX::VertexPositionColor vBR(DirectX::XMFLOAT3(hw, -hh, 1.0f), edgeColor);
+        DirectX::VertexPositionColor vBL(DirectX::XMFLOAT3(-hw, -hh, 1.0f), edgeColor);
+
+        // 中心から四隅への三角形4枚（グラデーション＝ビネット）
+        primBatch->DrawTriangle(vc, vTL, vTR);  // 上
+        primBatch->DrawTriangle(vc, vTR, vBR);  // 右
+        primBatch->DrawTriangle(vc, vBR, vBL);  // 下
+        primBatch->DrawTriangle(vc, vBL, vTL);  // 左
+
+        primBatch->End();
+    }
+
+    // =============================================
+    // Layer 2: SpriteBatchでテキスト＋装飾
+    // =============================================
+    if (m_spriteBatch && m_states && m_font && m_whitePixel)
+    {
+        m_spriteBatch->Begin(
+            DirectX::SpriteSortMode_Deferred,
+            m_states->AlphaBlend(),
+            nullptr,
+            m_states->DepthNone()
+        );
+
+        // --- 装飾線（上）: 0.3秒後に左右から中央へ伸びる ---
+        if (timer > 0.3f)
+        {
+            float lineT = min((timer - 0.3f) / 0.5f, 1.0f);
+            // EaseOutBackで行き過ぎてバネで戻る
+            float lineProgress = EaseOutBack(lineT);
+            float lineHalfW = 220.0f * lineProgress;  // 最大片側220px
+            float lineY = centerY - 340.0f;             // YOU DIEDの上
+
+            // 左側の線（中央から左へ伸びる）
+            RECT leftLine = {
+                (LONG)(centerX - lineHalfW), (LONG)lineY,
+                (LONG)centerX, (LONG)(lineY + 2)
+            };
+            // 右側の線（中央から右へ伸びる）
+            RECT rightLine = {
+                (LONG)centerX, (LONG)lineY,
+                (LONG)(centerX + lineHalfW), (LONG)(lineY + 2)
+            };
+
+            DirectX::XMVECTORF32 lineColor = { 0.7f, 0.15f, 0.0f, 0.9f * lineT };
+            m_spriteBatch->Draw(m_whitePixel.Get(), leftLine, lineColor);
+            m_spriteBatch->Draw(m_whitePixel.Get(), rightLine, lineColor);
+
+            // 中央の小さなダイヤ装飾（ゴシック感）
+            RECT diamond = {
+                (LONG)(centerX - 4), (LONG)(lineY - 3),
+                (LONG)(centerX + 4), (LONG)(lineY + 5)
+            };
+            m_spriteBatch->Draw(m_whitePixel.Get(), diamond, lineColor);
+        }
+
+        // --- 「YOU DIED」: 0.6秒後にバウンドしながら上から落ちる ---
+        if (timer > 0.6f)
+        {
+            float diedT = min((timer - 0.6f) / 0.8f, 1.0f);
+            // EaseOutBounceでドスンと落ちてバウンド
+            float bounceT = EaseOutBounce(diedT);
+            float textAlpha = min((timer - 0.6f) * 3.0f, 1.0f);
+
+            // 上からスライド（-80px → 0px）
+            float slideY = (1.0f - bounceT) * -80.0f;
+            float diedY = centerY - 320.0f + slideY;
+            
+            //  グロー（発光）：同じテキストを少しずらして半透明で複数回描く
+            if (m_fontLarge)
+            {
+                // テキスト幅を測って手動で中央揃え
+                DirectX::XMVECTOR diedSize = m_fontLarge->MeasureString(L"YOU DIED");
+                float diedW = DirectX::XMVectorGetX(diedSize);
+                float diedX = centerX - diedW * 0.5f;
+
+                // グロー（4方向にずらして半透明で描く→発光して見える）
+                float glowAlpha = textAlpha * 0.25f;
+                DirectX::XMVECTORF32 glowColor = { 1.0f, 0.2f, 0.0f, glowAlpha };
+                float glowSize = 3.0f;
+                m_fontLarge->DrawString(m_spriteBatch.get(), L"YOU DIED",
+                    DirectX::XMFLOAT2(diedX - glowSize, diedY), glowColor);
+                m_fontLarge->DrawString(m_spriteBatch.get(), L"YOU DIED",
+                    DirectX::XMFLOAT2(diedX + glowSize, diedY), glowColor);
+                m_fontLarge->DrawString(m_spriteBatch.get(), L"YOU DIED",
+                    DirectX::XMFLOAT2(diedX, diedY - glowSize), glowColor);
+                m_fontLarge->DrawString(m_spriteBatch.get(), L"YOU DIED",
+                    DirectX::XMFLOAT2(diedX, diedY + glowSize), glowColor);
+
+                // 本体テキスト
+                DirectX::XMVECTORF32 diedColor = { 0.95f, 0.15f, 0.05f, textAlpha };
+                m_fontLarge->DrawString(m_spriteBatch.get(), L"YOU DIED",
+                    DirectX::XMFLOAT2(diedX, diedY), diedColor);
+            }
+            else
+            {
+                // fontLargeが無い場合は通常フォント×2倍スケール
+                DirectX::XMVECTORF32 diedColor = { 0.95f, 0.15f, 0.05f, textAlpha };
+                m_font->DrawString(m_spriteBatch.get(), L"YOU DIED",
+                    DirectX::XMFLOAT2(centerX, diedY), diedColor, 0.0f,
+                    DirectX::XMFLOAT2(0.5f, 0.5f), 2.0f);
+            }
+        }
+
+        // ===================================================================
+        //  2カラムレイアウト
+        //  左パネル: スタッツ9行   右パネル: ランク + トータルスコア
+        // ===================================================================
+
+        // --- パネル座標 ---
+        const float leftL = 55.0f;
+        const float leftR = 605.0f;
+        const float rightL = 645.0f;
+        const float rightR = 1225.0f;
+        const float rightCX = (rightL + rightR) * 0.5f;
+        const float panelTop = 125.0f;
+        const float panelBot = 555.0f;
+
+        // --- パネル背景（半透明ダークボックス）---
+        if (timer > 0.8f)
+        {
+            float bgT = min((timer - 0.8f) / 0.4f, 1.0f);
+            float bgA = EaseOutCubic(bgT) * 0.2f;
+
+            RECT leftBg = { (LONG)leftL,  (LONG)panelTop, (LONG)leftR,  (LONG)panelBot };
+            RECT rightBg = { (LONG)rightL, (LONG)panelTop, (LONG)rightR, (LONG)panelBot };
+            DirectX::XMVECTORF32 bgCol = { 0.05f, 0.01f, 0.0f, bgA };
+            m_spriteBatch->Draw(m_whitePixel.Get(), leftBg, bgCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), rightBg, bgCol);
+
+            // パネル枠線（暗い赤）
+            float borderA = bgT * 0.35f;
+            DirectX::XMVECTORF32 borderCol = { 0.5f, 0.1f, 0.0f, borderA };
+            RECT bTop1 = { (LONG)leftL, (LONG)panelTop, (LONG)leftR, (LONG)(panelTop + 1) };
+            RECT bBot1 = { (LONG)leftL, (LONG)(panelBot - 1), (LONG)leftR, (LONG)panelBot };
+            RECT bLft1 = { (LONG)leftL, (LONG)panelTop, (LONG)(leftL + 1), (LONG)panelBot };
+            RECT bRgt1 = { (LONG)(leftR - 1), (LONG)panelTop, (LONG)leftR, (LONG)panelBot };
+            m_spriteBatch->Draw(m_whitePixel.Get(), bTop1, borderCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), bBot1, borderCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), bLft1, borderCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), bRgt1, borderCol);
+
+            RECT bTop2 = { (LONG)rightL, (LONG)panelTop, (LONG)rightR, (LONG)(panelTop + 1) };
+            RECT bBot2 = { (LONG)rightL, (LONG)(panelBot - 1), (LONG)rightR, (LONG)panelBot };
+            RECT bLft2 = { (LONG)rightL, (LONG)panelTop, (LONG)(rightL + 1), (LONG)panelBot };
+            RECT bRgt2 = { (LONG)(rightR - 1), (LONG)panelTop, (LONG)rightR, (LONG)panelBot };
+
+            //  コーナー装飾（L字型、各パネルの四隅）
+            float cornerLen = 20.0f;
+            float cornerThick = 2.0f;
+            DirectX::XMVECTORF32 cornerCol = { 0.8f, 0.2f, 0.0f, borderA * 1.5f };
+
+            // 左パネル四隅
+            // 左上
+            RECT cLT_H = { (LONG)leftL, (LONG)panelTop, (LONG)(leftL + cornerLen), (LONG)(panelTop + cornerThick) };
+            RECT cLT_V = { (LONG)leftL, (LONG)panelTop, (LONG)(leftL + cornerThick), (LONG)(panelTop + cornerLen) };
+            m_spriteBatch->Draw(m_whitePixel.Get(), cLT_H, cornerCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), cLT_V, cornerCol);
+            // 右上
+            RECT cRT_H = { (LONG)(leftR - cornerLen), (LONG)panelTop, (LONG)leftR, (LONG)(panelTop + cornerThick) };
+            RECT cRT_V = { (LONG)(leftR - cornerThick), (LONG)panelTop, (LONG)leftR, (LONG)(panelTop + cornerLen) };
+            m_spriteBatch->Draw(m_whitePixel.Get(), cRT_H, cornerCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), cRT_V, cornerCol);
+            // 左下
+            RECT cLB_H = { (LONG)leftL, (LONG)(panelBot - cornerThick), (LONG)(leftL + cornerLen), (LONG)panelBot };
+            RECT cLB_V = { (LONG)leftL, (LONG)(panelBot - cornerLen), (LONG)(leftL + cornerThick), (LONG)panelBot };
+            m_spriteBatch->Draw(m_whitePixel.Get(), cLB_H, cornerCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), cLB_V, cornerCol);
+            // 右下
+            RECT cRB_H = { (LONG)(leftR - cornerLen), (LONG)(panelBot - cornerThick), (LONG)leftR, (LONG)panelBot };
+            RECT cRB_V = { (LONG)(leftR - cornerThick), (LONG)(panelBot - cornerLen), (LONG)leftR, (LONG)panelBot };
+            m_spriteBatch->Draw(m_whitePixel.Get(), cRB_H, cornerCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), cRB_V, cornerCol);
+
+            // 右パネル四隅
+            RECT c2LT_H = { (LONG)rightL, (LONG)panelTop, (LONG)(rightL + cornerLen), (LONG)(panelTop + cornerThick) };
+            RECT c2LT_V = { (LONG)rightL, (LONG)panelTop, (LONG)(rightL + cornerThick), (LONG)(panelTop + cornerLen) };
+            m_spriteBatch->Draw(m_whitePixel.Get(), c2LT_H, cornerCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), c2LT_V, cornerCol);
+            RECT c2RT_H = { (LONG)(rightR - cornerLen), (LONG)panelTop, (LONG)rightR, (LONG)(panelTop + cornerThick) };
+            RECT c2RT_V = { (LONG)(rightR - cornerThick), (LONG)panelTop, (LONG)rightR, (LONG)(panelTop + cornerLen) };
+            m_spriteBatch->Draw(m_whitePixel.Get(), c2RT_H, cornerCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), c2RT_V, cornerCol);
+            RECT c2LB_H = { (LONG)rightL, (LONG)(panelBot - cornerThick), (LONG)(rightL + cornerLen), (LONG)panelBot };
+            RECT c2LB_V = { (LONG)rightL, (LONG)(panelBot - cornerLen), (LONG)(rightL + cornerThick), (LONG)panelBot };
+            m_spriteBatch->Draw(m_whitePixel.Get(), c2LB_H, cornerCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), c2LB_V, cornerCol);
+            RECT c2RB_H = { (LONG)(rightR - cornerLen), (LONG)(panelBot - cornerThick), (LONG)rightR, (LONG)panelBot };
+            RECT c2RB_V = { (LONG)(rightR - cornerThick), (LONG)(panelBot - cornerLen), (LONG)rightR, (LONG)panelBot };
+            m_spriteBatch->Draw(m_whitePixel.Get(), c2RB_H, cornerCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), c2RB_V, cornerCol);
+
+            m_spriteBatch->Draw(m_whitePixel.Get(), bTop2, borderCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), bBot2, borderCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), bLft2, borderCol);
+            m_spriteBatch->Draw(m_whitePixel.Get(), bRgt2, borderCol);
+        }
+
+        // ======================
+        //  左パネル: スタッツ9行
+        // ======================
+        if (timer > 1.2f)
+        {
+            const wchar_t* styleRankNames[] = { L"D", L"C", L"B", L"A", L"S", L"SS", L"SSS" };
+
+            const float tableL = leftL + 20.0f;
+            const float colVal = leftR - 140.0f;
+            const float colBonus = leftR - 20.0f;
+            const float statStartY = panelTop + 20.0f;
+            const float rowH = 25.0f;
+
+            const wchar_t* labels[] = {
+                L"KILLS", L"HEADSHOTS", L"MELEE KILLS", L"MAX COMBO",
+                L"PARRIES", L"SURVIVAL", L"DMG DEALT", L"DMG TAKEN", L"BEST STYLE"
+            };
+            int rawValues[] = {
+                m_goKills, m_goHeadshots, m_goMeleeKills, m_goMaxCombo,
+                m_goParryCount, 0, m_goDamageDealt, m_goDamageTaken, m_goMaxStyleRank
+            };
+
+            for (int i = 0; i < 9; i++)
+            {
+                float rowStart = 1.2f + i * 0.12f;
+                if (timer <= rowStart) continue;
+
+                float t = min((timer - rowStart) / 0.3f, 1.0f);
+                float ease = EaseOutCubic(t);
+                float alpha = ease;
+                float slideUp = (1.0f - ease) * 8.0f;
+
+                float y = statStartY + i * rowH + slideUp;
+                
+                
+
+                // ラベル（左揃え）
+                DirectX::XMVECTORF32 labelColor = { 0.6f, 0.6f, 0.6f, alpha };
+                m_font->DrawString(m_spriteBatch.get(), labels[i],
+                    DirectX::XMFLOAT2(tableL, y), labelColor);
+
+                // ドットリーダー
+                DirectX::XMVECTOR labelSize = m_font->MeasureString(labels[i]);
+                float labelEnd = tableL + DirectX::XMVectorGetX(labelSize);
+                float dotS = labelEnd + 6.0f;
+                float dotE = colVal - 70.0f;
+                if (dotE > dotS && m_whitePixel)
+                {
+                    for (float dx = dotS; dx < dotE; dx += 6.0f)
+                    {
+                        RECT dot = { (LONG)dx, (LONG)(y + 8), (LONG)(dx + 2), (LONG)(y + 10) };
+                        DirectX::XMVECTORF32 dotColor = { 0.35f, 0.35f, 0.35f, alpha * 0.5f };
+                        m_spriteBatch->Draw(m_whitePixel.Get(), dot, dotColor);
+                    }
+                }
+
+                // 値（右揃え）
+                wchar_t valBuf[64];
+                if (i == 5)
+                {
+                    int sec = (int)(m_goSurvivalTime * m_goStatCountUp[i]);
+                    swprintf_s(valBuf, L"%d:%02d", sec / 60, sec % 60);
+                }
+                else if (i == 8)
+                {
+                    int dr = (int)(m_goMaxStyleRank * m_goStatCountUp[i]);
+                    if (dr > 6) dr = 6;
+                    swprintf_s(valBuf, L"%s", styleRankNames[dr]);
+                }
+                else
+                {
+                    swprintf_s(valBuf, L"%d", (int)(rawValues[i] * m_goStatCountUp[i]));
+                }
+
+                DirectX::XMVECTORF32 valColor = { 1.0f, 1.0f, 1.0f, alpha };
+                DirectX::XMVECTOR valSize = m_font->MeasureString(valBuf);
+                float valW = DirectX::XMVectorGetX(valSize);
+                m_font->DrawString(m_spriteBatch.get(), valBuf,
+                    DirectX::XMFLOAT2(colVal - valW, y), valColor);
+
+                // ボーナスポイント（右揃え、金色）
+                int dispScore = (int)(m_goStatScores[i] * m_goStatCountUp[i]);
+                wchar_t sBuf[64];
+                swprintf_s(sBuf, L"+%d", dispScore);
+                DirectX::XMVECTORF32 bonusColor = { 1.0f, 0.85f, 0.2f, alpha };
+                DirectX::XMVECTOR sSize = m_font->MeasureString(sBuf);
+                float sW = DirectX::XMVectorGetX(sSize);
+                m_font->DrawString(m_spriteBatch.get(), sBuf,
+                    DirectX::XMFLOAT2(colBonus - sW, y), bonusColor);
+            }
+
+            // --- 左パネル下部: WAVE表示 ---
+            float waveStart = 1.2f + 9 * 0.12f + 0.2f;
+            if (timer > waveStart)
+            {
+                float wt = min((timer - waveStart) / 0.4f, 1.0f);
+                float wa = EaseOutCubic(wt);
+
+                float waveY = statStartY + 9 * rowH + 20.0f;
+                wchar_t waveBuf[64];
+                swprintf_s(waveBuf, L"WAVE  %d", m_gameOverWave);
+                DirectX::XMVECTORF32 waveCol = { 0.8f, 0.3f, 0.1f, wa };
+                m_font->DrawString(m_spriteBatch.get(), waveBuf,
+                    DirectX::XMFLOAT2(tableL, waveY), waveCol);
+            }
+        }
+
+        // =====================================
+        //  右パネル: ランク + トータルスコア
+        // =====================================
+
+        // --- 「RANK」ラベル ---
+        if (timer > 2.0f)
+        {
+            float rlT = min((timer - 2.0f) / 0.3f, 1.0f);
+            float rlA = EaseOutCubic(rlT);
+            DirectX::XMVECTORF32 rlCol = { 0.5f, 0.5f, 0.5f, rlA * 0.7f };
+            DirectX::XMVECTOR rlSize = m_font->MeasureString(L"RANK");
+            float rlW = DirectX::XMVectorGetX(rlSize);
+            m_font->DrawString(m_spriteBatch.get(), L"RANK",
+                DirectX::XMFLOAT2(rightCX - rlW * 0.5f, panelTop + 25.0f), rlCol);
+        }
+
+        // ★ ランク登場フラッシュ（文字の形に沿って放射状に光る）
+        if (timer > 2.15f && timer < 4.0f && m_fontLarge)
+        {
+            float flashT = (timer - 2.15f) / 1.85f;  // 0→1（1.85秒かけてゆっくり減衰）
+            float flashA = (1.0f - flashT) * (1.0f - flashT);
+            float intensity = (m_gameOverRank >= 2) ? 1.0f : 0.5f;
+
+            const wchar_t* rankNames[] = { L"C", L"B", L"A", L"S" };
+            const wchar_t* rn = rankNames[m_gameOverRank];
+            float rankY = panelTop + 70.0f;
+
+            DirectX::XMVECTOR rSize = m_fontLarge->MeasureString(rn);
+            float rW = DirectX::XMVectorGetX(rSize);
+            float rH = DirectX::XMVectorGetY(rSize);
+            float rX = rightCX - rW * 0.5f;
+
+            // フラッシュ色
+            DirectX::XMFLOAT3 flashRGB;
+            if (m_gameOverRank == 3)      flashRGB = { 1.0f, 0.4f, 0.1f };
+            else if (m_gameOverRank == 2) flashRGB = { 1.0f, 0.9f, 0.3f };
+            else if (m_gameOverRank == 1) flashRGB = { 0.5f, 0.7f, 1.0f };
+            else                          flashRGB = { 0.8f, 0.8f, 0.8f };
+
+            // === 外側レイヤー: 16方向に大きく放射 ===
+            float outerDist = 12.0f + (1.0f - flashT) * 60.0f;
+            float outerDirs[][2] = {
+                {1,0},{-1,0},{0,1},{0,-1},
+                {0.707f,0.707f},{-0.707f,0.707f},{0.707f,-0.707f},{-0.707f,-0.707f},
+                {0.92f,0.38f},{-0.92f,0.38f},{0.92f,-0.38f},{-0.92f,-0.38f},
+                {0.38f,0.92f},{-0.38f,0.92f},{0.38f,-0.92f},{-0.38f,-0.92f}
+            };
+            for (int d = 0; d < 16; d++)
+            {
+                float dx = outerDirs[d][0] * outerDist;
+                float dy = outerDirs[d][1] * outerDist;
+                DirectX::XMVECTORF32 gc = { flashRGB.x, flashRGB.y, flashRGB.z, flashA * intensity * 0.2f };
+                m_fontLarge->DrawString(m_spriteBatch.get(), rn,
+                    DirectX::XMFLOAT2(rX + dx, rankY + dy), gc);
+            }
+
+            // === 中間レイヤー: 8方向 ===
+            float midDist = 5.0f + (1.0f - flashT) * 30.0f;
+            for (int d = 0; d < 8; d++)
+            {
+                float dx = outerDirs[d][0] * midDist;
+                float dy = outerDirs[d][1] * midDist;
+                DirectX::XMVECTORF32 gc = { flashRGB.x, flashRGB.y, flashRGB.z, flashA * intensity * 0.35f };
+                m_fontLarge->DrawString(m_spriteBatch.get(), rn,
+                    DirectX::XMFLOAT2(rX + dx, rankY + dy), gc);
+            }
+
+            // === 内側レイヤー: 8方向（明るい）===
+            float innerDist = 2.0f + (1.0f - flashT) * 12.0f;
+            for (int d = 0; d < 8; d++)
+            {
+                float dx = outerDirs[d][0] * innerDist;
+                float dy = outerDirs[d][1] * innerDist;
+                DirectX::XMVECTORF32 gc = {
+                    min(flashRGB.x + 0.3f, 1.0f),
+                    min(flashRGB.y + 0.3f, 1.0f),
+                    min(flashRGB.z + 0.2f, 1.0f),
+                    flashA * intensity * 0.5f };
+                m_fontLarge->DrawString(m_spriteBatch.get(), rn,
+                    DirectX::XMFLOAT2(rX + dx, rankY + dy), gc);
+            }
+
+            // === S/Aランク: 背景にぼんやり光の円 ===
+            if (m_gameOverRank >= 2 && m_whitePixel)
+            {
+                float glowRadius = 80.0f + (1.0f - flashT) * 120.0f;
+                float cx = rightCX;
+                float cy = rankY + rH * 0.5f;
+                // 同心円的に3層の光
+                for (int ring = 0; ring < 3; ring++)
+                {
+                    float r = glowRadius * (0.4f + ring * 0.3f);
+                    float ringA = flashA * intensity * 0.08f / (ring + 1);
+                    RECT glowRect = {
+                        (LONG)(cx - r), (LONG)(cy - r),
+                        (LONG)(cx + r), (LONG)(cy + r)
+                    };
+                    DirectX::XMVECTORF32 glowCol = { flashRGB.x, flashRGB.y, flashRGB.z, ringA };
+                    m_spriteBatch->Draw(m_whitePixel.Get(), glowRect, glowCol);
+                }
+            }
+        }
+
+
+        // --- ランク文字（大きく中央に）---
+        if (timer > 2.2f)
+        {
+            float rankT = min((timer - 2.2f) / 0.5f, 1.0f);
+            float rankEase = EaseOutBack(rankT);
+            float rankAlpha = min((timer - 2.2f) * 3.0f, 1.0f);
+
+            const wchar_t* rankNames[] = { L"C", L"B", L"A", L"S" };
+            const wchar_t* rankName = rankNames[m_gameOverRank];
+
+            DirectX::XMVECTORF32 rankColors[] = {
+                { 0.5f, 0.5f, 0.5f, rankAlpha },
+                { 0.3f, 0.5f, 1.0f, rankAlpha },
+                { 1.0f, 0.85f, 0.0f, rankAlpha },
+                { 1.0f, 0.2f, 0.0f, rankAlpha },
+            };
+            DirectX::XMVECTORF32 rankColor = rankColors[m_gameOverRank];
+
+            float rankY = panelTop + 70.0f;
+
+            if (m_fontLarge)
+            {
+                // グロー（A/Sランク）
+                if (m_gameOverRank >= 2)
+                {
+                    float glowPulse = (sinf(timer * 4.0f) + 1.0f) * 0.5f;
+                    DirectX::XMVECTORF32 glowColor = { rankColor.f[0], rankColor.f[1], rankColor.f[2],
+                        rankAlpha * 0.2f * (0.5f + glowPulse * 0.5f) };
+                    float glow = 5.0f;
+                    DirectX::XMVECTOR rSize = m_fontLarge->MeasureString(rankName);
+                    float rW = DirectX::XMVectorGetX(rSize);
+                    float rH = DirectX::XMVectorGetY(rSize);
+                    float rX = rightCX - rW * 0.5f;
+                    DirectX::XMFLOAT2 glowOrigin(rW * 0.5f, rH * 0.5f);
+                    DirectX::XMFLOAT2 glowCenter(rightCX, rankY + rH * 0.5f);
+                    m_fontLarge->DrawString(m_spriteBatch.get(), rankName,
+                        DirectX::XMFLOAT2(glowCenter.x - glow, glowCenter.y), glowColor, 0.0f, glowOrigin, 2.0f);
+                    m_fontLarge->DrawString(m_spriteBatch.get(), rankName,
+                        DirectX::XMFLOAT2(glowCenter.x + glow, glowCenter.y), glowColor, 0.0f, glowOrigin, 2.0f);
+                    m_fontLarge->DrawString(m_spriteBatch.get(), rankName,
+                        DirectX::XMFLOAT2(glowCenter.x, glowCenter.y - glow), glowColor, 0.0f, glowOrigin, 2.0f);
+                    m_fontLarge->DrawString(m_spriteBatch.get(), rankName,
+                        DirectX::XMFLOAT2(glowCenter.x, glowCenter.y + glow), glowColor, 0.0f, glowOrigin, 2.0f);
+                }
+
+                DirectX::XMVECTOR rSize = m_fontLarge->MeasureString(rankName);
+                float rW = DirectX::XMVectorGetX(rSize);
+                float rH = DirectX::XMVectorGetY(rSize);
+                // 2倍スケールで描画（originを中央にして拡大）
+                DirectX::XMFLOAT2 origin(rW * 0.5f, rH * 0.5f);
+                DirectX::XMFLOAT2 pos(rightCX, rankY + rH * 0.5f);
+                m_fontLarge->DrawString(m_spriteBatch.get(), rankName,
+                    pos, rankColor, 0.0f, origin, 2.0f);
+            }
+            else
+            {
+                DirectX::XMVECTOR rSize = m_font->MeasureString(rankName);
+                float rW = DirectX::XMVectorGetX(rSize);
+                m_font->DrawString(m_spriteBatch.get(), rankName,
+                    DirectX::XMFLOAT2(rightCX - rW * 0.5f, rankY), rankColor);
+            }
+        }
+
+        // --- 右パネル: 区切り線 ---
+        if (timer > 2.5f)
+        {
+            float sepT = min((timer - 2.5f) / 0.4f, 1.0f);
+            float sepE = EaseOutCubic(sepT);
+            float sepY = panelTop + 220.0f;
+            float sepHW = 200.0f * sepE;
+            RECT sepLine = {
+                (LONG)(rightCX - sepHW), (LONG)sepY,
+                (LONG)(rightCX + sepHW), (LONG)(sepY + 1)
+            };
+            DirectX::XMVECTORF32 sepCol = { 0.5f, 0.12f, 0.0f, sepE * 0.6f };
+            m_spriteBatch->Draw(m_whitePixel.Get(), sepLine, sepCol);
+        }
+
+        // --- 右パネル: TOTAL SCORE ---
+        if (timer > 2.7f)
+        {
+            float tsT = min((timer - 2.7f) / 0.4f, 1.0f);
+            float tsA = EaseOutCubic(tsT);
+
+            float scoreY = panelTop + 240.0f;
+            DirectX::XMVECTORF32 tsLabelCol = { 0.6f, 0.6f, 0.6f, tsA * 0.8f };
+            DirectX::XMVECTOR tsLabelSize = m_font->MeasureString(L"TOTAL SCORE");
+            float tsLabelW = DirectX::XMVectorGetX(tsLabelSize);
+            m_font->DrawString(m_spriteBatch.get(), L"TOTAL SCORE",
+                DirectX::XMFLOAT2(rightCX - tsLabelW * 0.5f, scoreY), tsLabelCol);
+
+            int dispTotal = (int)(m_goTotalScore * m_gameOverCountUp);
+            wchar_t tBuf[64];
+            swprintf_s(tBuf, L"%d", dispTotal);
+            DirectX::XMVECTORF32 tCol = { 1.0f, 0.85f, 0.0f, tsA };
+            float numY = scoreY + 25.0f;
+
+            if (m_fontLarge)
+            {
+                DirectX::XMVECTOR ts = m_fontLarge->MeasureString(tBuf);
+                float tw = DirectX::XMVectorGetX(ts);
+                m_fontLarge->DrawString(m_spriteBatch.get(), tBuf,
+                    DirectX::XMFLOAT2(rightCX - tw * 0.5f, numY), tCol);
+            }
+            else
+            {
+                DirectX::XMVECTOR ts = m_font->MeasureString(tBuf);
+                float tw = DirectX::XMVectorGetX(ts);
+                m_font->DrawString(m_spriteBatch.get(), tBuf,
+                    DirectX::XMFLOAT2(rightCX - tw * 0.5f, numY), tCol);
+            }
+        }
+
+        // --- パーティクル（A/Sランクで右パネル周辺に火の粉）---
+        if (timer > 3.5f && m_gameOverRank >= 2 && m_whitePixel)
+        {
+            float particleAlpha = min((timer - 3.5f) * 2.0f, 1.0f);
+            int numParticles = (m_gameOverRank == 3) ? 30 : 15;
+
+            for (int i = 0; i < numParticles; i++)
+            {
+                float seed1 = sinf((float)i * 127.1f + timer * 0.7f) * 0.5f + 0.5f;
+                float seed2 = cosf((float)i * 311.7f + timer * 0.5f) * 0.5f + 0.5f;
+                float seed3 = sinf((float)i * 269.5f + timer * 1.3f) * 0.5f + 0.5f;
+
+                float px = rightCX + (seed1 - 0.5f) * 500.0f;
+                float py = panelTop + seed2 * (panelBot - panelTop);
+                float pSize = 2.0f + seed3 * 4.0f;
+
+                float flickerAlpha = particleAlpha * (0.3f + seed3 * 0.7f);
+                DirectX::XMVECTORF32 pColor = {
+                    0.9f + seed1 * 0.1f,
+                    0.3f + seed2 * 0.4f,
+                    0.0f,
+                    flickerAlpha
+                };
+
+                RECT pRect = {
+                    (LONG)(px - pSize * 0.5f), (LONG)(py - pSize * 0.5f),
+                    (LONG)(px + pSize * 0.5f), (LONG)(py + pSize * 0.5f)
+                };
+                m_spriteBatch->Draw(m_whitePixel.Get(), pRect, pColor);
+            }
+        }
+
+        // --- Press R to Restart（右パネル下）---
+        if (timer > 4.0f)
+        {
+            float restartT = min((timer - 4.0f) / 0.3f, 1.0f);
+            float restartAlpha = EaseOutCubic(restartT);
+            float blink = (sinf(timer * 3.0f) + 1.0f) * 0.5f;
+            float finalAlpha = restartAlpha * (0.4f + blink * 0.6f);
+
+            DirectX::XMVECTORF32 restartColor = { 0.6f, 0.6f, 0.6f, finalAlpha };
+            DirectX::XMVECTOR restartSize = m_font->MeasureString(L"Press R to Restart");
+            float restartW = DirectX::XMVectorGetX(restartSize);
+            m_font->DrawString(m_spriteBatch.get(), L"Press R to Restart",
+                DirectX::XMFLOAT2(rightCX - restartW * 0.5f, panelBot + 15.0f), restartColor);
+        }
+
+        m_spriteBatch->End();
+    }
 }
 
 void Game::RenderFade()
@@ -9232,7 +10226,7 @@ void Game::InitImGui()
     ImGui_ImplWin32_Init(m_window);
     ImGui_ImplDX11_Init(m_d3dDevice.Get(), m_d3dContext.Get());
 
-    OutputDebugStringA("ImGui initialized successfully!\n");
+    //OutputDebugStringA("ImGui initialized successfully!\n");
 }
 
 void Game::ShutdownImGui()
@@ -9382,7 +10376,7 @@ void Game::PerformMeleeAttack()
         if (hitEnemy->isStaggered)
         {
             //  グローリーキル
-            OutputDebugStringA("[GLORY KILL] GLORY KILL EXECUTED!\n");
+            //OutputDebugStringA("[GLORY KILL] GLORY KILL EXECUTED!\n");
 
             //  アニメーション開始
             m_gloryKillArmAnimActive = true;
@@ -9407,10 +10401,10 @@ void Game::PerformMeleeAttack()
 
             m_weaponSystem->SetReserveAmmo(newAmmo);
 
-            char buffer[128];
+            /*char buffer[128];
             sprintf_s(buffer, "[GLORY KILL] Ammo recovered: +%d (Total: %d/%d)\n",
-                ammoReward, newAmmo, maxReserve);
-            OutputDebugStringA(buffer);
+                ammoReward, newAmmo, maxReserve);*/
+            //OutputDebugStringA(buffer);
 
 
             //  カメラシェイク
@@ -9442,15 +10436,16 @@ void Game::PerformMeleeAttack()
 
             int oldHealth = hitEnemy->health;
             hitEnemy->health -= (int)normalMeleeDamage;
+            m_statDamageDealt += (int)normalMeleeDamage;  //  与ダメ記録
 
             // 弾補充
             int currentAmmo = m_weaponSystem->GetReserveAmmo();
             m_weaponSystem->SetReserveAmmo(currentAmmo + m_meleeAmmoRefill);
 
-            char buffer[128];
+            /*char buffer[128];
             sprintf_s(buffer, "[MELEE] Normal hit! Damage:%.0f HP:%d->%d\n",
-                normalMeleeDamage, oldHealth, hitEnemy->health);
-            OutputDebugStringA(buffer);
+                normalMeleeDamage, oldHealth, hitEnemy->health);*/
+            //OutputDebugStringA(buffer);
 
             // 軽いフィードバック
             m_cameraShake = 0.08f;
@@ -9474,7 +10469,7 @@ void Game::PerformMeleeAttack()
     else
     {
         //  空振り
-        OutputDebugStringA("[MELEE] Missed!\n");
+        //OutputDebugStringA("[MELEE] Missed!\n");
 
         m_cameraShake = 0.05f;
         m_cameraShakeTimer = 0.1f;
@@ -9582,15 +10577,15 @@ void Game::CreateBlurResources()
     );
     if (FAILED(hr)) throw std::runtime_error("Failed to create offscreen depth SRV");
 
-    char debugOffscreenDepth[256];
-    sprintf_s(debugOffscreenDepth, "[OFFSCREEN DEPTH] Created: %p\n", m_offscreenDepthSRV.Get());
-    OutputDebugStringA(debugOffscreenDepth);
+    /*char debugOffscreenDepth[256];
+    sprintf_s(debugOffscreenDepth, "[OFFSCREEN DEPTH] Created: %p\n", m_offscreenDepthSRV.Get());*/
+    //OutputDebugStringA(debugOffscreenDepth);
 
     // === シェーダー読み込み ===
     m_fullscreenVS = LoadVertexShader(L"FullscreenVS.cso");
     m_blurPS = LoadPixelShader(L"GaussianBlur.cso");
 
-    OutputDebugStringA("[BLUR] Blur resources created successfully\n");
+    //OutputDebugStringA("[BLUR] Blur resources created successfully\n");
 }
 
 // =================================================================
@@ -9605,9 +10600,9 @@ ID3D11VertexShader* Game::LoadVertexShader(const wchar_t* filename)
 
     if (FAILED(hr))
     {
-        char errorMsg[256];
-        sprintf_s(errorMsg, "Failed to load vertex shader: %ls\n", filename);
-        OutputDebugStringA(errorMsg);
+        /*char errorMsg[256];
+        sprintf_s(errorMsg, "Failed to load vertex shader: %ls\n", filename);*/
+        //OutputDebugStringA(errorMsg);
         throw std::runtime_error("Failed to load vertex shader");
     }
 
@@ -9636,9 +10631,9 @@ ID3D11PixelShader* Game::LoadPixelShader(const wchar_t* filename)
 
     if (FAILED(hr))
     {
-        char errorMsg[256];
-        sprintf_s(errorMsg, "Failed to load pixel shader: %ls\n", filename);
-        OutputDebugStringA(errorMsg);
+        /*char errorMsg[256];
+        sprintf_s(errorMsg, "Failed to load pixel shader: %ls\n", filename);*/
+        //OutputDebugStringA(errorMsg);
         throw std::runtime_error("Failed to load pixel shader");
     }
 

@@ -12,6 +12,7 @@ EnemySystem::EnemySystem()
 	, m_enemySpawnTimer(0.0f)	//	スポーンタイマー:	０秒からスタート
 	, m_nextEnemyID(0)
 {
+	m_enemies.reserve(60);  //  最大60体分のメモリを先に確保
 	//	m_enemies　は空の配列として自動初期化される
 }
 
@@ -252,7 +253,7 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 			char buf[128];
 			sprintf_s(buf, "[ATTACK] Enemy ID:%d STRIKE! (animTime=%.2f)\n",
 				enemy.id, enemy.animationTime);
-			OutputDebugStringA(buf);
+			//OutputDebugStringA(buf);
 		}
 		else
 		{
@@ -471,7 +472,7 @@ void EnemySystem::SpawnMidBoss(DirectX::XMFLOAT3 playerPos)
 
 	char buf[128];
 	sprintf_s(buf, "[MIDBOSS] Spawned! ID:%d, HP:%d\n", enemy.id, enemy.health);
-	OutputDebugStringA(buf);
+	//OutputDebugStringA(buf);
 }
 
 
@@ -510,7 +511,7 @@ void EnemySystem::SpawnBoss(DirectX::XMFLOAT3 playerPos)
 
 	char buf[128];
 	sprintf_s(buf, "[BOSS] Spawned! ID:%d, HP:%d\n", enemy.id, enemy.health);
-	OutputDebugStringA(buf);
+	//OutputDebugStringA(buf);
 }
 
 //	\死んだ敵を配列から削除
@@ -798,7 +799,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 					enemy.currentAnimation = "AttackJump";
 					enemy.animationTime = 0.0f;
 
-					OutputDebugStringA("[BOSS AI] -> JUMP_WINDUP (random)\n");
+					//OutputDebugStringA("[BOSS AI] -> JUMP_WINDUP (random)\n");
 				}
 				else
 				{
@@ -807,7 +808,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 					enemy.currentAnimation = "AttackSlash";
 					enemy.animationTime = 0.0f;
 
-					OutputDebugStringA("[BOSS AI] -> SLASH_WINDUP (random)\n");
+					//OutputDebugStringA("[BOSS AI] -> SLASH_WINDUP (random)\n");
 				}
 			}
 			else // MIDBOSS
@@ -824,7 +825,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 					char buf[64];
 					sprintf_s(buf, "[MIDBOSS AI] -> ROAR_WINDUP (%s)\n",
 						enemy.bossBeamParriable ? "GREEN" : "RED");
-					OutputDebugStringA(buf);
+					//OutputDebugStringA(buf);
 				}
 				else
 				{
@@ -833,7 +834,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 					enemy.currentAnimation = "Attack";
 					enemy.animationTime = 0.0f;
 
-					OutputDebugStringA("[MIDBOSS AI] -> JUMP_WINDUP\n");
+					//OutputDebugStringA("[MIDBOSS AI] -> JUMP_WINDUP\n");
 				}
 			}
 		}
@@ -881,7 +882,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 			enemy.bossPhaseTimer = 0.0f;
 			enemy.bossTargetPos = playerPos;  // ジャンプ先を更新
 
-			OutputDebugStringA("[BOSS AI] -> JUMP_AIR\n");
+			//OutputDebugStringA("[BOSS AI] -> JUMP_AIR\n");
 		}
 		break;
 	}
@@ -912,7 +913,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 			//   (game.cppで処理 - attackJustLandedを流用)
 			enemy.attackJustLanded = true;
 
-			OutputDebugStringA("[BOSS AI] -> JUMP_SLAM!\n");
+			//OutputDebugStringA("[BOSS AI] -> JUMP_SLAM!\n");
 		}
 		break;
 	}
@@ -928,7 +929,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 			enemy.bossPhase = BossAttackPhase::SLAM_RECOVERY;
 			enemy.bossPhaseTimer = 0.0f;
 
-			OutputDebugStringA("[BOSS AI] -> SLAM_RECOVERY\n");
+			//OutputDebugStringA("[BOSS AI] -> SLAM_RECOVERY\n");
 		}
 		break;
 	}
@@ -950,7 +951,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 			enemy.bossPhaseTimer = 0.0f;
 			enemy.bossAttackCooldown = 3.0f;  // 次の攻撃まで3秒
 
-			OutputDebugStringA("[BOSS AI] -> IDLE (cooldown)\n");
+			//OutputDebugStringA("[BOSS AI] -> IDLE (cooldown)\n");
 		}
 		break;
 	}
@@ -973,7 +974,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 			//   (フラグで通知)
 			enemy.attackJustLanded = true;
 
-			OutputDebugStringA("[BOSS AI] -> SLASH_FIRE!\n");
+			//OutputDebugStringA("[BOSS AI] -> SLASH_FIRE!\n");
 		}
 		break;
 	}
@@ -987,7 +988,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 			enemy.bossPhase = BossAttackPhase::SLASH_RECOVERY;
 			enemy.bossPhaseTimer = 0.0f;
 
-			OutputDebugStringA("[BOSS AI] -> SLASH_RECOVERY\n");
+			//OutputDebugStringA("[BOSS AI] -> SLASH_RECOVERY\n");
 		}
 		break;
 	}
@@ -1009,7 +1010,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 			enemy.bossPhaseTimer = 0.0f;
 			enemy.bossAttackCooldown = 2.5f;
 
-			OutputDebugStringA("[BOSS AI] -> IDLE (cooldown)\n");
+			//OutputDebugStringA("[BOSS AI] -> IDLE (cooldown)\n");
 		}
 		break;
 	}
@@ -1036,7 +1037,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 
 			enemy.attackJustLanded = true;
 
-			OutputDebugStringA("[MIDBOSS AI] -> ROAR_FIRE!\n");
+			//OutputDebugStringA("[MIDBOSS AI] -> ROAR_FIRE!\n");
 		}
 		break;
 	}
@@ -1064,7 +1065,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 			enemy.attackJustLanded = false;
 			enemy.bossPhase = BossAttackPhase::ROAR_RECOVERY;
 			enemy.bossPhaseTimer = 0.0f;
-			OutputDebugStringA("[MIDBOSS AI] -> ROAR_RECOVERY\n");
+			//OutputDebugStringA("[MIDBOSS AI] -> ROAR_RECOVERY\n");
 		}
 		break;
 	}
@@ -1086,7 +1087,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 			enemy.bossPhaseTimer = 0.0f;
 			enemy.bossAttackCooldown = 3.0f;
 
-			OutputDebugStringA("[MIDBOSS AI] -> IDLE (cooldown)\n");
+			//OutputDebugStringA("[MIDBOSS AI] -> IDLE (cooldown)\n");
 		}
 		break;
 	}
@@ -1146,5 +1147,5 @@ void EnemySystem::SpawnEnemyOfType(EnemyType type, DirectX::XMFLOAT3 playerPos)
 
 	char buf[128];
 	sprintf_s(buf, "[DEBUG SPAWN] Type:%d ID:%d\n", (int)type, enemy.id);
-	OutputDebugStringA(buf);
+	//OutputDebugStringA(buf);
 }

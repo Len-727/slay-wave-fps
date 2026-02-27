@@ -1349,9 +1349,10 @@ void Model::DrawAnimated(
 	const AnimationClip& clip = it->second;
 
 
-	//	全ての行列を単位行列で初期化
-	std::vector<DirectX::XMMATRIX> boneTransforms;
-	boneTransforms.resize(m_bones.size());
+	//  メンバ変数を再利用（毎フレームnewしない）
+	if (m_cachedBoneTransforms.size() != m_bones.size())
+		m_cachedBoneTransforms.resize(m_bones.size());
+	auto& boneTransforms = m_cachedBoneTransforms;
 
 	//	全ての行列を単位行列で初期化
 	for (size_t i = 0; i < boneTransforms.size(); i++)

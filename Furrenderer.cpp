@@ -27,13 +27,13 @@ bool FurRenderer::Initialize(ID3D11Device* device)
 {
     if (!CompileShaders(device))
     {
-        OutputDebugStringA("[FUR] Shader compilation FAILED\n");
+        //OutputDebugStringA("[FUR] Shader compilation FAILED\n");
         return false;
     }
 
     if (!CreateGroundQuad(device))
     {
-        OutputDebugStringA("[FUR] Ground quad creation FAILED\n");
+        //OutputDebugStringA("[FUR] Ground quad creation FAILED\n");
         return false;
     }
 
@@ -47,7 +47,7 @@ bool FurRenderer::Initialize(ID3D11Device* device)
     HRESULT hr = device->CreateBuffer(&cbDesc, nullptr, m_constantBuffer.GetAddressOf());
     if (FAILED(hr))
     {
-        OutputDebugStringA("[FUR] Constant buffer creation FAILED\n");
+       // OutputDebugStringA("[FUR] Constant buffer creation FAILED\n");
         return false;
     }
 
@@ -66,7 +66,7 @@ bool FurRenderer::Initialize(ID3D11Device* device)
     hr = device->CreateBlendState(&blendDesc, m_alphaBlendState.GetAddressOf());
     if (FAILED(hr))
     {
-        OutputDebugStringA("[FUR] Blend state creation FAILED\n");
+        //OutputDebugStringA("[FUR] Blend state creation FAILED\n");
         return false;
     }
 
@@ -80,7 +80,7 @@ bool FurRenderer::Initialize(ID3D11Device* device)
     hr = device->CreateRasterizerState(&rsDesc, m_noCullState.GetAddressOf());
     if (FAILED(hr))
     {
-        OutputDebugStringA("[FUR] Rasterizer state creation FAILED\n");
+        //OutputDebugStringA("[FUR] Rasterizer state creation FAILED\n");
         return false;
     }
 
@@ -94,7 +94,7 @@ bool FurRenderer::Initialize(ID3D11Device* device)
     hr = device->CreateDepthStencilState(&dsDesc, m_depthWriteOff.GetAddressOf());
     if (FAILED(hr))
     {
-        OutputDebugStringA("[FUR] Depth stencil state creation FAILED\n");
+        ////OutputDebugStringA("[FUR] Depth stencil state creation FAILED\n");
         return false;
     }
 
@@ -132,7 +132,7 @@ bool FurRenderer::CompileShaders(ID3D11Device* device)
             char buf[1024];
             sprintf_s(buf, "[FUR] VS compile error: %s\n",
                 (char*)errorBlob->GetBufferPointer());
-            OutputDebugStringA(buf);
+            //OutputDebugStringA(buf);
         }
         return false;
     }
@@ -155,7 +155,7 @@ bool FurRenderer::CompileShaders(ID3D11Device* device)
             char buf[1024];
             sprintf_s(buf, "[FUR] PS compile error: %s\n",
                 (char*)errorBlob->GetBufferPointer());
-            OutputDebugStringA(buf);
+            //OutputDebugStringA(buf);
         }
         return false;
     }
@@ -194,7 +194,7 @@ bool FurRenderer::CompileShaders(ID3D11Device* device)
     );
     if (FAILED(hr)) return false;
 
-    OutputDebugStringA("[FUR] Shaders compiled OK\n");
+    //OutputDebugStringA("[FUR] Shaders compiled OK\n");
     return true;
 }
 
@@ -249,7 +249,7 @@ bool FurRenderer::CreateGroundQuad(ID3D11Device* device)
     hr = device->CreateBuffer(&ibDesc, &ibData, m_indexBuffer.GetAddressOf());
     if (FAILED(hr)) return false;
 
-    OutputDebugStringA("[FUR] Ground quad created OK\n");
+   // OutputDebugStringA("[FUR] Ground quad created OK\n");
     return true;
 }
 

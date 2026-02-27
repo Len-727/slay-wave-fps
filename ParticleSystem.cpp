@@ -6,6 +6,7 @@
 // 【いつ呼ばれる】Game.cppで std::make_unique<ParticleSystem>() した時
 ParticleSystem::ParticleSystem()
 {
+    m_particles.reserve(500);  //  最大500パーティクル分を先に確保
     // m_particles は空の配列として自動初期化される
     // 何もする必要なし
 }
