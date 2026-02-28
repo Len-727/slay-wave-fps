@@ -106,6 +106,32 @@ Game::Game() noexcept :
     QueryPerformanceFrequency(&m_performanceFrequency);
     QueryPerformanceCounter(&m_lastFrameTime);
     m_gibs.reserve(200);
+    m_instWorlds.reserve(100);
+    m_instColors.reserve(100);
+    m_instAnims.reserve(100);
+    m_instTimes.reserve(100);
+    // 旧インスタンシング用バッファ予約
+    m_normalDead.reserve(40);
+    m_normalDeadHeadless.reserve(40);
+    m_runnerDead.reserve(40);
+    m_runnerDeadHeadless.reserve(40);
+    m_tankAttackingHeadless.reserve(20);
+    m_tankDead.reserve(20);
+    m_tankDeadHeadless.reserve(20);
+    m_midBossWalking.reserve(5);
+    m_midBossAttacking.reserve(5);
+    m_midBossWalkingHeadless.reserve(5);
+    m_midBossAttackingHeadless.reserve(5);
+    m_midBossDead.reserve(5);
+    m_midBossDeadHeadless.reserve(5);
+    m_bossWalking.reserve(3);
+    m_bossAttackingJump.reserve(3);
+    m_bossAttackingSlash.reserve(3);
+    m_bossAttackingJumpHeadless.reserve(3);
+    m_bossAttackingSlashHeadless.reserve(3);
+    m_bossWalkingHeadless.reserve(3);
+    m_bossDead.reserve(3);
+    m_bossDeadHeadless.reserve(3);
 }
 
 Game::~Game()
@@ -125,6 +151,71 @@ void Game::Initialize(HWND window, int width, int height)
     CreateResources();
 
     CreateRenderResources();  // 3D描画用の初期化
+
+    m_states = std::make_unique<DirectX::CommonStates>(m_d3dDevice.Get());
+
+    m_screenBloods.reserve(50);
+
+    // === 血パーティクル用ソフト円テクスチャを生成 ===
+    {
+        const int texSize = 64;
+        std::vector<uint32_t> texData(texSize * texSize);
+        float center = texSize / 2.0f;
+
+        for (int y = 0; y < texSize; y++)
+        {
+            for (int x = 0; x < texSize; x++)
+            {
+                float dx = (x - center) / center;
+                float dy = (y - center) / center;
+                float dist = sqrtf(dx * dx + dy * dy);
+
+                // 中心が白、端に向かって透明になる円
+                float alpha = 1.0f - dist;
+                if (alpha < 0.0f) alpha = 0.0f;
+                alpha = alpha * alpha;  // 二乗で端を急速にフェードアウト
+
+                uint8_t a = (uint8_t)(alpha * 255.0f);
+                // RGBA: 白(255,255,255) × alpha
+                texData[y * texSize + x] = (a << 24) | 0x00FFFFFF;
+            }
+        }
+
+        D3D11_TEXTURE2D_DESC texDesc = {};
+        texDesc.Width = texSize;
+        texDesc.Height = texSize;
+        texDesc.MipLevels = 1;
+        texDesc.ArraySize = 1;
+        texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        texDesc.SampleDesc.Count = 1;
+        texDesc.Usage = D3D11_USAGE_DEFAULT;
+        texDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+        D3D11_SUBRESOURCE_DATA initData = {};
+        initData.pSysMem = texData.data();
+        initData.SysMemPitch = texSize * sizeof(uint32_t);
+
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> tex;
+        m_d3dDevice->CreateTexture2D(&texDesc, &initData, tex.GetAddressOf());
+        m_d3dDevice->CreateShaderResourceView(tex.Get(), nullptr, m_bloodParticleSRV.GetAddressOf());
+    }
+
+    // === パーティクル用エフェクト（テクスチャ付きビルボード用）===
+    m_particleEffect = std::make_unique<DirectX::BasicEffect>(m_d3dDevice.Get());
+    m_particleEffect->SetVertexColorEnabled(true);
+    m_particleEffect->SetTextureEnabled(true);
+    m_particleEffect->SetTexture(m_bloodParticleSRV.Get());
+
+    // 入力レイアウト作成
+    void const* shaderByteCode;
+    size_t byteCodeLength;
+    m_particleEffect->GetVertexShaderBytecode(&shaderByteCode, &byteCodeLength);
+    m_d3dDevice->CreateInputLayout(
+        DirectX::VertexPositionColorTexture::InputElements,
+        DirectX::VertexPositionColorTexture::InputElementCount,
+        shaderByteCode, byteCodeLength,
+        m_particleInputLayout.GetAddressOf()
+    );
 
     //  === Bullet Physics 初期化  ===
     InitPhysics();
@@ -1469,6 +1560,19 @@ void Game::CreateRenderResources()
         m_d3dContext.Get(),
         8000
     );
+
+    m_enemyModel->LoadCustomShaders(m_d3dDevice.Get());
+    m_runnerModel->LoadCustomShaders(m_d3dDevice.Get());
+    m_tankModel->LoadCustomShaders(m_d3dDevice.Get());
+    m_midBossModel->LoadCustomShaders(m_d3dDevice.Get());
+    m_bossModel->LoadCustomShaders(m_d3dDevice.Get());
+
+    // インスタンシング用バッファ作成
+    m_enemyModel->CreateInstanceBuffers(m_d3dDevice.Get(), 100);
+    m_runnerModel->CreateInstanceBuffers(m_d3dDevice.Get(), 100);
+    m_tankModel->CreateInstanceBuffers(m_d3dDevice.Get(), 100);
+    m_midBossModel->CreateInstanceBuffers(m_d3dDevice.Get(), 100);
+    m_bossModel->CreateInstanceBuffers(m_d3dDevice.Get(), 100);
 
     // エッフェクト管理クラス
     m_effekseerManager = Effekseer::Manager::Create(8000);
@@ -3251,47 +3355,27 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
     //  インスタンスデータを作成
     //	========================================================================
 
-    // === Normal（Y_Bot）用 ===
-    //std::vector<InstanceData> normalWalking;
-    //std::vector<InstanceData> normalAttacking;
-    //std::vector<InstanceData> normalWalkingHeadless;
-    //std::vector<InstanceData> normalAttackingHeadless;
-    std::vector<InstanceData> normalDead;
-    std::vector<InstanceData> normalDeadHeadless;
-
-    // === Runner用 ===
-    //std::vector<InstanceData> runnerWalking;
-    //std::vector<InstanceData> runnerAttacking;
-    //std::vector<InstanceData> runnerWalkingHeadless;
-    //std::vector<InstanceData> runnerAttackingHeadless;
-    std::vector<InstanceData> runnerDead;
-    std::vector<InstanceData> runnerDeadHeadless;
-
-    // === Tank用 ===
-    //std::vector<InstanceData> tankWalking;
-    //std::vector<InstanceData> tankAttacking;
-    //std::vector<InstanceData> tankWalkingHeadless;
-    std::vector<InstanceData> tankAttackingHeadless;
-    std::vector<InstanceData> tankDead;
-    std::vector<InstanceData> tankDeadHeadless;
-
-    //  === MIDBASS用    ===
-    std::vector<InstanceData> midBossWalking;
-    std::vector<InstanceData> midBossAttacking;
-    std::vector<InstanceData> midBossWalkingHeadless;
-    std::vector<InstanceData> midBossAttackingHeadless;
-    std::vector<InstanceData> midBossDead;
-    std::vector<InstanceData> midBossDeadHeadless;
-
-    // BOSS用インスタンスリスト
-    std::vector<InstanceData> bossWalking;
-    std::vector<InstanceData> bossAttackingJump;
-    std::vector<InstanceData> bossAttackingSlash;
-    std::vector<InstanceData> bossAttackingJumpHeadless;
-    std::vector<InstanceData> bossAttackingSlashHeadless;
-    std::vector<InstanceData> bossWalkingHeadless;
-    std::vector<InstanceData> bossDead;
-    std::vector<InstanceData> bossDeadHeadless;
+    m_normalDead.clear();
+    m_normalDeadHeadless.clear();
+    m_runnerDead.clear();
+    m_runnerDeadHeadless.clear();
+    m_tankAttackingHeadless.clear();
+    m_tankDead.clear();
+    m_tankDeadHeadless.clear();
+    m_midBossWalking.clear();
+    m_midBossAttacking.clear();
+    m_midBossWalkingHeadless.clear();
+    m_midBossAttackingHeadless.clear();
+    m_midBossDead.clear();
+    m_midBossDeadHeadless.clear();
+    m_bossWalking.clear();
+    m_bossAttackingJump.clear();
+    m_bossAttackingSlash.clear();
+    m_bossAttackingJumpHeadless.clear();
+    m_bossAttackingSlashHeadless.clear();
+    m_bossWalkingHeadless.clear();
+    m_bossDead.clear();
+    m_bossDeadHeadless.clear();
 
     //  === 死亡アニメーション再生時間の取得    ===
     float deathDuration = m_enemyModel->GetAnimationDuration("Death");
@@ -3352,42 +3436,42 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                     switch (enemy.type)
                     {
                     case EnemyType::TANK:
-                        tankAttackingHeadless.push_back(instance);
+                        m_tankAttackingHeadless.push_back(instance);
                         break;
                     case EnemyType::MIDBOSS:
                         if (enemy.headDestroyed)
                         {
                             if (enemy.currentAnimation == "Attack")
-                                midBossAttackingHeadless.push_back(instance);
+                                m_midBossAttackingHeadless.push_back(instance);
                             else
-                                midBossWalkingHeadless.push_back(instance);
+                                m_midBossWalkingHeadless.push_back(instance);
                         }
                         else
                         {
                             if (enemy.currentAnimation == "Attack")
-                                midBossAttacking.push_back(instance);
+                                m_midBossAttacking.push_back(instance);
                             else
-                                midBossWalking.push_back(instance);
+                                m_midBossWalking.push_back(instance);
                         }
                         break;
                     case EnemyType::BOSS:
                         if (enemy.headDestroyed)
                         {
                             if (enemy.currentAnimation == "AttackJump")
-                                bossAttackingJumpHeadless.push_back(instance);
+                                m_bossAttackingJumpHeadless.push_back(instance);
                             else if (enemy.currentAnimation == "AttackSlash")
-                                bossAttackingSlashHeadless.push_back(instance);
+                                m_bossAttackingSlashHeadless.push_back(instance);
                             else
-                                bossWalkingHeadless.push_back(instance);
+                                m_bossWalkingHeadless.push_back(instance);
                         }
                         else
                         {
                             if (enemy.currentAnimation == "AttackJump")
-                                bossAttackingJump.push_back(instance);
+                                m_bossAttackingJump.push_back(instance);
                             else if (enemy.currentAnimation == "AttackSlash")
-                                bossAttackingSlash.push_back(instance);
+                                m_bossAttackingSlash.push_back(instance);
                             else
-                                bossWalking.push_back(instance);
+                                m_bossWalking.push_back(instance);
                         }
                         break;
                     }
@@ -3504,7 +3588,7 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
             if (enemy.headDestroyed)
             {
                 if (enemy.currentAnimation == "Attack")
-                    tankAttackingHeadless.push_back(instance);
+                    m_tankAttackingHeadless.push_back(instance);
                 else
                 {}//tankWalkingHeadless.push_back(instance);
             }
@@ -3522,16 +3606,16 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
             if (enemy.headDestroyed)
             {
                 if (enemy.currentAnimation == "Attack")
-                    midBossAttackingHeadless.push_back(instance);
+                    m_midBossAttackingHeadless.push_back(instance);
                 else
-                    midBossWalkingHeadless.push_back(instance);
+                    m_midBossWalkingHeadless.push_back(instance);
             }
             else
             {
                 if (enemy.currentAnimation == "Attack")
-                    midBossAttacking.push_back(instance);
+                    m_midBossAttacking.push_back(instance);
                 else
-                    midBossWalking.push_back(instance);
+                    m_midBossWalking.push_back(instance);
             }
             break;
 
@@ -3539,20 +3623,20 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
             if (enemy.headDestroyed)
             {
                 if (enemy.currentAnimation == "AttackJump")
-                    bossAttackingJumpHeadless.push_back(instance);
+                    m_bossAttackingJumpHeadless.push_back(instance);
                 else if (enemy.currentAnimation == "AttackSlash")
-                    bossAttackingSlashHeadless.push_back(instance);
+                    m_bossAttackingSlashHeadless.push_back(instance);
                 else
-                    bossWalkingHeadless.push_back(instance);
+                    m_bossWalkingHeadless.push_back(instance);
             }
             else
             {
                 if (enemy.currentAnimation == "AttackJump")
-                    bossAttackingJump.push_back(instance);
+                    m_bossAttackingJump.push_back(instance);
                 else if (enemy.currentAnimation == "AttackSlash")
-                    bossAttackingSlash.push_back(instance);
+                    m_bossAttackingSlash.push_back(instance);
                 else
-                    bossWalking.push_back(instance);
+                    m_bossWalking.push_back(instance);
             }
             break;
         }
@@ -3587,83 +3671,104 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
 // ====================================================================
     if (m_enemyModel)
     {
-        // ================================================================
-        // [PERF] NORMAL: Head ON - walking+attacking unified loop
-        // Before: 2 separate loops (walking, attacking) = 2N iterations
-        // After:  1 loop = N iterations
-        // ================================================================
+         // ================================================================
+         // [PERF] NORMAL: Head ON -  インスタンシング描画
+         // ================================================================
         m_enemyModel->SetBoneScale("Head", 1.0f);
-        for (const auto& enemy : m_enemySystem->GetEnemies())
         {
-            if (!enemy.isAlive || enemy.isDying) continue;
-            if (enemy.type != EnemyType::NORMAL) continue;
-            if (enemy.headDestroyed) continue;
-
-            float s = 0.01f;
-            DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                * DirectX::XMMatrixRotationY(enemy.rotationY)
-                * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-            
-            // [FIX] よろめき中はオレンジ点滅
-            DirectX::XMFLOAT4 finalColor = enemy.color;
-            if (enemy.isStaggered)
             {
-                float flash = sinf(enemy.staggerFlashTimer);
-                flash = (flash + 1.0f) * 0.5f;
-                finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
-            }
-            DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&finalColor);
+                m_instWorlds.clear();   // サイズ0にするだけ。メモリは解放しない！
+                m_instColors.clear();
+                m_instAnims.clear();
+                m_instTimes.clear();
 
-            m_enemyModel->DrawAnimated(
-                m_d3dContext.Get(), world,
-                viewMatrix, projectionMatrix,
-                color, enemy.currentAnimation, enemy.animationTime);
+                for (const auto& enemy : m_enemySystem->GetEnemies())
+                {
+                    if (!enemy.isAlive || enemy.isDying) continue;
+                    if (enemy.type != EnemyType::NORMAL) continue;
+                    if (enemy.headDestroyed) continue;
+
+                    float s = 0.01f;
+                    m_instWorlds.push_back(
+                        DirectX::XMMatrixScaling(s, s, s)
+                        * DirectX::XMMatrixRotationY(enemy.rotationY)
+                        * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z)
+                    );
+
+                    DirectX::XMFLOAT4 finalColor = enemy.color;
+                    if (enemy.isStaggered)
+                    {
+                        float flash = sinf(enemy.staggerFlashTimer);
+                        flash = (flash + 1.0f) * 0.5f;
+                        finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
+                    }
+                    m_instColors.push_back(DirectX::XMLoadFloat4(&finalColor));
+                    m_instAnims.push_back(enemy.currentAnimation);
+                    m_instTimes.push_back(enemy.animationTime);
+                }
+
+                if (!m_instWorlds.empty())
+                {
+                    m_enemyModel->DrawInstanced_Custom(
+                        m_d3dContext.Get(), viewMatrix, projectionMatrix,
+                        m_instWorlds, m_instColors, m_instAnims, m_instTimes);
+                }
+            }
         }
 
         // Dead - head on (instanced)
-        if (!normalDead.empty())
+        if (!m_normalDead.empty())
         {
             float finalTime = deathDuration - 0.001f;
-            m_enemyModel->DrawInstanced(m_d3dContext.Get(), normalDead,
+            m_enemyModel->DrawInstanced(m_d3dContext.Get(), m_normalDead,
                 viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
-        // ================================================================
-        // [PERF] NORMAL: Headless - walking+attacking unified loop
-        // ================================================================
         m_enemyModel->SetBoneScale("Head", 0.0f);
-        for (const auto& enemy : m_enemySystem->GetEnemies())
         {
-            if (!enemy.isAlive || enemy.isDying) continue;
-            if (enemy.type != EnemyType::NORMAL) continue;
-            if (!enemy.headDestroyed) continue;
+            m_instWorlds.clear();
+            m_instColors.clear();
+            m_instAnims.clear();
+            m_instTimes.clear();
 
-            float s = 0.01f;
-            DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                * DirectX::XMMatrixRotationY(enemy.rotationY)
-                * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-
-            // [FIX] よろめき中はオレンジ点滅
-            DirectX::XMFLOAT4 finalColor = enemy.color;
-            if (enemy.isStaggered)
+            for (const auto& enemy : m_enemySystem->GetEnemies())
             {
-                float flash = sinf(enemy.staggerFlashTimer);
-                flash = (flash + 1.0f) * 0.5f;
-                finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
-            }
-            DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&finalColor);
+                if (!enemy.isAlive || enemy.isDying) continue;
+                if (enemy.type != EnemyType::NORMAL) continue;
+                if (!enemy.headDestroyed) continue;
 
-            m_enemyModel->DrawAnimated(
-                m_d3dContext.Get(), world,
-                viewMatrix, projectionMatrix,
-                color, enemy.currentAnimation, enemy.animationTime);
+                float s = 0.01f;
+                m_instWorlds.push_back(
+                    DirectX::XMMatrixScaling(s, s, s)
+                    * DirectX::XMMatrixRotationY(enemy.rotationY)
+                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z)
+                );
+
+                DirectX::XMFLOAT4 finalColor = enemy.color;
+                if (enemy.isStaggered)
+                {
+                    float flash = sinf(enemy.staggerFlashTimer);
+                    flash = (flash + 1.0f) * 0.5f;
+                    finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
+                }
+                m_instColors.push_back(DirectX::XMLoadFloat4(&finalColor));
+                m_instAnims.push_back(enemy.currentAnimation);
+                m_instTimes.push_back(enemy.animationTime);
+            }
+
+            if (!m_instWorlds.empty())
+            {
+                m_enemyModel->DrawInstanced_Custom(
+                    m_d3dContext.Get(), viewMatrix, projectionMatrix,
+                    m_instWorlds, m_instColors, m_instAnims, m_instTimes);
+            }
         }
 
         // Dead - headless (instanced)
-        if (!normalDeadHeadless.empty())
+        if (!m_normalDeadHeadless.empty())
         {
             float finalTime = deathDuration - 0.001f;
-            m_enemyModel->DrawInstanced(m_d3dContext.Get(), normalDeadHeadless,
+            m_enemyModel->DrawInstanced(m_d3dContext.Get(), m_normalDeadHeadless,
                 viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
@@ -3680,38 +3785,50 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
         // [PERF] RUNNER: Head ON - walking+attacking unified loop
         // ================================================================
         m_runnerModel->SetBoneScale("Head", 1.0f);
-        for (const auto& enemy : m_enemySystem->GetEnemies())
         {
-            if (!enemy.isAlive || enemy.isDying) continue;
-            if (enemy.type != EnemyType::RUNNER) continue;
-            if (enemy.headDestroyed) continue;
+            m_instWorlds.clear();
+            m_instColors.clear();
+            m_instAnims.clear();
+            m_instTimes.clear();
 
-            float s = 0.01f;
-            DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                * DirectX::XMMatrixRotationY(enemy.rotationY)
-                * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-           
-            // [FIX] よろめき中はオレンジ点滅
-            DirectX::XMFLOAT4 finalColor = enemy.color;
-            if (enemy.isStaggered)
+            for (const auto& enemy : m_enemySystem->GetEnemies())
             {
-                float flash = sinf(enemy.staggerFlashTimer);
-                flash = (flash + 1.0f) * 0.5f;
-                finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
-            }
-            DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&finalColor);
+                if (!enemy.isAlive || enemy.isDying) continue;
+                if (enemy.type != EnemyType::RUNNER) continue;
+                if (enemy.headDestroyed) continue;
 
-            m_runnerModel->DrawAnimated(
-                m_d3dContext.Get(), world,
-                viewMatrix, projectionMatrix,
-                color, enemy.currentAnimation, enemy.animationTime);
+                float s = 0.01f;
+                m_instWorlds.push_back(
+                    DirectX::XMMatrixScaling(s, s, s)
+                    * DirectX::XMMatrixRotationY(enemy.rotationY)
+                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z)
+                );
+
+                DirectX::XMFLOAT4 finalColor = enemy.color;
+                if (enemy.isStaggered)
+                {
+                    float flash = sinf(enemy.staggerFlashTimer);
+                    flash = (flash + 1.0f) * 0.5f;
+                    finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
+                }
+                m_instColors.push_back(DirectX::XMLoadFloat4(&finalColor));
+                m_instAnims.push_back(enemy.currentAnimation);
+                m_instTimes.push_back(enemy.animationTime);
+            }
+
+            if (!m_instWorlds.empty())
+            {
+                m_runnerModel->DrawInstanced_Custom(
+                    m_d3dContext.Get(), viewMatrix, projectionMatrix,
+                    m_instWorlds, m_instColors, m_instAnims, m_instTimes);
+            }
         }
 
         // Dead - head on (instanced)
-        if (!runnerDead.empty())
+        if (!m_runnerDead.empty())
         {
             float finalTime = m_runnerModel->GetAnimationDuration("Death") - 0.001f;
-            m_runnerModel->DrawInstanced(m_d3dContext.Get(), runnerDead,
+            m_runnerModel->DrawInstanced(m_d3dContext.Get(), m_runnerDead,
                 viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
@@ -3719,38 +3836,50 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
         // [PERF] RUNNER: Headless - walking+attacking unified loop
         // ================================================================
         m_runnerModel->SetBoneScale("Head", 0.0f);
-        for (const auto& enemy : m_enemySystem->GetEnemies())
         {
-            if (!enemy.isAlive || enemy.isDying) continue;
-            if (enemy.type != EnemyType::RUNNER) continue;
-            if (!enemy.headDestroyed) continue;
+            m_instWorlds.clear();
+            m_instColors.clear();
+            m_instAnims.clear();
+            m_instTimes.clear();
 
-            float s = 0.01f;
-            DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                * DirectX::XMMatrixRotationY(enemy.rotationY)
-                * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-            
-            // [FIX] よろめき中はオレンジ点滅
-            DirectX::XMFLOAT4 finalColor = enemy.color;
-            if (enemy.isStaggered)
+            for (const auto& enemy : m_enemySystem->GetEnemies())
             {
-                float flash = sinf(enemy.staggerFlashTimer);
-                flash = (flash + 1.0f) * 0.5f;
-                finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
-            }
-            DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&finalColor);
+                if (!enemy.isAlive || enemy.isDying) continue;
+                if (enemy.type != EnemyType::RUNNER) continue;
+                if (!enemy.headDestroyed) continue;
 
-            m_runnerModel->DrawAnimated(
-                m_d3dContext.Get(), world,
-                viewMatrix, projectionMatrix,
-                color, enemy.currentAnimation, enemy.animationTime);
+                float s = 0.01f;
+                m_instWorlds.push_back(
+                    DirectX::XMMatrixScaling(s, s, s)
+                    * DirectX::XMMatrixRotationY(enemy.rotationY)
+                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z)
+                );
+
+                DirectX::XMFLOAT4 finalColor = enemy.color;
+                if (enemy.isStaggered)
+                {
+                    float flash = sinf(enemy.staggerFlashTimer);
+                    flash = (flash + 1.0f) * 0.5f;
+                    finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
+                }
+                m_instColors.push_back(DirectX::XMLoadFloat4(&finalColor));
+                m_instAnims.push_back(enemy.currentAnimation);
+                m_instTimes.push_back(enemy.animationTime);
+            }
+
+            if (!m_instWorlds.empty())
+            {
+                m_runnerModel->DrawInstanced_Custom(
+                    m_d3dContext.Get(), viewMatrix, projectionMatrix,
+                    m_instWorlds, m_instColors, m_instAnims, m_instTimes);
+            }
         }
 
         // Dead - headless (instanced)
-        if (!runnerDeadHeadless.empty())
+        if (!m_runnerDeadHeadless.empty())
         {
             float finalTime = m_runnerModel->GetAnimationDuration("Death") - 0.001f;
-            m_runnerModel->DrawInstanced(m_d3dContext.Get(), runnerDeadHeadless,
+            m_runnerModel->DrawInstanced(m_d3dContext.Get(), m_runnerDeadHeadless,
                 viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
@@ -3767,38 +3896,50 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
         // [PERF] TANK: Head ON - walking+attacking unified loop
         // ================================================================
         m_tankModel->SetBoneScale("Head", 1.0f);
-        for (const auto& enemy : m_enemySystem->GetEnemies())
         {
-            if (!enemy.isAlive || enemy.isDying) continue;
-            if (enemy.type != EnemyType::TANK) continue;
-            if (enemy.headDestroyed) continue;
+            m_instWorlds.clear();
+            m_instColors.clear();
+            m_instAnims.clear();
+            m_instTimes.clear();
 
-            float s = 0.01f;
-            DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                * DirectX::XMMatrixRotationY(enemy.rotationY)
-                * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-           
-            // [FIX] よろめき中はオレンジ点滅
-            DirectX::XMFLOAT4 finalColor = enemy.color;
-            if (enemy.isStaggered)
+            for (const auto& enemy : m_enemySystem->GetEnemies())
             {
-                float flash = sinf(enemy.staggerFlashTimer);
-                flash = (flash + 1.0f) * 0.5f;
-                finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
-            }
-            DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&finalColor);
+                if (!enemy.isAlive || enemy.isDying) continue;
+                if (enemy.type != EnemyType::TANK) continue;
+                if (enemy.headDestroyed) continue;
 
-            m_tankModel->DrawAnimated(
-                m_d3dContext.Get(), world,
-                viewMatrix, projectionMatrix,
-                color, enemy.currentAnimation, enemy.animationTime);
+                float s = 0.01f;
+                m_instWorlds.push_back(
+                    DirectX::XMMatrixScaling(s, s, s)
+                    * DirectX::XMMatrixRotationY(enemy.rotationY)
+                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z)
+                );
+
+                DirectX::XMFLOAT4 finalColor = enemy.color;
+                if (enemy.isStaggered)
+                {
+                    float flash = sinf(enemy.staggerFlashTimer);
+                    flash = (flash + 1.0f) * 0.5f;
+                    finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
+                }
+                m_instColors.push_back(DirectX::XMLoadFloat4(&finalColor));
+                m_instAnims.push_back(enemy.currentAnimation);
+                m_instTimes.push_back(enemy.animationTime);
+            }
+
+            if (!m_instWorlds.empty())
+            {
+                m_tankModel->DrawInstanced_Custom(
+                    m_d3dContext.Get(), viewMatrix, projectionMatrix,
+                    m_instWorlds, m_instColors, m_instAnims, m_instTimes);
+            }
         }
 
         // Dead - head on (instanced)
-        if (!tankDead.empty())
+        if (!m_tankDead.empty())
         {
             float finalTime = m_tankModel->GetAnimationDuration("Death") - 0.001f;
-            m_tankModel->DrawInstanced(m_d3dContext.Get(), tankDead,
+            m_tankModel->DrawInstanced(m_d3dContext.Get(), m_tankDead,
                 viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
@@ -3806,48 +3947,60 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
         // [PERF] TANK: Headless - walking unified loop
         // ================================================================
         m_tankModel->SetBoneScale("Head", 0.0f);
-        for (const auto& enemy : m_enemySystem->GetEnemies())
         {
-            if (!enemy.isAlive || enemy.isDying) continue;
-            if (enemy.type != EnemyType::TANK) continue;
-            if (!enemy.headDestroyed) continue;
-            if (enemy.currentAnimation == "Attack") continue;  // Attacking uses DrawInstanced below
+            m_instWorlds.clear();
+            m_instColors.clear();
+            m_instAnims.clear();
+            m_instTimes.clear();
 
-            float s = 0.01f;
-            DirectX::XMMATRIX world = DirectX::XMMatrixScaling(s, s, s)
-                * DirectX::XMMatrixRotationY(enemy.rotationY)
-                * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z);
-
-            // [FIX] よろめき中はオレンジ点滅
-            DirectX::XMFLOAT4 finalColor = enemy.color;
-            if (enemy.isStaggered)
+            for (const auto& enemy : m_enemySystem->GetEnemies())
             {
-                float flash = sinf(enemy.staggerFlashTimer);
-                flash = (flash + 1.0f) * 0.5f;
-                finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
-            }
-            DirectX::XMVECTOR color = DirectX::XMLoadFloat4(&finalColor);
+                if (!enemy.isAlive || enemy.isDying) continue;
+                if (enemy.type != EnemyType::TANK) continue;
+                if (!enemy.headDestroyed) continue;
+                if (enemy.currentAnimation == "Attack") continue;  // ★ 元のロジック維持
 
-            m_tankModel->DrawAnimated(
-                m_d3dContext.Get(), world,
-                viewMatrix, projectionMatrix,
-                color, enemy.currentAnimation, enemy.animationTime);
+                float s = 0.01f;
+                m_instWorlds.push_back(
+                    DirectX::XMMatrixScaling(s, s, s)
+                    * DirectX::XMMatrixRotationY(enemy.rotationY)
+                    * DirectX::XMMatrixTranslation(enemy.position.x, enemy.position.y, enemy.position.z)
+                );
+
+                DirectX::XMFLOAT4 finalColor = enemy.color;
+                if (enemy.isStaggered)
+                {
+                    float flash = sinf(enemy.staggerFlashTimer);
+                    flash = (flash + 1.0f) * 0.5f;
+                    finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
+                }
+                m_instColors.push_back(DirectX::XMLoadFloat4(&finalColor));
+                m_instAnims.push_back(enemy.currentAnimation);
+                m_instTimes.push_back(enemy.animationTime);
+            }
+
+            if (!m_instWorlds.empty())
+            {
+                m_tankModel->DrawInstanced_Custom(
+                    m_d3dContext.Get(), viewMatrix, projectionMatrix,
+                    m_instWorlds, m_instColors, m_instAnims, m_instTimes);
+            }
         }
 
         // Attacking headless (instanced with shared timer)
-        if (!tankAttackingHeadless.empty())
+        if (!m_tankAttackingHeadless.empty())
         {
             float attackTime = fmod(m_typeAttackTimer[2],
                 m_tankModel->GetAnimationDuration("Attack"));
-            m_tankModel->DrawInstanced(m_d3dContext.Get(), tankAttackingHeadless,
+            m_tankModel->DrawInstanced(m_d3dContext.Get(), m_tankAttackingHeadless,
                 viewMatrix, projectionMatrix, "Attack", attackTime);
         }
 
         // Dead - headless (instanced)
-        if (!tankDeadHeadless.empty())
+        if (!m_tankDeadHeadless.empty())
         {
             float finalTime = m_tankModel->GetAnimationDuration("Death") - 0.001f;
-            m_tankModel->DrawInstanced(m_d3dContext.Get(), tankDeadHeadless,
+            m_tankModel->DrawInstanced(m_d3dContext.Get(), m_tankDeadHeadless,
                 viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
@@ -3862,16 +4015,16 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
         m_midBossModel->SetBoneScale("Head", 1.0f);
 
         // Walking - 頭あり
-        if (!midBossWalking.empty())
+        if (!m_midBossWalking.empty())
         {
             float walkTime = fmod(m_typeWalkTimer[3],
                 m_midBossModel->GetAnimationDuration("Walk"));
-            m_midBossModel->DrawInstanced(m_d3dContext.Get(), midBossWalking,
+            m_midBossModel->DrawInstanced(m_d3dContext.Get(), m_midBossWalking,
                 viewMatrix, projectionMatrix, "Walk", walkTime);
         }
 
         // Attacking - 頭あり
-        if (!midBossAttacking.empty())
+        if (!m_midBossAttacking.empty())
         {
             float duration = m_midBossModel->GetAnimationDuration("Attack");
             float attackTime = fmod(m_typeAttackTimer[3], duration);
@@ -3888,22 +4041,22 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 }
             }
 
-            m_midBossModel->DrawInstanced(m_d3dContext.Get(), midBossAttacking,
+            m_midBossModel->DrawInstanced(m_d3dContext.Get(), m_midBossAttacking,
                 viewMatrix, projectionMatrix, "Attack", attackTime);
         }
 
         // Dead - 頭あり
-        if (!midBossDead.empty())
+        if (!m_midBossDead.empty())
         {
             float finalTime = m_midBossModel->GetAnimationDuration("Death") - 0.001f;
-            m_midBossModel->DrawInstanced(m_d3dContext.Get(), midBossDead,
+            m_midBossModel->DrawInstanced(m_d3dContext.Get(), m_midBossDead,
                 viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
         // 頭なし描画
         m_midBossModel->SetBoneScale("Head", 0.0f);
 
-        if (!midBossAttacking.empty())
+        if (!m_midBossAttacking.empty())
         {
             float duration = m_midBossModel->GetAnimationDuration("Attack");
             float attackTime = fmod(m_typeAttackTimer[3], duration);
@@ -3920,22 +4073,22 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 }
             }
 
-            m_midBossModel->DrawInstanced(m_d3dContext.Get(), midBossAttacking,
+            m_midBossModel->DrawInstanced(m_d3dContext.Get(), m_midBossAttacking,
                 viewMatrix, projectionMatrix, "Attack", attackTime);
         }
 
-        if (!midBossAttackingHeadless.empty())
+        if (!m_midBossAttackingHeadless.empty())
         {
             float attackTime = fmod(m_typeAttackTimer[3],
                 m_midBossModel->GetAnimationDuration("Attack"));
-            m_midBossModel->DrawInstanced(m_d3dContext.Get(), midBossAttackingHeadless,
+            m_midBossModel->DrawInstanced(m_d3dContext.Get(), m_midBossAttackingHeadless,
                 viewMatrix, projectionMatrix, "Attack", attackTime);
         }
 
-        if (!midBossDeadHeadless.empty())
+        if (!m_midBossDeadHeadless.empty())
         {
             float finalTime = m_midBossModel->GetAnimationDuration("Death") - 0.001f;
-            m_midBossModel->DrawInstanced(m_d3dContext.Get(), midBossDeadHeadless,
+            m_midBossModel->DrawInstanced(m_d3dContext.Get(), m_midBossDeadHeadless,
                 viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
@@ -3943,79 +4096,79 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
     }
 
     // ====================================================================
-    // ★BOSS の描画
+    // BOSS の描画
     // ====================================================================
     if (m_bossModel)
     {
         m_bossModel->SetBoneScale("Head", 1.0f);
 
         // Walking - 頭あり
-        if (!bossWalking.empty())
+        if (!m_bossWalking.empty())
         {
             float walkTime = fmod(m_typeWalkTimer[4],
                 m_bossModel->GetAnimationDuration("Walk"));
-            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossWalking,
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), m_bossWalking,
                 viewMatrix, projectionMatrix, "Walk", walkTime);
         }
 
         // ジャンプ叩き
-        if (!bossAttackingJump.empty())
+        if (!m_bossAttackingJump.empty())
         {
             float attackTime = fmod(m_typeAttackTimer[4],
                 m_bossModel->GetAnimationDuration("AttackJump"));
-            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossAttackingJump,
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), m_bossAttackingJump,
                 viewMatrix, projectionMatrix, "AttackJump", attackTime);
         }
 
         // 殴り上げ斬撃
-        if (!bossAttackingSlash.empty())
+        if (!m_bossAttackingSlash.empty())
         {
             float attackTime = fmod(m_typeAttackTimer[4],
                 m_bossModel->GetAnimationDuration("AttackSlash"));
-            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossAttackingSlash,
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), m_bossAttackingSlash,
                 viewMatrix, projectionMatrix, "AttackSlash", attackTime);
         }
 
         // Dead - 頭あり
-        if (!bossDead.empty())
+        if (!m_bossDead.empty())
         {
             float finalTime = m_bossModel->GetAnimationDuration("Death") - 0.001f;
-            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossDead,
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), m_bossDead,
                 viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
         // --- Headless variants ---
         m_bossModel->SetBoneScale("Head", 0.0f);
 
-        if (!bossWalkingHeadless.empty())
+        if (!m_bossWalkingHeadless.empty())
         {
             float walkTime = fmod(m_typeWalkTimer[4],
                 m_bossModel->GetAnimationDuration("Walk"));
-            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossWalkingHeadless,
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), m_bossWalkingHeadless,
                 viewMatrix, projectionMatrix, "Walk", walkTime);
         }
 
-        if (!bossAttackingJumpHeadless.empty())
+        if (!m_bossAttackingJumpHeadless.empty())
         {
             float attackTime = fmod(m_typeAttackTimer[4],
                 m_bossModel->GetAnimationDuration("AttackJump"));
-            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossAttackingJumpHeadless,
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), m_bossAttackingJumpHeadless,
                 viewMatrix, projectionMatrix, "AttackJump", attackTime);
         }
 
-        if (!bossAttackingSlashHeadless.empty())
+        if (!m_bossAttackingSlashHeadless.empty())
         {
             float attackTime = fmod(m_typeAttackTimer[4],
                 m_bossModel->GetAnimationDuration("AttackSlash"));
-            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossAttackingSlashHeadless,
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), m_bossAttackingSlashHeadless,
                 viewMatrix, projectionMatrix, "AttackSlash", attackTime);
         }
 
 
-        if (!bossDeadHeadless.empty())
+        if (!m_bossDeadHeadless.empty())
         {
             float finalTime = m_bossModel->GetAnimationDuration("Death") - 0.001f;
-            m_bossModel->DrawInstanced(m_d3dContext.Get(), bossDeadHeadless,
+            m_bossModel->DrawInstanced(m_d3dContext.Get(), m_bossDeadHeadless,
                 viewMatrix, projectionMatrix, "Death", finalTime);
         }
 
@@ -4540,8 +4693,7 @@ void Game::DrawParticles()
 
     auto context = m_d3dContext.Get();
 
-    // ビュー・プロジェクション行列の計算
-    // 位置と回転を変数に保存
+    // === カメラ行列 ===
     DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
     DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
 
@@ -4560,69 +4712,66 @@ void Game::DrawParticles()
         DirectX::XMConvertToRadians(m_currentFOV), aspectRatio, 0.1f, 1000.0f
     );
 
-    // 重要：頂点カラーを有効化
-    m_effect->SetVertexColorEnabled(true);
-    m_effect->SetDiffuseColor(DirectX::Colors::White);
-    m_effect->SetView(viewMatrix);
-    m_effect->SetProjection(projectionMatrix);
-    m_effect->SetWorld(DirectX::XMMatrixIdentity());
+    // === テクスチャ付きエフェクト ===
+    m_particleEffect->SetView(viewMatrix);
+    m_particleEffect->SetProjection(projectionMatrix);
+    m_particleEffect->SetWorld(DirectX::XMMatrixIdentity());
+    m_particleEffect->Apply(context);
+    context->IASetInputLayout(m_particleInputLayout.Get());
 
-    m_effect->Apply(context);
-    context->IASetInputLayout(m_inputLayout.Get());
+    // === アルファブレンド + 加算ブレンド ===
+    float blendFactor[4] = { 0, 0, 0, 0 };
+    context->OMSetBlendState(m_states->AlphaBlend(), blendFactor, 0xFFFFFFFF);
+    context->OMSetDepthStencilState(m_states->DepthRead(), 0);
 
-    auto primitiveBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
-    primitiveBatch->Begin();
-    // ① ビュー行列から「カメラの右方向」と「上方向」を取り出す
-    //    ビュー行列の1行目 = カメラのRight、2行目 = カメラのUp
+    // === ビルボード方向 ===
     DirectX::XMFLOAT4X4 viewF;
     DirectX::XMStoreFloat4x4(&viewF, viewMatrix);
-
-    // right = ビュー行列の1行目（カメラの「右」方向）
     DirectX::XMFLOAT3 right(viewF._11, viewF._21, viewF._31);
-    // up    = ビュー行列の2行目（カメラの「上」方向）
     DirectX::XMFLOAT3 up(viewF._12, viewF._22, viewF._32);
+
+    // === テクスチャ付きビルボード描画 ===
+    auto batch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColorTexture>>(context);
+    batch->Begin();
 
     for (const auto& particle : m_particleSystem->GetParticles())
     {
-        float size = 0.1f;
-        DirectX::XMFLOAT3 c = particle.position; // 中心座標
+        float s = particle.size;
+        DirectX::XMFLOAT3 c = particle.position;
 
-        // ② 「右方向」に沿った横線
-        DirectX::XMFLOAT3 leftPt(
-            c.x - right.x * size,
-            c.y - right.y * size,
-            c.z - right.z * size
-        );
-        DirectX::XMFLOAT3 rightPt(
-            c.x + right.x * size,
-            c.y + right.y * size,
-            c.z + right.z * size
-        );
-        primitiveBatch->DrawLine(
-            DirectX::VertexPositionColor(leftPt, particle.color),
-            DirectX::VertexPositionColor(rightPt, particle.color)
-        );
+        // 4頂点 + UV座標
+        DirectX::XMFLOAT3 tl(
+            c.x - right.x * s + up.x * s,
+            c.y - right.y * s + up.y * s,
+            c.z - right.z * s + up.z * s);
+        DirectX::XMFLOAT3 tr(
+            c.x + right.x * s + up.x * s,
+            c.y + right.y * s + up.y * s,
+            c.z + right.z * s + up.z * s);
+        DirectX::XMFLOAT3 bl(
+            c.x - right.x * s - up.x * s,
+            c.y - right.y * s - up.y * s,
+            c.z - right.z * s - up.z * s);
+        DirectX::XMFLOAT3 br(
+            c.x + right.x * s - up.x * s,
+            c.y + right.y * s - up.y * s,
+            c.z + right.z * s - up.z * s);
 
-        // ③ 「上方向」に沿った縦線
-        DirectX::XMFLOAT3 downPt(
-            c.x - up.x * size,
-            c.y - up.y * size,
-            c.z - up.z * size
-        );
-        DirectX::XMFLOAT3 upPt(
-            c.x + up.x * size,
-            c.y + up.y * size,
-            c.z + up.z * size
-        );
-        primitiveBatch->DrawLine(
-            DirectX::VertexPositionColor(downPt, particle.color),
-            DirectX::VertexPositionColor(upPt, particle.color)
-        );
+        DirectX::VertexPositionColorTexture vTL(tl, particle.color, DirectX::XMFLOAT2(0, 0));
+        DirectX::VertexPositionColorTexture vTR(tr, particle.color, DirectX::XMFLOAT2(1, 0));
+        DirectX::VertexPositionColorTexture vBL(bl, particle.color, DirectX::XMFLOAT2(0, 1));
+        DirectX::VertexPositionColorTexture vBR(br, particle.color, DirectX::XMFLOAT2(1, 1));
+
+        batch->DrawTriangle(vTL, vTR, vBL);
+        batch->DrawTriangle(vTR, vBR, vBL);
     }
 
-    primitiveBatch->End();
-}
+    batch->End();
 
+    // === 元に戻す ===
+    context->OMSetBlendState(nullptr, blendFactor, 0xFFFFFFFF);
+    context->OMSetDepthStencilState(m_states->DepthDefault(), 0);
+}
 
 void Game::UpdateTitle()
 {
@@ -5191,6 +5340,8 @@ void Game::RenderPlaying()
             }
             
         }
+        // スクリーンブラッド
+        DrawScreenBlood();
         // UI描画（オフスクリーンへ）
         DrawUI();
 
@@ -5461,7 +5612,8 @@ void Game::RenderPlaying()
             }
             
         }
-
+        // スクリーンブラッド
+        DrawScreenBlood();
         // UI描画
         DrawUI();
     }
@@ -6462,6 +6614,9 @@ void Game::UpdatePlaying()
             m_gloryKillTargetEnemy->currentAnimation = "Death";
             m_gloryKillTargetEnemy->corpseTimer = 3.0f;
 
+            // スクリーンブラッド
+            SpawnScreenBlood(10, 1.0f);
+
             // HP回復（最大HPを超えないように）
             int currentHP = m_player->GetHealth();
             int maxHP = m_player->GetMaxHealth();
@@ -7326,6 +7481,19 @@ void Game::UpdatePlaying()
                                 // ===  死んだ瞬間に物理ボディを削除 ===
                                 RemoveEnemyPhysicsBody(hitEnemy->id);
 
+                                // スクリーンブラッド（近距離ほど多い）
+                                {
+                                    DirectX::XMFLOAT3 pPos = m_player->GetPosition();
+                                    float bx = hitEnemy->position.x - pPos.x;
+                                    float bz = hitEnemy->position.z - pPos.z;
+                                    float bDist = sqrtf(bx * bx + bz * bz);
+                                    if (bDist < 8.0f)
+                                    {
+                                        float intensity = 1.0f - (bDist / 8.0f);
+                                        SpawnScreenBlood((int)(3 + intensity * 8), intensity);
+                                    }
+                                }
+
                                 // MIDBOSSが死んだらビーム停止
                                 if (hitEnemy->type == EnemyType::MIDBOSS &&
                                     m_beamHandle >= 0 && m_effekseerManager != nullptr)
@@ -7499,6 +7667,7 @@ void Game::UpdatePlaying()
 
     m_particleSystem->Update(deltaTime);
 
+    UpdateScreenBlood(deltaTime);
 
     //  グローリーキル中は敵の更新を停止
     if (!m_gloryKillCameraActive)
@@ -7949,6 +8118,19 @@ void Game::UpdatePlaying()
 
                     RemoveEnemyPhysicsBody(enemy.id);
 
+                    // スクリーンブラッド
+                    {
+                        DirectX::XMFLOAT3 pPos = m_player->GetPosition();
+                        float bx = enemy.position.x - pPos.x;
+                        float bz = enemy.position.z - pPos.z;
+                        float bDist = sqrtf(bx * bx + bz * bz);
+                        if (bDist < 8.0f)
+                        {
+                            float intensity = 1.0f - (bDist / 8.0f);
+                            SpawnScreenBlood((int)(3 + intensity * 8), intensity);
+                        }
+                    }
+
                     int waveBonus = m_waveManager->OnEnemyKilled();
                     m_player->AddPoints(100 + waveBonus);
 
@@ -7985,6 +8167,8 @@ void Game::UpdatePlaying()
                         enemy.isRagdoll = true;
                         enemy.corpseTimer = 3.0f;
                         RemoveEnemyPhysicsBody(enemy.id);
+                        // スクリーンブラッド
+                        SpawnScreenBlood(8, 0.9f);
                         m_statKills++;       //  総キル
                         m_statMeleeKills++;  //  近接キル
 
@@ -10667,4 +10851,114 @@ void Game::DrawFullscreenQuad()
     // シェーダーをクリア
     m_d3dContext->VSSetShader(nullptr, nullptr, 0);
     m_d3dContext->PSSetShader(nullptr, nullptr, 0);
+}
+
+
+// === スクリーンブラッド発生 ===
+void Game::SpawnScreenBlood(int count, float intensity)
+{
+    for (int i = 0; i < count; i++)
+    {
+        ScreenBlood blood;
+
+        // 画面の端寄りにランダム配置（中央は避ける）
+        float angle = ((float)rand() / RAND_MAX) * 6.28318f;
+        float dist = 0.3f + ((float)rand() / RAND_MAX) * 0.5f;  // 中央から離れた位置
+        blood.x = 0.5f + cosf(angle) * dist;
+        blood.y = 0.5f + sinf(angle) * dist;
+
+        blood.size = (0.1f + ((float)rand() / RAND_MAX) * 0.25f) * intensity;
+        blood.alpha = 0.7f + ((float)rand() / RAND_MAX) * 0.3f;
+        blood.lifetime = 1.5f + ((float)rand() / RAND_MAX) * 1.0f;
+        blood.maxLifetime = blood.lifetime;
+        blood.rotation = ((float)rand() / RAND_MAX) * 6.28318f;
+
+        m_screenBloods.push_back(blood);
+    }
+}
+
+// === スクリーンブラッド更新 ===
+void Game::UpdateScreenBlood(float deltaTime)
+{
+    for (auto it = m_screenBloods.begin(); it != m_screenBloods.end();)
+    {
+        it->lifetime -= deltaTime;
+
+        // 残り寿命に応じてフェードアウト
+        float t = it->lifetime / it->maxLifetime;
+        it->alpha = t * t;  // 二乗で急速にフェード
+
+        // 少し下に垂れる（重力演出）
+        it->y += deltaTime * 0.02f;
+
+        if (it->lifetime <= 0.0f)
+            it = m_screenBloods.erase(it);
+        else
+            ++it;
+    }
+}
+
+// === スクリーンブラッド描画（2Dオーバーレイ）===
+void Game::DrawScreenBlood()
+{
+    if (m_screenBloods.empty()) return;
+
+    auto context = m_d3dContext.Get();
+
+    // 2D用の行列（画面座標）
+    DirectX::XMMATRIX proj = DirectX::XMMatrixOrthographicOffCenterLH(
+        0.0f, (float)m_outputWidth, (float)m_outputHeight, 0.0f, 0.0f, 1.0f);
+
+    m_particleEffect->SetView(DirectX::XMMatrixIdentity());
+    m_particleEffect->SetProjection(proj);
+    m_particleEffect->SetWorld(DirectX::XMMatrixIdentity());
+    m_particleEffect->Apply(context);
+    context->IASetInputLayout(m_particleInputLayout.Get());
+
+    // 加算ブレンド（血が重なると濃くなる）
+    float blendFactor[4] = { 0, 0, 0, 0 };
+    context->OMSetBlendState(m_states->AlphaBlend(), blendFactor, 0xFFFFFFFF);
+    context->OMSetDepthStencilState(m_states->DepthNone(), 0);
+
+    auto batch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColorTexture>>(context);
+    batch->Begin();
+
+    for (const auto& blood : m_screenBloods)
+    {
+        float px = blood.x * m_outputWidth;
+        float py = blood.y * m_outputHeight;
+        float s = blood.size * m_outputWidth * 0.5f;
+
+        // 回転付きの4頂点
+        float c = cosf(blood.rotation);
+        float sn = sinf(blood.rotation);
+
+        DirectX::XMFLOAT4 col(0.4f, 0.0f, 0.0f, blood.alpha);
+
+        // 回転を適用した4コーナー
+        auto rotPt = [&](float lx, float ly) -> DirectX::XMFLOAT3 {
+            return DirectX::XMFLOAT3(
+                px + (lx * c - ly * sn) * s,
+                py + (lx * sn + ly * c) * s,
+                0.0f);
+            };
+
+        DirectX::XMFLOAT3 tl = rotPt(-1, -1);
+        DirectX::XMFLOAT3 tr = rotPt(1, -1);
+        DirectX::XMFLOAT3 bl = rotPt(-1, 1);
+        DirectX::XMFLOAT3 br = rotPt(1, 1);
+
+        DirectX::VertexPositionColorTexture vTL(tl, col, DirectX::XMFLOAT2(0, 0));
+        DirectX::VertexPositionColorTexture vTR(tr, col, DirectX::XMFLOAT2(1, 0));
+        DirectX::VertexPositionColorTexture vBL(bl, col, DirectX::XMFLOAT2(0, 1));
+        DirectX::VertexPositionColorTexture vBR(br, col, DirectX::XMFLOAT2(1, 1));
+
+        batch->DrawTriangle(vTL, vTR, vBL);
+        batch->DrawTriangle(vTR, vBR, vBL);
+    }
+
+    batch->End();
+
+    context->OMSetBlendState(nullptr, blendFactor, 0xFFFFFFFF);
+    context->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 }

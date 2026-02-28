@@ -96,6 +96,12 @@ public:
 	//	FBXファイルからアニメーションを読み込む
 	bool LoadAnimation(const std::string& filename, const std::string& animationName);
 
+	void DrawAnimated_Legacy(
+		ID3D11DeviceContext* context,
+		DirectX::XMMATRIX world, DirectX::XMMATRIX view,
+		DirectX::XMMATRIX projection, DirectX::XMVECTOR color,
+		const std::string& animationName, float animationTime);
+
 	//	アニメーション付きで描画
 	void DrawAnimated(ID3D11DeviceContext* context,
 		DirectX::XMMATRIX world,
@@ -139,12 +145,75 @@ public:
 	//	テクスチャを設定
 	void SetTexture(ID3D11ShaderResourceView* texture);
 
-	
+	// カスタムシェーダーを読み込む
+	bool LoadCustomShaders(ID3D11Device* device);
 
+
+	// インスタンシング用バッファを作成
+	bool CreateInstanceBuffers(ID3D11Device* device, int maxInstances);
+
+	// インスタンシング描画（同じモデルの敵をまとめて描画）
+	void DrawInstanced_Custom(
+		ID3D11DeviceContext* context,
+		DirectX::XMMATRIX view,
+		DirectX::XMMATRIX projection,
+		const std::vector<DirectX::XMMATRIX>& worlds,
+		const std::vector<DirectX::XMVECTOR>& colors,
+		const std::vector<std::string>& animNames,
+		const std::vector<float>& animTimes
+	);
 
 private:
 
 	std::vector<DirectX::XMMATRIX> m_cachedBoneTransforms;  //  事前確保キャッシュ
+
+	// === インスタンシング用 ===
+	struct InstanceGPU {
+		DirectX::XMMATRIX World;       // 64 bytes
+		DirectX::XMFLOAT4 Color;       // 16 bytes
+		uint32_t BoneOffset;           // 4 bytes
+		uint32_t pad[3];               // 12 bytes (16バイト境界に揃える)
+	};  // 合計 96 bytes
+
+	struct FrameCB {
+		DirectX::XMMATRIX View;
+		DirectX::XMMATRIX Projection;
+	};
+
+	Microsoft::WRL::ComPtr<ID3D11Buffer>              m_instanceBuffer;     // インスタンスバッファ
+	Microsoft::WRL::ComPtr<ID3D11Buffer>              m_boneStructuredBuf;  // StructuredBuffer
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>  m_boneSRV;           // ↑のSRV
+	Microsoft::WRL::ComPtr<ID3D11Buffer>              m_frameCB;           // View/Proj定数バッファ
+	int m_maxInstances = 0;
+	int m_maxBoneEntries = 0;
+
+	// === カスタムシェーダー ===
+	Microsoft::WRL::ComPtr<ID3D11VertexShader>  m_customVS;        // 頂点シェーダー
+	Microsoft::WRL::ComPtr<ID3D11PixelShader>   m_customPS;        // ピクセルシェーダー
+	Microsoft::WRL::ComPtr<ID3D11InputLayout>   m_customInputLayout; // 頂点データの構造定義
+	Microsoft::WRL::ComPtr<ID3D11Buffer>        m_transformCB;     // 定数バッファ: Transform
+	Microsoft::WRL::ComPtr<ID3D11Buffer>        m_boneCB;          // 定数バッファ: Bones
+	Microsoft::WRL::ComPtr<ID3D11Buffer>        m_lightCB;         // 定数バッファ: Light
+	Microsoft::WRL::ComPtr<ID3D11SamplerState>  m_customSampler;   // テクスチャサンプラー
+	bool m_useCustomShader = false;  // カスタムシェーダーを使うか
+
+	// 定数バッファの構造体（HLSLと完全に一致させる）
+	struct TransformCB {
+		DirectX::XMMATRIX World;
+		DirectX::XMMATRIX View;
+		DirectX::XMMATRIX Projection;
+	};
+
+	struct BoneCB {
+		DirectX::XMMATRIX Bones[72];  // SkinnedEffect::MaxBones と同じ
+	};
+
+	struct LightCB {
+		DirectX::XMFLOAT4 AmbientColor;
+		DirectX::XMFLOAT4 DiffuseColor;
+		DirectX::XMFLOAT3 LightDirection;
+		float Padding;
+	};
 
 	std::unique_ptr<DirectX::CommonStates> m_states;
 

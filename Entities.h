@@ -300,3 +300,13 @@ struct Particle {
 	float maxLifetime;
 	float size;
 };
+
+// スクリーンブラッド（画面に飛び散る血）
+struct ScreenBlood {
+	float x, y;        // スクリーン上の位置 (0?1)
+	float size;         // サイズ
+	float alpha;        // 透明度
+	float lifetime;     // 残り時間
+	float maxLifetime;  // 最大寿命
+	float rotation;     // 回転角度（ランダム）
+};

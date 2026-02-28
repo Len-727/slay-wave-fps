@@ -1324,7 +1324,7 @@ void Model::UpdateNodeTransforms(
 	}
 }
 
-void Model::DrawAnimated(
+void Model::DrawAnimated_Legacy(
 	ID3D11DeviceContext* context,
 	DirectX::XMMATRIX world,
 	DirectX::XMMATRIX view,
@@ -1650,4 +1650,334 @@ void Model::SetBoneScaleByPrefix(const std::string& prefix, float scale)
 			m_boneScales[shortName] = scale;
 		}
 	}
+}
+
+// === カスタムシェーダー読み込み ===
+bool Model::LoadCustomShaders(ID3D11Device* device)
+{
+	// ---頂点シェーダーの .cso を読み込む ---
+	// .cso = （ビルド済みバイナリ）
+
+	// ファイルを開く
+	FILE* vsFile = nullptr;
+	fopen_s(&vsFile, "SkinnedVS.cso", "rb");  // rb = バイナリ読み込み
+	if (!vsFile)
+	{
+		OutputDebugStringA("[SHADER] SkinnedVS.cso が見つからない！\n");
+		return false;
+	}
+
+	// ファイルサイズを取得
+	fseek(vsFile, 0, SEEK_END);        // ファイル末尾に移動
+	long vsSize = ftell(vsFile);       // 現在位置 = ファイルサイズ
+	fseek(vsFile, 0, SEEK_SET);        // 先頭に戻す
+
+	// バイナリデータを読み込む
+	std::vector<char> vsData(vsSize);
+	fread(vsData.data(), 1, vsSize, vsFile);
+	fclose(vsFile);
+
+	// GPUに頂点シェーダーを作成
+	HRESULT hr = device->CreateVertexShader(
+		vsData.data(),    // シェーダーのバイナリ
+		vsSize,           // サイズ
+		nullptr,          // クラスリンクなし
+		m_customVS.GetAddressOf()
+	);
+	if (FAILED(hr))
+	{
+		OutputDebugStringA("[SHADER] CreateVertexShader 失敗！\n");
+		return false;
+	}
+
+	// --- 入力レイアウト（頂点データの構造をGPUに教える）---
+	// VSInput の各メンバーと対応させる
+	D3D11_INPUT_ELEMENT_DESC layout[] = {
+		// スロット0: 頂点データ（モデルの各頂点）
+		{ "POSITION",        0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA,   0 },
+		{ "NORMAL",          0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 12, D3D11_INPUT_PER_VERTEX_DATA,   0 },
+		{ "TEXCOORD",        0, DXGI_FORMAT_R32G32_FLOAT,       0, 24, D3D11_INPUT_PER_VERTEX_DATA,   0 },
+		{ "BLENDINDICES",    0, DXGI_FORMAT_R32G32B32A32_UINT,  0, 32, D3D11_INPUT_PER_VERTEX_DATA,   0 },
+		{ "BLENDWEIGHT",     0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 48, D3D11_INPUT_PER_VERTEX_DATA,   0 },
+
+		// スロット1: インスタンスデータ（敵1体ごとに違う）
+		// matrix = float4×4行 なので4要素に分割
+		{ "INST_WORLD",      0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1,  0, D3D11_INPUT_PER_INSTANCE_DATA, 1 },
+		{ "INST_WORLD",      1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 16, D3D11_INPUT_PER_INSTANCE_DATA, 1 },
+		{ "INST_WORLD",      2, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 32, D3D11_INPUT_PER_INSTANCE_DATA, 1 },
+		{ "INST_WORLD",      3, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 48, D3D11_INPUT_PER_INSTANCE_DATA, 1 },
+		{ "INST_COLOR",      0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 64, D3D11_INPUT_PER_INSTANCE_DATA, 1 },
+		{ "INST_BONEOFFSET", 0, DXGI_FORMAT_R32_UINT,           1, 80, D3D11_INPUT_PER_INSTANCE_DATA, 1 },
+	};
+
+	hr = device->CreateInputLayout(
+		layout,
+		11,                    // 要素数
+		vsData.data(),        // 頂点シェーダーのバイナリ（検証用）
+		vsSize,
+		m_customInputLayout.GetAddressOf()
+	);
+	if (FAILED(hr))
+	{
+		OutputDebugStringA("[SHADER] CreateInputLayout 失敗！\n");
+		return false;
+	}
+
+	// ---  ピクセルシェーダーの .cso を読み込む ---
+	FILE* psFile = nullptr;
+	fopen_s(&psFile, "SkinnedPS.cso", "rb");
+	if (!psFile)
+	{
+		OutputDebugStringA("[SHADER] SkinnedPS.cso が見つからない！\n");
+		return false;
+	}
+
+	fseek(psFile, 0, SEEK_END);
+	long psSize = ftell(psFile);
+	fseek(psFile, 0, SEEK_SET);
+
+	std::vector<char> psData(psSize);
+	fread(psData.data(), 1, psSize, psFile);
+	fclose(psFile);
+
+	hr = device->CreatePixelShader(
+		psData.data(), psSize, nullptr,
+		m_customPS.GetAddressOf()
+	);
+	if (FAILED(hr))
+	{
+		OutputDebugStringA("[SHADER] CreatePixelShader 失敗！\n");
+		return false;
+	}
+
+	// --- 定数バッファを3つ作成 ---
+	// 定数バッファ = CPUからGPUにデータを送るための箱
+
+	D3D11_BUFFER_DESC cbDesc = {};
+	cbDesc.Usage = D3D11_USAGE_DEFAULT;          // GPUが読み書き
+	cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	cbDesc.CPUAccessFlags = 0;
+
+	// Transform バッファ（b0）
+	cbDesc.ByteWidth = sizeof(TransformCB);
+	hr = device->CreateBuffer(&cbDesc, nullptr, m_transformCB.GetAddressOf());
+	if (FAILED(hr)) return false;
+
+	// Bone バッファ（b1）
+	cbDesc.ByteWidth = sizeof(BoneCB);
+	hr = device->CreateBuffer(&cbDesc, nullptr, m_boneCB.GetAddressOf());
+	if (FAILED(hr)) return false;
+
+	// Light バッファ（b2）
+	cbDesc.ByteWidth = sizeof(LightCB);
+	hr = device->CreateBuffer(&cbDesc, nullptr, m_lightCB.GetAddressOf());
+	if (FAILED(hr)) return false;
+
+	// --- サンプラーステート ---
+	D3D11_SAMPLER_DESC sampDesc = {};
+	sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;  // 滑らかな補間
+	sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;      // テクスチャの繰り返し
+	sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+	sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+	hr = device->CreateSamplerState(&sampDesc, m_customSampler.GetAddressOf());
+	if (FAILED(hr)) return false;
+
+	m_useCustomShader = true;
+	OutputDebugStringA("[SHADER] カスタムシェーダー読み込み完了！\n");
+	return true;
+}
+
+void Model::DrawAnimated(
+	ID3D11DeviceContext* context,
+	DirectX::XMMATRIX world,
+	DirectX::XMMATRIX view,
+	DirectX::XMMATRIX projection,
+	DirectX::XMVECTOR color,
+	const std::string& animationName,
+	float animationTime)
+{
+	// カスタムシェーダー＋インスタンスバッファがあれば、1体だけのインスタンシングで描画
+	if (m_useCustomShader && m_instanceBuffer)
+	{
+		std::vector<DirectX::XMMATRIX> worlds = { world };
+		std::vector<DirectX::XMVECTOR> colors = { color };
+		std::vector<std::string>       anims = { animationName };
+		std::vector<float>             times = { animationTime };
+
+		DrawInstanced_Custom(context, view, projection, worlds, colors, anims, times);
+		return;
+	}
+
+	// フォールバック：旧描画
+	DrawAnimated_Legacy(context, world, view, projection, color, animationName, animationTime);
+}
+
+// === インスタンシング用バッファ作成 ===
+bool Model::CreateInstanceBuffers(ID3D11Device* device, int maxInstances)
+{
+	m_maxInstances = maxInstances;
+	m_maxBoneEntries = maxInstances * 72;  // 各インスタンス72ボーン
+
+	// --- インスタンスバッファ（頂点バッファとして使う）---
+	D3D11_BUFFER_DESC ibDesc = {};
+	ibDesc.ByteWidth = sizeof(InstanceGPU) * maxInstances;
+	ibDesc.Usage = D3D11_USAGE_DYNAMIC;          // 毎フレーム更新するため
+	ibDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	ibDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	HRESULT hr = device->CreateBuffer(&ibDesc, nullptr, m_instanceBuffer.GetAddressOf());
+	if (FAILED(hr)) { OutputDebugStringA("[INST] instanceBuffer 作成失敗\n"); return false; }
+
+	// --- StructuredBuffer（ボーン行列の巨大配列）---
+	D3D11_BUFFER_DESC sbDesc = {};
+	sbDesc.ByteWidth = sizeof(DirectX::XMMATRIX) * m_maxBoneEntries;
+	sbDesc.Usage = D3D11_USAGE_DYNAMIC;
+	sbDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	sbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	sbDesc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;  // StructuredBuffer!
+	sbDesc.StructureByteStride = sizeof(DirectX::XMMATRIX);   // 1要素 = 64bytes
+	hr = device->CreateBuffer(&sbDesc, nullptr, m_boneStructuredBuf.GetAddressOf());
+	if (FAILED(hr)) { OutputDebugStringA("[INST] boneStructuredBuf 作成失敗\n"); return false; }
+
+	// --- SRV（シェーダーからStructuredBufferを読むためのビュー）---
+	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Format = DXGI_FORMAT_UNKNOWN;             // Structured = UNKNOWN
+	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
+	srvDesc.Buffer.FirstElement = 0;
+	srvDesc.Buffer.NumElements = m_maxBoneEntries;
+	hr = device->CreateShaderResourceView(m_boneStructuredBuf.Get(), &srvDesc, m_boneSRV.GetAddressOf());
+	if (FAILED(hr)) { OutputDebugStringA("[INST] boneSRV 作成失敗\n"); return false; }
+
+	// --- Frame定数バッファ（View/Projection）---
+	D3D11_BUFFER_DESC fcbDesc = {};
+	fcbDesc.ByteWidth = sizeof(FrameCB);
+	fcbDesc.Usage = D3D11_USAGE_DEFAULT;
+	fcbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	hr = device->CreateBuffer(&fcbDesc, nullptr, m_frameCB.GetAddressOf());
+	if (FAILED(hr)) return false;
+
+	char buf[128];
+	sprintf_s(buf, "[INST] バッファ作成完了: max %d instances, %d bones\n", maxInstances, m_maxBoneEntries);
+	OutputDebugStringA(buf);
+	return true;
+}
+
+// === インスタンシング描画 ===
+void Model::DrawInstanced_Custom(
+	ID3D11DeviceContext* context,
+	DirectX::XMMATRIX view,
+	DirectX::XMMATRIX projection,
+	const std::vector<DirectX::XMMATRIX>& worlds,
+	const std::vector<DirectX::XMVECTOR>& colors,
+	const std::vector<std::string>& animNames,
+	const std::vector<float>& animTimes)
+{
+	int count = (int)worlds.size();
+	if (count == 0 || !m_useCustomShader || !m_instanceBuffer) return;
+	if (count > m_maxInstances) count = m_maxInstances;
+
+	// ---  全インスタンスのボーン行列を計算してStructuredBufferに書き込む ---
+	D3D11_MAPPED_SUBRESOURCE mappedBones;
+	context->Map(m_boneStructuredBuf.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedBones);
+	DirectX::XMMATRIX* bonePtr = (DirectX::XMMATRIX*)mappedBones.pData;
+
+	// ボーン計算用（メンバ変数のキャッシュを再利用）
+	auto& tempBones = m_cachedBoneTransforms;
+
+	for (int inst = 0; inst < count; inst++)
+	{
+		// このインスタンスのアニメーションからボーン行列を計算
+		auto it = m_animations.find(animNames[inst]);
+
+		if (it != m_animations.end() && !m_nodes.empty())
+		{
+			const AnimationClip& clip = it->second;
+			tempBones.resize(m_bones.size());
+			for (size_t b = 0; b < tempBones.size(); b++)
+				tempBones[b] = DirectX::XMMatrixIdentity();
+
+			UpdateNodeTransforms(m_rootNodeIndex, clip, animTimes[inst],
+				DirectX::XMMatrixIdentity(), tempBones);
+
+			// StructuredBufferに転置して書き込む
+			for (int b = 0; b < 72; b++)
+			{
+				if (b < (int)tempBones.size())
+					bonePtr[inst * 72 + b] = DirectX::XMMatrixTranspose(tempBones[b]);
+				else
+					bonePtr[inst * 72 + b] = DirectX::XMMatrixTranspose(DirectX::XMMatrixIdentity());
+			}
+		}
+		else
+		{
+			// アニメーションなし → 単位行列で埋める
+			for (int b = 0; b < 72; b++)
+				bonePtr[inst * 72 + b] = DirectX::XMMatrixTranspose(DirectX::XMMatrixIdentity());
+		}
+	}
+	context->Unmap(m_boneStructuredBuf.Get(), 0);
+
+	// --- インスタンスバッファに書き込む ---
+	D3D11_MAPPED_SUBRESOURCE mappedInst;
+	context->Map(m_instanceBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedInst);
+	InstanceGPU* instPtr = (InstanceGPU*)mappedInst.pData;
+
+	for (int i = 0; i < count; i++)
+	{
+		instPtr[i].World = DirectX::XMMatrixTranspose(worlds[i]);
+		DirectX::XMStoreFloat4(&instPtr[i].Color, colors[i]);
+		instPtr[i].BoneOffset = i * 72;  // このインスタンスのボーン開始位置
+		instPtr[i].pad[0] = instPtr[i].pad[1] = instPtr[i].pad[2] = 0;
+	}
+	context->Unmap(m_instanceBuffer.Get(), 0);
+
+	// --- 定数バッファ更新 ---
+	FrameCB frameData;
+	frameData.View = DirectX::XMMatrixTranspose(view);
+	frameData.Projection = DirectX::XMMatrixTranspose(projection);
+	context->UpdateSubresource(m_frameCB.Get(), 0, nullptr, &frameData, 0, 0);
+
+	// --- Step 4: パイプラインセット ---
+	context->VSSetShader(m_customVS.Get(), nullptr, 0);
+	context->PSSetShader(m_customPS.Get(), nullptr, 0);
+	context->IASetInputLayout(m_customInputLayout.Get());
+
+	// 定数バッファ
+	context->VSSetConstantBuffers(0, 1, m_frameCB.GetAddressOf());
+	context->VSSetConstantBuffers(2, 1, m_lightCB.GetAddressOf());
+
+	// StructuredBuffer → t1 にセット
+	context->VSSetShaderResources(1, 1, m_boneSRV.GetAddressOf());
+
+	// テクスチャ → t0
+	if (m_diffuseTexture)
+		context->PSSetShaderResources(0, 1, m_diffuseTexture.GetAddressOf());
+	context->PSSetSamplers(0, 1, m_customSampler.GetAddressOf());
+
+	// Light定数バッファ
+	LightCB lightData;
+	lightData.AmbientColor = DirectX::XMFLOAT4(0.55f, 0.50f, 0.45f, 1.0f);
+	lightData.DiffuseColor = DirectX::XMFLOAT4(1, 1, 1, 1); // 個別色はインスタンスデータで
+	lightData.LightDirection = DirectX::XMFLOAT3(0.0f, -1.0f, 0.0f);
+	lightData.Padding = 0.0f;
+	context->UpdateSubresource(m_lightCB.Get(), 0, nullptr, &lightData, 0, 0);
+
+	// ---  描画 ---
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	for (auto& mesh : m_meshes)
+	{
+		// スロット0: モデルの頂点データ、スロット1: インスタンスデータ
+		ID3D11Buffer* buffers[] = { mesh.vertexBuffer.Get(), m_instanceBuffer.Get() };
+		UINT strides[] = { sizeof(ModelVertex), sizeof(InstanceGPU) };
+		UINT offsets[] = { 0, 0 };
+		context->IASetVertexBuffers(0, 2, buffers, strides, offsets);
+		context->IASetIndexBuffer(mesh.indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+
+		//  DrawIndexedInstanced: 1回のコールで全インスタンスを描画！
+		context->DrawIndexedInstanced((UINT)mesh.indices.size(), count, 0, 0, 0);
+	}
+
+	// --- クリーンアップ: SRVをnullに戻す ---
+	ID3D11ShaderResourceView* nullSRV = nullptr;
+	context->VSSetShaderResources(1, 1, &nullSRV);
 }

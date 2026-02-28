@@ -31,6 +31,12 @@ void ParticleSystem::Update(float deltaTime)
         // 【効果】パーティクルが下に落ちる
         it->velocity.y -= 9.8f * deltaTime;
 
+        // 空気抵抗（速度が徐々に落ちる → 霧がふわっと止まる）
+        float drag = 0.98f;
+        it->velocity.x *= drag;
+        it->velocity.y *= drag;
+        it->velocity.z *= drag;
+
         // === 寿命更新 ===
         it->lifetime -= deltaTime;
 
@@ -84,6 +90,10 @@ void ParticleSystem::CreateExplosion(DirectX::XMFLOAT3 position)
             0.0f,  // B: 青なし
             1.0f   // A: 不透明
         );
+
+        particle.size = 0.05f + (float)rand() / RAND_MAX * 0.1f;  // 0.05?0.15
+
+        particle.lifetime = 1.0f + (float)rand() / RAND_MAX * 2.0f;
 
         // === 寿命設定（1?3秒） ===
         particle.lifetime = 1.0f + (float)rand() / RAND_MAX * 2.0f;
@@ -209,6 +219,8 @@ void ParticleSystem::CreateMuzzleFlash(DirectX::XMFLOAT3 muzzlePosition,
 
         particle.color = gasColor;
 
+        particle.size = sparkSize * 1.5f;  // ガスは火花より少し大きめ
+
         particle.lifetime = 0.3f + (float)rand() / RAND_MAX * 0.2f;
         particle.maxLifetime = particle.lifetime;
 
@@ -285,38 +297,89 @@ void ParticleSystem::CreateMuzzleParticles(DirectX::XMFLOAT3 muzzlePosition,
 //  血しぶき
 void ParticleSystem::CreateBloodEffect(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT3 dir, int count)
 {
-    for (int i = 0; i < count; i++)
+    // === Layer 1: 大きい飛沫（全体の20%）===
+    // 肉片が飛ぶような大きい塊
+    int splashCount = count / 5;
+    for (int i = 0; i < splashCount; i++)
     {
         Particle p;
         p.position = pos;
 
-        // === 血の色にバリエーション ===
-        float brightness = 0.4f + ((rand() % 60) / 100.0f);  // 0.4 ~ 1.0
-        p.color = DirectX::XMFLOAT4(
-            brightness,           // R: 赤
-            0.0f,                 // G: 緑
-            brightness * 0.1f,    // B: 少し（深い赤）
-            1.0f                  // A: 不透明
-        );
+        // 暗い赤（ドス黒い血）
+        float r = 0.4f + ((rand() % 30) / 100.0f);  // 0.4?0.7
+        p.color = DirectX::XMFLOAT4(r, 0.0f, 0.0f, 1.0f);
 
-        // === 速度にバリエーション ===
-        float speedMultiplier = 0.5f + ((rand() % 150) / 100.0f);  // 0.5 ~ 2.0
-        float speed = 3.0f * speedMultiplier;
-
-        // === ランダムな拡散 ===
-        float rx = ((rand() % 200) - 100) / 100.0f;  // -1.0 ~ 1.0
-        float ry = ((rand() % 200) - 100) / 100.0f;
-        float rz = ((rand() % 200) - 100) / 100.0f;
-
+        // 速い・方向に沿って飛ぶ
+        float speed = 5.0f + ((rand() % 300) / 100.0f);  // 5?8
+        float rx = ((rand() % 100) - 50) / 100.0f;  // 小さめの拡散
+        float ry = ((rand() % 100) - 50) / 100.0f;
+        float rz = ((rand() % 100) - 50) / 100.0f;
         p.velocity.x = dir.x * speed + rx;
-        p.velocity.y = dir.y * speed + ry + 2.0f;  // 上向き強化
+        p.velocity.y = dir.y * speed + ry + 1.5f;
         p.velocity.z = dir.z * speed + rz;
 
-        // === サイズにバリエーション ===
-        p.size = 0.03f + ((rand() % 200) / 1000.0f);  // 0.03 ~ 0.23
+        p.size = 0.08f + ((rand() % 100) / 1000.0f);  // 0.08?0.18（大きめ）
+        p.lifetime = 0.3f + ((rand() % 30) / 100.0f);  // 0.3?0.6秒（短い）
+        p.maxLifetime = p.lifetime;
 
-        // === 寿命にバリエーション ===
-        p.lifetime = 0.8f + ((rand() % 40) / 100.0f);  // 0.8 ~ 1.2秒
+        m_particles.push_back(p);
+    }
+
+    // === Layer 2: 中間のしぶき（全体の50%）===
+    // メインの血しぶき
+    int midCount = count / 2;
+    for (int i = 0; i < midCount; i++)
+    {
+        Particle p;
+        p.position = pos;
+
+        // 鮮やかな赤（メインの血の色）
+        float r = 0.6f + ((rand() % 40) / 100.0f);  // 0.6?1.0
+        float g = ((rand() % 5) / 100.0f);           // 0?0.05（ほぼゼロ）
+        p.color = DirectX::XMFLOAT4(r, g, 0.0f, 1.0f);
+
+        float speed = 2.0f + ((rand() % 200) / 100.0f);  // 2?4
+        float rx = ((rand() % 200) - 100) / 100.0f;
+        float ry = ((rand() % 200) - 100) / 100.0f;
+        float rz = ((rand() % 200) - 100) / 100.0f;
+        p.velocity.x = dir.x * speed + rx;
+        p.velocity.y = dir.y * speed + ry + 2.0f;
+        p.velocity.z = dir.z * speed + rz;
+
+        p.size = 0.04f + ((rand() % 80) / 1000.0f);  // 0.04?0.12
+        p.lifetime = 0.5f + ((rand() % 50) / 100.0f);  // 0.5?1.0秒
+        p.maxLifetime = p.lifetime;
+
+        m_particles.push_back(p);
+    }
+
+    // === Layer 3: 霧状のミスト（全体の30%）===
+    // ふわっと漂う血の霧
+    int mistCount = count - splashCount - midCount;
+    for (int i = 0; i < mistCount; i++)
+    {
+        Particle p;
+
+        // 少しずれた位置から発生（霧っぽく広がる）
+        p.position.x = pos.x + ((rand() % 40) - 20) / 100.0f;
+        p.position.y = pos.y + ((rand() % 40) - 20) / 100.0f;
+        p.position.z = pos.z + ((rand() % 40) - 20) / 100.0f;
+
+        // 薄い赤（半透明の霧）
+        float r = 0.3f + ((rand() % 20) / 100.0f);
+        p.color = DirectX::XMFLOAT4(r, 0.0f, 0.0f, 0.4f);  //  最初から半透明
+
+        // 遅い・ふわっと漂う
+        float speed = 0.5f + ((rand() % 100) / 100.0f);  // 0.5?1.5
+        float rx = ((rand() % 200) - 100) / 100.0f;
+        float ry = ((rand() % 100) / 100.0f);  // 上向きだけ
+        float rz = ((rand() % 200) - 100) / 100.0f;
+        p.velocity.x = dir.x * speed * 0.3f + rx * 0.5f;
+        p.velocity.y = dir.y * speed * 0.3f + ry + 0.5f;
+        p.velocity.z = dir.z * speed * 0.3f + rz * 0.5f;
+
+        p.size = 0.15f + ((rand() % 150) / 1000.0f);  // 0.15?0.30（大きい霧）
+        p.lifetime = 1.0f + ((rand() % 80) / 100.0f);  // 1.0?1.8秒（長め）
         p.maxLifetime = p.lifetime;
 
         m_particles.push_back(p);

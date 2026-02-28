@@ -424,6 +424,9 @@
     <FxCompile Include="SkinnedVS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
+    <FxCompile Include="SkinnedPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="FireParticlePS_Standalone.hlsl">

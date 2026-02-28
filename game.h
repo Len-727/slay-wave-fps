@@ -610,6 +610,45 @@ private:
     int   m_goTotalScore = 0;           // 合計スコア
     float m_goStatCountUp[9] = {};      // 各行のカウントアップ進行（0→1）
 
+    // インスタンシング描画用（毎フレーム再利用でヒープ確保を防ぐ）
+    std::vector<DirectX::XMMATRIX> m_instWorlds;
+    std::vector<DirectX::XMVECTOR> m_instColors;
+    std::vector<std::string>       m_instAnims;
+    std::vector<float>             m_instTimes;
+
+    // === 旧インスタンシング用ワークバッファ（毎フレーム再利用）===
+    std::vector<InstanceData> m_normalDead;
+    std::vector<InstanceData> m_normalDeadHeadless;
+    std::vector<InstanceData> m_runnerDead;
+    std::vector<InstanceData> m_runnerDeadHeadless;
+    std::vector<InstanceData> m_tankAttackingHeadless;
+    std::vector<InstanceData> m_tankDead;
+    std::vector<InstanceData> m_tankDeadHeadless;
+    std::vector<InstanceData> m_midBossWalking;
+    std::vector<InstanceData> m_midBossAttacking;
+    std::vector<InstanceData> m_midBossWalkingHeadless;
+    std::vector<InstanceData> m_midBossAttackingHeadless;
+    std::vector<InstanceData> m_midBossDead;
+    std::vector<InstanceData> m_midBossDeadHeadless;
+    std::vector<InstanceData> m_bossWalking;
+    std::vector<InstanceData> m_bossAttackingJump;
+    std::vector<InstanceData> m_bossAttackingSlash;
+    std::vector<InstanceData> m_bossAttackingJumpHeadless;
+    std::vector<InstanceData> m_bossAttackingSlashHeadless;
+    std::vector<InstanceData> m_bossWalkingHeadless;
+    std::vector<InstanceData> m_bossDead;
+    std::vector<InstanceData> m_bossDeadHeadless;
+
+    // 血パーティクル用ソフト円テクスチャ
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_bloodParticleSRV;
+    std::unique_ptr<DirectX::BasicEffect>            m_particleEffect;
+    Microsoft::WRL::ComPtr<ID3D11InputLayout>        m_particleInputLayout;
+
+    // スクリーンブラッド
+    std::vector<ScreenBlood> m_screenBloods;
+    void SpawnScreenBlood(int count, float intensity);
+    void UpdateScreenBlood(float deltaTime);
+    void DrawScreenBlood();
 
     //  ==========================
     //  === ImGui用  ===
