@@ -72,29 +72,32 @@ private:
     Microsoft::WRL::ComPtr<ID3D11VertexShader>   m_vertexShader;    // ビルボードVS
     Microsoft::WRL::ComPtr<ID3D11PixelShader>    m_pixelShader;     // 通常描画PS
 
-    // --- ★ 流体シェーダー ---
+    // ---  流体シェーダー ---
+
     Microsoft::WRL::ComPtr<ID3D11PixelShader>    m_fluidDepthPS;    // 深度PS
     Microsoft::WRL::ComPtr<ID3D11PixelShader>    m_fluidBlurPS;     // ブラーPS
     Microsoft::WRL::ComPtr<ID3D11PixelShader>    m_fluidCompositePS;// 合成PS
     Microsoft::WRL::ComPtr<ID3D11VertexShader>   m_fullscreenVS;    // フルスクリーンVS
     bool m_fluidShadersReady = false;  // 流体シェーダーのコンパイル成功フラグ
 
-    // --- ★ 流体テクスチャ ---
+
+    // ---  流体テクスチャ ---
     // 深度テクスチャ(R32_FLOAT: パーティクル深度を保存)
     Microsoft::WRL::ComPtr<ID3D11Texture2D>          m_fluidDepthTex;
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView>   m_fluidDepthRTV;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_fluidDepthSRV;
+
 
     // ブラー中間テクスチャ(水平ブラー結果を一時保存)
     Microsoft::WRL::ComPtr<ID3D11Texture2D>          m_blurTempTex;
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView>   m_blurTempRTV;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_blurTempSRV;
 
-    // --- ★ 流体定数バッファ ---
+    // ---  流体定数バッファ ---
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_blurCB;
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_compositeCB;
 
-    // --- ★ 流体ステート ---
+    // ---  流体ステート ---
     Microsoft::WRL::ComPtr<ID3D11SamplerState> m_pointSampler;
 
     // --- 既存バッファ/ステート ---

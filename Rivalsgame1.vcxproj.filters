@@ -439,31 +439,31 @@
     <FxCompile Include="SkinnedPS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
-    <FxCompile Include="BloodPS.hlsl">
+    <FxCompile Include="Assets\Shaders\BloodFluidCompositePS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
-    <FxCompile Include="BloodVS.hlsl">
+    <FxCompile Include="Assets\Shaders\BloodFluidDepthPS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
-    <FxCompile Include="BloodParticleCS.hlsl">
+    <FxCompile Include="Assets\Shaders\FullscreenQuadVS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
-    <FxCompile Include="BloodParticleVS.hlsl">
+    <FxCompile Include="Assets\Shaders\BloodPS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
-    <FxCompile Include="BloodParticlePS.hlsl">
+    <FxCompile Include="Assets\Shaders\BloodVS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
-    <FxCompile Include="BloodFluidDepthPS.hlsl">
+    <FxCompile Include="Assets\Shaders\BloodFluidBlurPS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
-    <FxCompile Include="BloodFluidBlurPS.hlsl">
+    <FxCompile Include="Assets\Shaders\BloodParticleCS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
-    <FxCompile Include="BloodFluidCompositePS.hlsl">
+    <FxCompile Include="Assets\Shaders\BloodParticlePS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
-    <FxCompile Include="FullscreenQuadVS.hlsl">
+    <FxCompile Include="Assets\Shaders\BloodParticleVS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
   </ItemGroup>

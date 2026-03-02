@@ -362,6 +362,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_offscreenRTV;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_offscreenSRV;
 
+    //  流体レンダリング用シーンコピー(DrawFluidがシーンを読むために必要)
+    Microsoft::WRL::ComPtr<ID3D11Texture2D>          m_sceneCopyTex;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_sceneCopySRV;
+
     // ブラーシェーダー
     Microsoft::WRL::ComPtr<ID3D11VertexShader> m_fullscreenVS;
     Microsoft::WRL::ComPtr<ID3D11PixelShader> m_blurPS;

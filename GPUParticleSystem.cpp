@@ -889,6 +889,10 @@ void GPUParticleSystem::FluidCompositePass(XMMATRIX proj, XMFLOAT3 cameraPos,
 void GPUParticleSystem::DrawFluid(XMMATRIX view, XMMATRIX proj, XMFLOAT3 cameraPos,
     ID3D11ShaderResourceView* sceneColorSRV, ID3D11RenderTargetView* finalRTV)
 {
+    ////  パーティクルが0なら何もしない
+    //if (m_activeCount <= 0)
+    //    return;
+
     // 流体シェーダーが準備できてなければ通常描画にフォールバック
     if (!m_fluidShadersReady || !m_fluidEnabled)
     {

@@ -5227,7 +5227,7 @@ void Game::RenderPlaying()
         m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 
         // 3D描画（優先順位順）
-        DrawParticles();
+        //DrawParticles();
         //  深度テストと深度書き込みを有効化
         m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 
@@ -5362,8 +5362,11 @@ void Game::RenderPlaying()
         }
         m_bloodSystem->DrawScreenBlood(m_outputWidth, m_outputHeight);
         m_bloodSystem->DrawBloodDecals(viewMatrix, projectionMatrix, m_player->GetPosition());
-        m_gpuParticles->Draw(viewMatrix, projectionMatrix, m_player->GetPosition());
        
+        //  流体レンダリング: シーンをコピーしてからDrawFluid
+        m_d3dContext->CopyResource(m_sceneCopyTex.Get(), m_offscreenTexture.Get());
+        m_gpuParticles->DrawFluid(viewMatrix, projectionMatrix, m_player->GetPosition(),
+            m_sceneCopySRV.Get(), m_offscreenRTV.Get());
 
         // UI描画（オフスクリーンへ）
         DrawUI();
@@ -5488,7 +5491,7 @@ void Game::RenderPlaying()
         //}
 
         // 3D描画（優先順位順）
-        DrawParticles();
+        //DrawParticles();
         DrawEnemies(viewMatrix, projectionMatrix);
         DrawBillboard();
         DrawWeapon();
@@ -5637,7 +5640,17 @@ void Game::RenderPlaying()
         }
         m_bloodSystem->DrawScreenBlood(m_outputWidth, m_outputHeight);
         m_bloodSystem->DrawBloodDecals(viewMatrix, projectionMatrix, m_player->GetPosition());
-        m_gpuParticles->Draw(viewMatrix, projectionMatrix, m_player->GetPosition());
+
+        //  流体レンダリング: バックバッファをコピーしてからDrawFluid
+        //  GetBuffer毎フレームはCOMオーバーヘッド大 → 直接テクスチャ使用
+        {
+            // バックバッファの中身をシーンコピーテクスチャに取得
+            Microsoft::WRL::ComPtr<ID3D11Resource> backBufRes;
+            m_renderTargetView->GetResource(backBufRes.GetAddressOf());
+            m_d3dContext->CopyResource(m_sceneCopyTex.Get(), backBufRes.Get());
+        }
+        m_gpuParticles->DrawFluid(viewMatrix, projectionMatrix, m_player->GetPosition(),
+            m_sceneCopySRV.Get(), m_renderTargetView.Get());
         
 
         // UI描画
@@ -10700,6 +10713,21 @@ void Game::CreateBlurResources()
     hr = m_d3dDevice->CreateShaderResourceView(m_offscreenTexture.Get(), nullptr, m_offscreenSRV.GetAddressOf());
     if (FAILED(hr))
         throw std::runtime_error("Failed to create offscreen SRV");
+
+    //  流体レンダリング用シーンコピーテクスチャ
+    {
+        D3D11_TEXTURE2D_DESC copyDesc = texDesc;  // offscreenと同じ設定をコピー
+        copyDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;  // SRVだけでOK(RTVは不要)
+        hr = m_d3dDevice->CreateTexture2D(&copyDesc, nullptr, m_sceneCopyTex.GetAddressOf());
+        if (FAILED(hr))
+            throw std::runtime_error("Failed to create scene copy texture");
+
+        hr = m_d3dDevice->CreateShaderResourceView(m_sceneCopyTex.Get(), nullptr, m_sceneCopySRV.GetAddressOf());
+        if (FAILED(hr))
+            throw std::runtime_error("Failed to create scene copy SRV");
+
+        OutputDebugStringA("[Fluid] Scene copy texture created\n");
+    }
 
     // === 定数バッファ作成 ===
     D3D11_BUFFER_DESC cbDesc = {};
