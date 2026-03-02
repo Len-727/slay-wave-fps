@@ -310,3 +310,29 @@ struct ScreenBlood {
 	float maxLifetime;  // 最大寿命
 	float rotation;     // 回転角度（ランダム）
 };
+
+// 血デカール（床に残る血痕）
+struct BloodDecal {
+	DirectX::XMFLOAT3 position;
+	float size;
+	float rotation;
+	float alpha;
+	float lifetime;
+	float maxLifetime;
+	DirectX::XMFLOAT4 color;
+};
+
+// 壁の血痕デカール(重力で垂れる)
+struct WallBloodDecal {
+	DirectX::XMFLOAT3 position;    // 壁上の衝突位置
+	DirectX::XMFLOAT3 normal;      // 壁の法線
+	float size;
+	float rotation;
+	float alpha;
+	float lifetime;
+	float maxLifetime;
+	float dripLength;              // 現在の垂れの長さ(時間で伸びる)
+	float maxDripLength;           // 最大垂れ長さ
+	float dripSpeed;               // 垂れる速度
+	DirectX::XMFLOAT4 color;
+};

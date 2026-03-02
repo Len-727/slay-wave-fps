@@ -210,7 +210,7 @@ void Player::Draw(
 // TakeDamage - ダメージを受ける
 bool Player::TakeDamage(int damage)
 {
-    //return false;
+    return false;
 
 
     // 無敵時間中はダメージなし

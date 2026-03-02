@@ -52,6 +52,8 @@
 #include "Shadow.h"
 #include "StyleRankSystem.h"
 #include "Furrenderer.h"
+#include "BloodSystem.h"
+#include "GPUParticleSystem.h"
 
 class Game
 {
@@ -96,6 +98,9 @@ private:
 
     //  スタイルランクシステム
     std::unique_ptr<StyleRankSystem> m_styleRank;
+
+    std::unique_ptr<BloodSystem> m_bloodSystem;
+    std::unique_ptr<GPUParticleSystem> m_gpuParticles;
 
     //  ===========================
     //  === キャラクターモデル   ===
@@ -644,11 +649,9 @@ private:
     std::unique_ptr<DirectX::BasicEffect>            m_particleEffect;
     Microsoft::WRL::ComPtr<ID3D11InputLayout>        m_particleInputLayout;
 
-    // スクリーンブラッド
-    std::vector<ScreenBlood> m_screenBloods;
-    void SpawnScreenBlood(int count, float intensity);
-    void UpdateScreenBlood(float deltaTime);
-    void DrawScreenBlood();
+    
+
+   
 
     //  ==========================
     //  === ImGui用  ===

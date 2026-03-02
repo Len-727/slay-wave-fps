@@ -231,6 +231,12 @@
     <ClInclude Include="Furrenderer.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
+    <ClInclude Include="BloodSystem.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="GPUParticleSystem.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -362,6 +368,12 @@
     <ClCompile Include="Furrenderer.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
+    <ClCompile Include="BloodSystem.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="GPUParticleSystem.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\Models\Y_Bot\Y_Bot.fbx">
@@ -425,6 +437,33 @@
       <Filter>Assets\shader</Filter>
     </FxCompile>
     <FxCompile Include="SkinnedPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="BloodPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="BloodVS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="BloodParticleCS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="BloodParticleVS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="BloodParticlePS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="BloodFluidDepthPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="BloodFluidBlurPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="BloodFluidCompositePS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="FullscreenQuadVS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
   </ItemGroup>

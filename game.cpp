@@ -5,6 +5,9 @@
 #include <WICTextureLoader.h>
 //#include <stdexcept>
 //#include <algorithm>
+#include <d3dcompiler.h>
+
+#pragma comment(lib, "d3dcompiler.lib")
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -154,7 +157,7 @@ void Game::Initialize(HWND window, int width, int height)
 
     m_states = std::make_unique<DirectX::CommonStates>(m_d3dDevice.Get());
 
-    m_screenBloods.reserve(50);
+    
 
     // === 血パーティクル用ソフト円テクスチャを生成 ===
     {
@@ -171,9 +174,9 @@ void Game::Initialize(HWND window, int width, int height)
                 float dist = sqrtf(dx * dx + dy * dy);
 
                 // 中心が白、端に向かって透明になる円
-                float alpha = 1.0f - dist;
-                if (alpha < 0.0f) alpha = 0.0f;
-                alpha = alpha * alpha;  // 二乗で端を急速にフェードアウト
+                if (dist > 0.5f) { texData[y * texSize + x] = 0; continue; }  // 外半分バッサリ
+                float alpha = 1.0f - (dist / 0.5f);  // 0?0.5を0?1に引き伸ばす
+                alpha = alpha * alpha * alpha;  // 三乗で急速フェード
 
                 uint8_t a = (uint8_t)(alpha * 255.0f);
                 // RGBA: 白(255,255,255) × alpha
@@ -216,6 +219,19 @@ void Game::Initialize(HWND window, int width, int height)
         shaderByteCode, byteCodeLength,
         m_particleInputLayout.GetAddressOf()
     );
+
+    m_bloodSystem = std::make_unique<BloodSystem>();
+    m_bloodSystem->Initialize(
+        m_d3dDevice.Get(),
+        m_d3dContext.Get(),
+        m_states.get(),
+        m_bloodParticleSRV.Get(),
+        m_particleEffect.get(),
+        m_particleInputLayout.Get());
+
+    m_gpuParticles = std::make_unique<GPUParticleSystem>();
+    m_gpuParticles->Initialize(m_d3dDevice.Get(), m_d3dContext.Get(), 4096,
+        m_outputWidth, m_outputHeight);
 
     //  === Bullet Physics 初期化  ===
     InitPhysics();
@@ -662,7 +678,7 @@ void Game::UpdateGibs(float deltaTime)
 
                     DirectX::XMFLOAT3 landPos = it->finalPos;
                     DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
-                    m_particleSystem->CreateBloodEffect(landPos, upDir, 5);
+                    //m_particleSystem->CreateBloodEffect(landPos, upDir, 5);
                 }
             }
             ++it;
@@ -1515,6 +1531,8 @@ void Game::CreateRenderResources()
     else
     {
         m_mapSystem->CreateDefaultMap();
+        
+        
         //OutputDebugStringA("Game::CreateRenderResources - MapSystem initialized successfully\n");
     }
 
@@ -1645,6 +1663,8 @@ void Game::CreateRenderResources()
 
     //  === Imgui   ===
     InitImGui();
+
+    
 }
 
 void Game::DrawDebugUI()
@@ -5340,8 +5360,11 @@ void Game::RenderPlaying()
             }
             
         }
-        // スクリーンブラッド
-        DrawScreenBlood();
+        m_bloodSystem->DrawScreenBlood(m_outputWidth, m_outputHeight);
+        m_bloodSystem->DrawBloodDecals(viewMatrix, projectionMatrix, m_player->GetPosition());
+        m_gpuParticles->Draw(viewMatrix, projectionMatrix, m_player->GetPosition());
+       
+
         // UI描画（オフスクリーンへ）
         DrawUI();
 
@@ -5612,8 +5635,11 @@ void Game::RenderPlaying()
             }
             
         }
-        // スクリーンブラッド
-        DrawScreenBlood();
+        m_bloodSystem->DrawScreenBlood(m_outputWidth, m_outputHeight);
+        m_bloodSystem->DrawBloodDecals(viewMatrix, projectionMatrix, m_player->GetPosition());
+        m_gpuParticles->Draw(viewMatrix, projectionMatrix, m_player->GetPosition());
+        
+
         // UI描画
         DrawUI();
     }
@@ -6615,7 +6641,8 @@ void Game::UpdatePlaying()
             m_gloryKillTargetEnemy->corpseTimer = 3.0f;
 
             // スクリーンブラッド
-            SpawnScreenBlood(10, 1.0f);
+            m_bloodSystem->OnGloryKill(m_gloryKillTargetEnemy->position);
+            m_gpuParticles->Emit(m_gloryKillTargetEnemy->position, 400, 10.0f);
 
             // HP回復（最大HPを超えないように）
             int currentHP = m_player->GetHealth();
@@ -6657,7 +6684,7 @@ void Game::UpdatePlaying()
             
             // 血しぶきパーティクル（大量）
             DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
-            m_particleSystem->CreateBloodEffect(m_gloryKillTargetEnemy->position, upDir, 800);
+            //m_particleSystem->CreateBloodEffect(m_gloryKillTargetEnemy->position, upDir, 800);
 
             // グローリーキル腕アニメーション開始（横からこめかみへ）
             m_gloryKillArmAnimActive = true;
@@ -7293,11 +7320,11 @@ void Game::UpdatePlaying()
                             hitEnemy->bloodDirection = shotDir;
 
                             // 血のエフェクト（後方）
-                            m_particleSystem->CreateBloodEffect(hitEnemy->headPosition, shotDir, 300);
+                            //m_particleSystem->CreateBloodEffect(hitEnemy->headPosition, shotDir, 300);
 
                             // 血のエフェクト（上方）
                             DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
-                            m_particleSystem->CreateBloodEffect(hitEnemy->headPosition, upDir, 300);
+                            //m_particleSystem->CreateBloodEffect(hitEnemy->headPosition, upDir, 300);
 
                             // 放射状の血
                             for (int i = 0; i < 12; i++)
@@ -7307,7 +7334,7 @@ void Game::UpdatePlaying()
                                 radialDir.x = cosf(angle);
                                 radialDir.y = 0.3f + (rand() % 100) / 200.0f;
                                 radialDir.z = sinf(angle);
-                                m_particleSystem->CreateBloodEffect(hitEnemy->headPosition, radialDir, 50);
+                                //m_particleSystem->CreateBloodEffect(hitEnemy->headPosition, radialDir, 50);
                             }
 
                             // ランダム方向の血
@@ -7317,10 +7344,10 @@ void Game::UpdatePlaying()
                                 randomDir.x = ((rand() % 200) - 100) / 100.0f;
                                 randomDir.y = ((rand() % 100) + 50) / 100.0f;
                                 randomDir.z = ((rand() % 200) - 100) / 100.0f;
-                                m_particleSystem->CreateBloodEffect(hitEnemy->headPosition, randomDir, 50);
+                                //m_particleSystem->CreateBloodEffect(hitEnemy->headPosition, randomDir, 50);
                             }
 
-                            m_particleSystem->CreateExplosion(hitEnemy->headPosition);
+                            //m_particleSystem->CreateExplosion(hitEnemy->headPosition);
 
                             // ダメージ
                             if (hitEnemy->type == EnemyType::BOSS || hitEnemy->type == EnemyType::MIDBOSS || hitEnemy->type == EnemyType::TANK)
@@ -7422,6 +7449,8 @@ void Game::UpdatePlaying()
                                 }
                                 m_particleSystem->CreateExplosion(rayResult.hitPoint);
 
+                                m_bloodSystem->OnEnemyKilled(hitEnemy->position, m_player->GetPosition());
+                                m_gpuParticles->Emit(hitEnemy->position, 150, 6.0f);
                                 SpawnGibs(hitEnemy->position, 5, 10.0f);
 
                                 float knockbackPower = 10.0f;
@@ -7481,18 +7510,8 @@ void Game::UpdatePlaying()
                                 // ===  死んだ瞬間に物理ボディを削除 ===
                                 RemoveEnemyPhysicsBody(hitEnemy->id);
 
-                                // スクリーンブラッド（近距離ほど多い）
-                                {
-                                    DirectX::XMFLOAT3 pPos = m_player->GetPosition();
-                                    float bx = hitEnemy->position.x - pPos.x;
-                                    float bz = hitEnemy->position.z - pPos.z;
-                                    float bDist = sqrtf(bx * bx + bz * bz);
-                                    if (bDist < 8.0f)
-                                    {
-                                        float intensity = 1.0f - (bDist / 8.0f);
-                                        SpawnScreenBlood((int)(3 + intensity * 8), intensity);
-                                    }
-                                }
+                                m_bloodSystem->OnEnemyKilled(hitEnemy->position, m_player->GetPosition());
+                                m_gpuParticles->Emit(hitEnemy->position, 150, 6.0f);
 
                                 // MIDBOSSが死んだらビーム停止
                                 if (hitEnemy->type == EnemyType::MIDBOSS &&
@@ -7544,28 +7563,15 @@ void Game::UpdatePlaying()
                     {
                         // 敵に当たらなかった（壁など）
                        /* //OutputDebugStringA("[BULLET] Hit wall or object\n");*/
+                       // 敵に当たらなかった（壁など）→ 壁に血痕を貼る
+                     
                     }
                 }
                 else
                 {
                     // 何にも当たらなかった
-                    ////OutputDebugStringA("[BULLET] Complete miss\n");
-                    //// === デバッグ: 死亡判定に入らなかった ===
-                    ////OutputDebugStringA("[DEBUG] NOT entering death check (HP > 0)\n");
-
-                    // 何にも当たらなかった → 100m先まで
-                    BulletTrace trace;
-                    trace.start = rayStart;
-                    trace.end = {
-                        rayStart.x + shotDir.x * 100.0f,
-                        rayStart.y + shotDir.y * 100.0f,
-                        rayStart.z + shotDir.z * 100.0f
-                    };
-                    trace.lifetime = 0.1f;
-                    trace.maxLifetime = 0.1f;
-                    trace.width = 0.04f;
-                    trace.color = { 1.0f, 0.6f, 0.0f, 0.5f };
-                    m_bulletTraces.push_back(trace);
+                    // 法線がほぼ水平 → 壁ヒット
+                    
                 }
             }
 }
@@ -7667,7 +7673,8 @@ void Game::UpdatePlaying()
 
     m_particleSystem->Update(deltaTime);
 
-    UpdateScreenBlood(deltaTime);
+    m_bloodSystem->Update(deltaTime);
+    m_gpuParticles->Update(deltaTime);
 
     //  グローリーキル中は敵の更新を停止
     if (!m_gloryKillCameraActive)
@@ -7790,11 +7797,11 @@ void Game::UpdatePlaying()
             }
 
             // 血を噴出（保存した弾の方向を使う）
-            m_particleSystem->CreateBloodEffect(
-                neckPosition,
-                enemy.bloodDirection,  //   弾が飛んできた方向
-                3
-            );
+            //m_particleSystem->CreateBloodEffect(
+            //    neckPosition,
+            //    enemy.bloodDirection,  //   弾が飛んできた方向
+            //    3
+            //);
         }
     }
     UpdatePhysics(deltaTime);
@@ -8127,7 +8134,8 @@ void Game::UpdatePlaying()
                         if (bDist < 8.0f)
                         {
                             float intensity = 1.0f - (bDist / 8.0f);
-                            SpawnScreenBlood((int)(3 + intensity * 8), intensity);
+                            m_bloodSystem->OnExplosionKill(enemy.position, m_player->GetPosition());
+                            m_gpuParticles->Emit(enemy.position, 250, 8.0f);
                         }
                     }
 
@@ -8168,7 +8176,8 @@ void Game::UpdatePlaying()
                         enemy.corpseTimer = 3.0f;
                         RemoveEnemyPhysicsBody(enemy.id);
                         // スクリーンブラッド
-                        SpawnScreenBlood(8, 0.9f);
+                        m_bloodSystem->OnMeleeKill(enemy.position);
+                        m_gpuParticles->Emit(enemy.position, 200, 7.0f);
                         m_statKills++;       //  総キル
                         m_statMeleeKills++;  //  近接キル
 
@@ -8179,8 +8188,8 @@ void Game::UpdatePlaying()
             }
 
             DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
-            m_particleSystem->CreateBloodEffect(blastCenter, upDir, 300);
-            m_particleSystem->CreateExplosion(blastCenter);
+            //m_particleSystem->CreateBloodEffect(blastCenter, upDir, 300);
+            //m_particleSystem->CreateExplosion(blastCenter);
 
             /*char buf[128];
             sprintf_s(buf, "[CHARGE] AOE EXPLOSION! %d grunts obliterated!\n", killCount);*/
@@ -8334,7 +8343,7 @@ void Game::UpdatePlaying()
 
                     // 血エフェクト
                     DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
-                    m_particleSystem->CreateBloodEffect(enemy.position, upDir, 80);
+                    //m_particleSystem->CreateBloodEffect(enemy.position, upDir, 80);
 
                     // カメラシェイク（軽め）
                     m_cameraShake = 0.15f;
@@ -8525,7 +8534,7 @@ void Game::UpdatePlaying()
                 // 地面エフェクトはここで後で追加（Effekseer）
                 if (m_particleSystem)
                 {
-                    m_particleSystem->CreateExplosion(enemy.position);
+                    //m_particleSystem->CreateExplosion(enemy.position);
                 }
 
                 //  衝撃波エフェクト追加
@@ -8832,8 +8841,8 @@ void Game::UpdatePlaying()
                 if (m_particleSystem)
                 {
                     XMFLOAT3 sparkDir(0.0f, 1.0f, 0.0f);
-                    m_particleSystem->CreateBloodEffect(
-                        enemy.position, sparkDir, 30);
+                    /*m_particleSystem->CreateBloodEffect(
+                        enemy.position, sparkDir, 30);*/
                 }
 
                 //OutputDebugStringA("[PARRY] === TIMING PARRY! ===\n");
@@ -10607,11 +10616,11 @@ void Game::PerformMeleeAttack()
             {
                 XMFLOAT3 bloodDir(0.0f, 1.0f, 0.0f);
 
-                m_particleSystem->CreateBloodEffect(
+                /*m_particleSystem->CreateBloodEffect(
                     hitEnemy->position,
                     bloodDir,
                     150
-                );
+                );*/
             }
         }
         else
@@ -10642,11 +10651,11 @@ void Game::PerformMeleeAttack()
             {
                 XMFLOAT3 bloodDir(0.0f, 1.0f, 0.0f);
 
-                m_particleSystem->CreateBloodEffect(
-                    hitEnemy->position,
-                    bloodDir,
-                    30  // 少量
-                );
+                //m_particleSystem->CreateBloodEffect(
+                //    hitEnemy->position,
+                //    bloodDir,
+                //    30  // 少量
+                //);
             }
         }
     }
@@ -10851,114 +10860,4 @@ void Game::DrawFullscreenQuad()
     // シェーダーをクリア
     m_d3dContext->VSSetShader(nullptr, nullptr, 0);
     m_d3dContext->PSSetShader(nullptr, nullptr, 0);
-}
-
-
-// === スクリーンブラッド発生 ===
-void Game::SpawnScreenBlood(int count, float intensity)
-{
-    for (int i = 0; i < count; i++)
-    {
-        ScreenBlood blood;
-
-        // 画面の端寄りにランダム配置（中央は避ける）
-        float angle = ((float)rand() / RAND_MAX) * 6.28318f;
-        float dist = 0.3f + ((float)rand() / RAND_MAX) * 0.5f;  // 中央から離れた位置
-        blood.x = 0.5f + cosf(angle) * dist;
-        blood.y = 0.5f + sinf(angle) * dist;
-
-        blood.size = (0.1f + ((float)rand() / RAND_MAX) * 0.25f) * intensity;
-        blood.alpha = 0.7f + ((float)rand() / RAND_MAX) * 0.3f;
-        blood.lifetime = 1.5f + ((float)rand() / RAND_MAX) * 1.0f;
-        blood.maxLifetime = blood.lifetime;
-        blood.rotation = ((float)rand() / RAND_MAX) * 6.28318f;
-
-        m_screenBloods.push_back(blood);
-    }
-}
-
-// === スクリーンブラッド更新 ===
-void Game::UpdateScreenBlood(float deltaTime)
-{
-    for (auto it = m_screenBloods.begin(); it != m_screenBloods.end();)
-    {
-        it->lifetime -= deltaTime;
-
-        // 残り寿命に応じてフェードアウト
-        float t = it->lifetime / it->maxLifetime;
-        it->alpha = t * t;  // 二乗で急速にフェード
-
-        // 少し下に垂れる（重力演出）
-        it->y += deltaTime * 0.02f;
-
-        if (it->lifetime <= 0.0f)
-            it = m_screenBloods.erase(it);
-        else
-            ++it;
-    }
-}
-
-// === スクリーンブラッド描画（2Dオーバーレイ）===
-void Game::DrawScreenBlood()
-{
-    if (m_screenBloods.empty()) return;
-
-    auto context = m_d3dContext.Get();
-
-    // 2D用の行列（画面座標）
-    DirectX::XMMATRIX proj = DirectX::XMMatrixOrthographicOffCenterLH(
-        0.0f, (float)m_outputWidth, (float)m_outputHeight, 0.0f, 0.0f, 1.0f);
-
-    m_particleEffect->SetView(DirectX::XMMatrixIdentity());
-    m_particleEffect->SetProjection(proj);
-    m_particleEffect->SetWorld(DirectX::XMMatrixIdentity());
-    m_particleEffect->Apply(context);
-    context->IASetInputLayout(m_particleInputLayout.Get());
-
-    // 加算ブレンド（血が重なると濃くなる）
-    float blendFactor[4] = { 0, 0, 0, 0 };
-    context->OMSetBlendState(m_states->AlphaBlend(), blendFactor, 0xFFFFFFFF);
-    context->OMSetDepthStencilState(m_states->DepthNone(), 0);
-
-    auto batch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColorTexture>>(context);
-    batch->Begin();
-
-    for (const auto& blood : m_screenBloods)
-    {
-        float px = blood.x * m_outputWidth;
-        float py = blood.y * m_outputHeight;
-        float s = blood.size * m_outputWidth * 0.5f;
-
-        // 回転付きの4頂点
-        float c = cosf(blood.rotation);
-        float sn = sinf(blood.rotation);
-
-        DirectX::XMFLOAT4 col(0.4f, 0.0f, 0.0f, blood.alpha);
-
-        // 回転を適用した4コーナー
-        auto rotPt = [&](float lx, float ly) -> DirectX::XMFLOAT3 {
-            return DirectX::XMFLOAT3(
-                px + (lx * c - ly * sn) * s,
-                py + (lx * sn + ly * c) * s,
-                0.0f);
-            };
-
-        DirectX::XMFLOAT3 tl = rotPt(-1, -1);
-        DirectX::XMFLOAT3 tr = rotPt(1, -1);
-        DirectX::XMFLOAT3 bl = rotPt(-1, 1);
-        DirectX::XMFLOAT3 br = rotPt(1, 1);
-
-        DirectX::VertexPositionColorTexture vTL(tl, col, DirectX::XMFLOAT2(0, 0));
-        DirectX::VertexPositionColorTexture vTR(tr, col, DirectX::XMFLOAT2(1, 0));
-        DirectX::VertexPositionColorTexture vBL(bl, col, DirectX::XMFLOAT2(0, 1));
-        DirectX::VertexPositionColorTexture vBR(br, col, DirectX::XMFLOAT2(1, 1));
-
-        batch->DrawTriangle(vTL, vTR, vBL);
-        batch->DrawTriangle(vTR, vBR, vBL);
-    }
-
-    batch->End();
-
-    context->OMSetBlendState(nullptr, blendFactor, 0xFFFFFFFF);
-    context->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 }
