@@ -11,7 +11,7 @@ Player::Player() :
     m_points(500),
     m_isDamaged(false),
     m_damageTimer(0.0f),
-    m_mouseCaptured(false),
+    m_mouseCaptured(true),
     m_firstMouse(true),
     m_lastMouseX(0),
     m_lastMouseY(0),
@@ -22,6 +22,14 @@ Player::Player() :
 // Update - メイン更新処理
 void Player::Update(HWND window)
 {
+    //  初回フレームでカーソルを消す
+    static bool firstFrame = true;
+    if (firstFrame && m_mouseCaptured)
+    {
+        ShowCursor(FALSE);
+        firstFrame = false;
+    }
+
     // 移動処理
     UpdateMovement();
 
@@ -210,7 +218,7 @@ void Player::Draw(
 // TakeDamage - ダメージを受ける
 bool Player::TakeDamage(int damage)
 {
-    return false;
+    //return false;
 
 
     // 無敵時間中はダメージなし

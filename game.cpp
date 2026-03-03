@@ -1,4 +1,5 @@
 // Game.cpp - 実装（基盤部分）
+
 #include "Game.h"
 #include <string>
 #include <d3dcompiler.h>
@@ -57,6 +58,7 @@ Game::Game() noexcept :
     m_particleSystem(std::make_unique<ParticleSystem>()),
     m_waveManager(std::make_unique<WaveManager>()),
     m_styleRank(std::make_unique<StyleRankSystem>()),
+    m_rankingSystem(std::make_unique<RankingSystem>()),
     m_player(std::make_unique<Player>()),
     m_uiSystem(std::make_unique<UISystem>(1280, 720)),
     m_shadow(nullptr),
@@ -835,6 +837,10 @@ void Game::Update()
     case GameState::GAMEOVER:
         UpdateGameOver();
         break;
+
+    case GameState::RANKING:
+        UpdateRanking();
+        break;
     }
 
     UpdateFade();
@@ -1532,6 +1538,20 @@ void Game::CreateRenderResources()
         }
     }
 
+    {
+        // 充血ビネットテクスチャ読み込み
+        HRESULT hr = DirectX::CreateWICTextureFromFile(
+            m_d3dDevice.Get(),                        // デバイス
+            L"Assets/Texture/low_health_vignette.png", // ファイルパス
+            nullptr,                                   // テクスチャリソース（不要）
+            m_lowHealthVignetteSRV.GetAddressOf()      // SRV（シェーダーに渡す用）
+        );
+        if (SUCCEEDED(hr))
+            OutputDebugStringA("[Game] Low health vignette texture loaded!\n");
+        else
+            OutputDebugStringA("[Game] WARNING: low_health_vignette.png not found!\n");
+    }
+
     //  === MapSystem   初期化 ===
     m_mapSystem = std::make_unique<MapSystem>();
     if (!m_mapSystem->Initialize(m_d3dContext.Get(), m_d3dDevice.Get()))
@@ -1541,6 +1561,22 @@ void Game::CreateRenderResources()
     else
     {
         m_mapSystem->CreateDefaultMap();
+
+        //  FBXマップ読み込み
+        if (m_mapSystem->LoadMapFBX(
+            "Assets/Models/Map/Market AL_DANUBE.fbx",
+            L"Assets/Models/Map/textures",
+            1.0f))
+        {
+            OutputDebugStringA("FBX Map loaded!\n");
+            //  既存プリミティブも描画する（床・壁を残す）
+            m_mapSystem->SetDrawPrimitives(false);
+            m_mapSystem->SetMapTransform(
+                XMFLOAT3(0.0f, -0.1f, 0.0f),
+                0.0f,
+                0.005f
+            );
+        }
         
         
         //OutputDebugStringA("Game::CreateRenderResources - MapSystem initialized successfully\n");
@@ -4827,6 +4863,15 @@ void Game::UpdateTitle()
     {
         ResetGame();
         m_gameState = GameState::PLAYING;
+        
+    }
+
+    // Lキーでランキング画面
+    if (GetAsyncKeyState('L') & 0x8000)
+    {
+        m_rankingTimer = 0.0f;
+        m_newRecordRank = -1;
+        m_gameState = GameState::RANKING;
     }
 }
 
@@ -5111,6 +5156,9 @@ void Game::Render()
     case GameState::GAMEOVER:
         RenderGameOver();
         break;
+    case GameState::RANKING:
+        RenderRanking();
+        break;
     }
 
     RenderFade();
@@ -5245,7 +5293,7 @@ void Game::RenderPlaying()
         //  深度テストと深度書き込みを有効化
         m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 
-        DrawBillboard();
+        //DrawBillboard();
         DrawWeapon();
         DrawShield();
 
@@ -5506,7 +5554,7 @@ void Game::RenderPlaying()
         // 3D描画（優先順位順）
         //DrawParticles();
         DrawEnemies(viewMatrix, projectionMatrix);
-        DrawBillboard();
+        //DrawBillboard();
         DrawWeapon();
         DrawShield();
 
@@ -5664,11 +5712,9 @@ void Game::RenderPlaying()
         DrawScorePopups();
     }
 
-    // ダメージエフェクト（ブラーの上に重ねる）
-    if (m_player->IsDamaged())
-    {
-        RenderDamageFlash();
-    }
+
+    //  瀕死日ネット
+    RenderLowHealthVignette();
 
     //  スピードライン
     RenderSpeedLines();
@@ -6343,14 +6389,28 @@ void Game::DrawUI()
 void Game::UpdatePlaying()
 {
 
-
-    // F1キーでデバッグウィンドウ切り替え
+    \
+    // F1キーでデバッグウィンドウ切り替え + マウスキャプチャ連動
     static bool f1Pressed = false;
     if (GetAsyncKeyState(VK_F1) & 0x8000)
     {
         if (!f1Pressed)
         {
             m_showDebugWindow = !m_showDebugWindow;
+
+            if (m_showDebugWindow)
+            {
+                // ImGui表示 → カーソル出す（UI操作用）
+                m_player->SetMouseCaptured(false);
+                ShowCursor(TRUE);
+            }
+            else
+            {
+                // ImGui閉じる → カーソル消す（FPS視点に戻る）
+                m_player->SetMouseCaptured(true);
+                ShowCursor(FALSE);
+            }
+
             f1Pressed = true;
         }
     }
@@ -6812,6 +6872,13 @@ void Game::UpdatePlaying()
     if (m_mapSystem && m_mapSystem->CheckCollision(testPositionZ, playerRadius))
     {
         newPosition.z = oldPosition.z;
+    }
+
+    //  床の高さに合わせてY座標を更新
+    if (m_mapSystem)
+    {
+        float floorY = m_mapSystem->GetFloorHeight(newPosition.x, newPosition.z);
+        newPosition.y = floorY + 1.8f;  // 1.8 = 目の高さ
     }
 
     m_player->SetPosition(newPosition);
@@ -7517,7 +7584,11 @@ void Game::UpdatePlaying()
                                 hitEnemy->isAlive = false;
                                 hitEnemy->currentAnimation = "Death";
                                 hitEnemy->animationTime = 0.0f;
-                                hitEnemy->corpseTimer = 5.0f;
+                                // 変更後（ボスは早く消す）:
+                                if (hitEnemy->type == EnemyType::BOSS || hitEnemy->type == EnemyType::MIDBOSS)
+                                    hitEnemy->corpseTimer = 2.0f;  // ボスは2秒で消す
+                                else
+                                    hitEnemy->corpseTimer = 5.0f;
 
                                 // ===  死んだ瞬間に物理ボディを削除 ===
                                 RemoveEnemyPhysicsBody(hitEnemy->id);
@@ -7826,6 +7897,19 @@ void Game::UpdatePlaying()
 
     //  ウェーブ管理
     m_waveManager->Update(1.0f / 60.0f, m_player->GetPosition(), m_enemySystem.get());
+
+    //  全敵のY座標を床の高さに合わせる
+    if (m_mapSystem)
+    {
+        for (auto& enemy : m_enemySystem->GetEnemiesMutable())
+        {
+            if (enemy.isAlive)
+            {
+                enemy.position.y = m_mapSystem->GetFloorHeight(
+                    enemy.position.x, enemy.position.z);
+            }
+        }
+    }
 
     // ボススポーンエフェクト
     if (m_effectBossSpawn != nullptr && m_effekseerManager != nullptr)
@@ -8540,10 +8624,7 @@ void Game::UpdatePlaying()
                     }
                     else if (m_shieldState == ShieldState::Guarding)
                     {
-                        // ガード：ダメージ軽減
-                        float reduced = slamDamage * (1.0f - m_guardDamageReduction);
-                        m_statDamageTaken += (int)reduced;  //  被ダメ記録
-                        bool died = m_player->TakeDamage((int)reduced);
+                        // ガード：HPダメージなし、盾HPのみ消費
                         m_shieldHP -= slamDamage * 0.5f;
                         m_shieldRegenDelayTimer = m_shieldRegenDelay;
                         m_cameraShake = 0.1f;
@@ -8555,9 +8636,6 @@ void Game::UpdatePlaying()
                             m_shieldState = ShieldState::Broken;
                             m_shieldBrokenTimer = m_shieldBrokenDuration;
                         }
-                        if (died) m_gameState = GameState::GAMEOVER;
-
-                        //OutputDebugStringA("[BOSS] JUMP SLAM GUARDED!\n");
                     }
                     else
                     {
@@ -8774,18 +8852,13 @@ void Game::UpdatePlaying()
                     }
                     else if (m_shieldState == ShieldState::Parrying && !enemy.bossBeamParriable)
                     {
-                        // 赤ビーム → パリィ不可、ガードに格下げ
-                        float reduced = frameDamage * (1.0f - m_guardDamageReduction);
-                        m_statDamageTaken += (int)(std::max)(1.0f, reduced);  // 被ダメ
-                        m_player->TakeDamage((int)(std::max)(1.0f, reduced));
+                        // 赤ビーム：パリィ不可→ガード扱い、HPダメージなし
                         m_shieldHP -= frameDamage * 0.3f;
                         m_shieldRegenDelayTimer = m_shieldRegenDelay;
                     }
                     else if (m_shieldState == ShieldState::Guarding)
                     {
-                        float reduced = frameDamage * (1.0f - m_guardDamageReduction);
-                        m_statDamageTaken += (int)(std::max)(1.0f, reduced);  //被ダメ
-                        m_player->TakeDamage((int)(std::max)(1.0f, reduced));
+                        // ガード：HPダメージなし、盾HPのみ消費
                         m_shieldHP -= frameDamage * 0.3f;
                         m_shieldRegenDelayTimer = m_shieldRegenDelay;
 
@@ -8899,7 +8972,7 @@ void Game::UpdatePlaying()
                 //OutputDebugStringA("[PARRY] === TIMING PARRY! ===\n");
                 break;
             }
-            else if(m_shieldState == ShieldState::Guarding)
+            else if (m_shieldState == ShieldState::Guarding)
             {
                 float rawDamage;
                 switch (enemy.type)
@@ -8908,38 +8981,21 @@ void Game::UpdatePlaying()
                 case EnemyType::TANK:   rawDamage = 25.0f; break;
                 default:                rawDamage = 10.0f; break;
                 }
-                rawDamage *= enemy.damageMultiplier;  //  ウェーブ倍率
+                rawDamage *= enemy.damageMultiplier;
 
-                float reducedDamage = rawDamage * (1.0f - m_guardDamageReduction);
-                m_statDamageTaken += (int)reducedDamage;  //  被ダメ記録
-                bool died = m_player->TakeDamage((int)reducedDamage);
-
-                // シールドHP消費
-                m_shieldHP -= rawDamage * 0.5f;  // 元ダメージの半分をシールドから
+                // // HPダメージなし！盾HPのみ消費
+                m_shieldHP -= rawDamage * 0.5f;
                 m_shieldRegenDelayTimer = m_shieldRegenDelay;
 
-                // カメラ揺れ（パリィより小さめ）
                 m_cameraShake = 0.05f;
                 m_cameraShakeTimer = 0.1f;
 
-                /*char buf[128];
-                sprintf_s(buf, "[GUARD] Blocked! Damage: %.0f -> %.0f, ShieldHP: %.0f/%.0f\n",
-                    rawDamage, reducedDamage, m_shieldHP, m_shieldMaxHP);*/
-                //OutputDebugStringA(buf);
-
-                // シールド破壊チェック
                 if (m_shieldHP <= 0.0f)
                 {
                     m_shieldHP = 0.0f;
                     m_shieldState = ShieldState::Broken;
                     m_shieldBrokenTimer = m_shieldBrokenDuration;
                     m_isGuarding = false;
-                    //OutputDebugStringA("[SHIELD] === SHIELD BROKEN! ===\n");
-                }
-
-                if (died)
-                {
-                    m_gameState = GameState::GAMEOVER;
                 }
                 break;
             }
@@ -9189,9 +9245,14 @@ void Game::ResetGame()
     // === プレイヤー ===
     m_player->SetHealth(100);
     m_healthPickups.clear();     //  アイテムもリセット
+    m_rankingSaved = false;
+    m_nameInputActive = false;
+    m_nameLength = 0;
+    m_nameKeyWasDown = false;
     m_pickupSpawnTimer = 0.0f;   // 
     m_scorePopups.clear();
-    m_player->SetPosition(DirectX::XMFLOAT3(0.0f, 1.8f, 0.0f));
+    m_player->SetPosition(DirectX::XMFLOAT3(0.0f, 1.8f, -0.5f));  // コンストラクタと同じ初期位置
+    m_player->SetRotation(DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f));   // 向きも正面にリセット
     m_player->GetPointsRef() = 500;  // 初期ポイント
 
     // === 敵を全消去 ===
@@ -9334,6 +9395,14 @@ void Game::UpdateGameOver()
         // カウントアップ初期化
         for (int i = 0; i < 9; i++)
             m_goStatCountUp[i] = 0.0f;
+
+        // === 名前入力の準備（まだ保存しない） ===
+        if (!m_rankingSaved && !m_nameInputActive)
+        {
+            memset(m_nameBuffer, 0, sizeof(m_nameBuffer));
+            m_nameLength = 0;
+            m_nameKeyTimer = 0.0f;
+        }
     }
 
     // スコアカウントアップ演出（1.5秒後から2秒かけて0→最終スコア）
@@ -9376,6 +9445,125 @@ void Game::UpdateGameOver()
         m_gameOverNoiseT = 1.0f;  // 完了
     }
 
+    // =============================================
+    // 名前入力の処理（4.5秒後に開始）
+    // =============================================
+    if (m_gameOverTimer > 4.5f && !m_rankingSaved)
+    {
+        // --- 名前入力モード開始 ---
+        if (!m_nameInputActive)
+        {
+            m_nameInputActive = true;
+            memset(m_nameBuffer, 0, sizeof(m_nameBuffer));
+            m_nameLength = 0;
+            m_nameKeyWasDown = false;
+            OutputDebugStringA("[RANKING] Name input started\n");
+        }
+
+        // --- 今フレームで何かキーが押されてるか調べる ---
+        bool anyKeyDown = false;
+        int pressedKey = 0;         // 押されたキーコード
+        bool isBackspace = false;
+        bool isEnter = false;
+
+        // Enter チェック
+        if (GetAsyncKeyState(VK_RETURN) & 0x8000)
+        {
+            anyKeyDown = true;
+            isEnter = true;
+        }
+
+        // Backspace チェック
+        if (GetAsyncKeyState(VK_BACK) & 0x8000)
+        {
+            anyKeyDown = true;
+            isBackspace = true;
+        }
+
+        // A-Z チェック
+        if (!anyKeyDown)
+        {
+            for (int key = 'A'; key <= 'Z'; key++)
+            {
+                if (GetAsyncKeyState(key) & 0x8000)
+                {
+                    anyKeyDown = true;
+                    pressedKey = key;
+                    break;
+                }
+            }
+        }
+
+        // 0-9 チェック
+        if (!anyKeyDown)
+        {
+            for (int key = '0'; key <= '9'; key++)
+            {
+                if (GetAsyncKeyState(key) & 0x8000)
+                {
+                    anyKeyDown = true;
+                    pressedKey = key;
+                    break;
+                }
+            }
+        }
+
+        // --- 「押した瞬間」だけ反応する ---
+        // 前フレームで押されてなくて、今フレームで押された = 新規入力
+        if (anyKeyDown && !m_nameKeyWasDown)
+        {
+            if (isEnter)
+            {
+                // 名前が空なら "NONAME" をセット
+                if (m_nameLength == 0)
+                {
+                    strcpy_s(m_nameBuffer, "NONAME");
+                    m_nameLength = 6;
+                }
+
+                // ランキングに保存
+                RankingEntry entry;
+                entry.score = m_goTotalScore;
+                entry.wave = m_gameOverWave;
+                entry.kills = m_goKills;
+                entry.headshots = m_goHeadshots;
+                entry.rank = m_gameOverRank;
+                entry.survivalTime = m_goSurvivalTime;
+                strcpy_s(entry.name, m_nameBuffer);
+
+                m_newRecordRank = m_rankingSystem->AddEntry(entry);
+                m_rankingSaved = true;
+                m_nameInputActive = false;
+
+                char buf[128];
+                sprintf_s(buf, "[RANKING] Saved! Name: %s, Rank: %d\n",
+                    m_nameBuffer, m_newRecordRank + 1);
+                OutputDebugStringA(buf);
+            }
+            else if (isBackspace)
+            {
+                // 1文字削除
+                if (m_nameLength > 0)
+                {
+                    m_nameLength--;
+                    m_nameBuffer[m_nameLength] = '\0';
+                }
+            }
+            else if (pressedKey != 0 && m_nameLength < 15)
+            {
+                // 文字追加（A-Z or 0-9）
+                m_nameBuffer[m_nameLength] = (char)pressedKey;
+                m_nameLength++;
+                m_nameBuffer[m_nameLength] = '\0';
+            }
+        }
+
+        // --- 今フレームの状態を記録（次フレームの比較用） ---
+        m_nameKeyWasDown = anyKeyDown;
+
+        return;  // 名前入力中は R/L キーをブロック
+    }
+
     // 2.5秒経過後にRキーでリスタート可能（誤操作防止）
     if (m_gameOverTimer > 4.5f && (GetAsyncKeyState('R') & 0x8000))
     {
@@ -9387,6 +9575,15 @@ void Game::UpdateGameOver()
         m_gameOverRank = 0;
         m_gameOverNoiseT = 0.0f;
         m_gameState = GameState::TITLE;
+
+       
+    }
+
+    // Lキーでランキング画面へ
+    if (m_gameOverTimer > 4.5f && (GetAsyncKeyState('L') & 0x8000))
+    {
+        m_rankingTimer = 0.0f;
+        m_gameState = GameState::RANKING;
     }
 }
 
@@ -9455,6 +9652,80 @@ void Game::RenderDamageFlash()
 
 
     primitiveBatch->End();
+}
+
+void Game::RenderLowHealthVignette()
+{
+    // テクスチャが読み込めていなければスキップ
+    if (!m_lowHealthVignetteSRV || !m_player) return;
+
+    // === HP比率を計算 ===
+    int   hp = m_player->GetHealth();
+    int   maxHp = 100;  // 最大HPに合わせて変更してね
+    float ratio = (float)hp / (float)maxHp;  // 1.0=満タン, 0.0=瀕死
+
+    // HP70%以上なら何も表示しない
+    if (ratio > 0.8f) return;
+
+    // === 強度を計算（0.0?1.0） ===
+    // HP70%で0.0、HP0%で1.0
+    float intensity = 1.0f - (ratio / 0.7f);
+    if (intensity < 0.0f) intensity = 0.0f;
+    if (intensity > 1.0f) intensity = 1.0f;
+
+    // === 心拍パルス（HP30%以下で発動） ===
+    float pulse = 1.0f;
+    if (ratio < 0.3f)
+    {
+        // 心拍リズム: HP低いほど速い（1.5?3.5Hz）
+        float heartRate = 1.5f + (1.0f - ratio / 0.3f) * 2.0f;
+
+        // sin^8 で鋭い「ドクッ」パルスを作る
+        float t = sinf(m_accumulatedAnimTime * heartRate * 3.14159f);
+        t = t * t;  // sin^2
+        t = t * t;  // sin^4
+        t = t * t;  // sin^8（鋭いスパイク）
+
+        // パルスの振れ幅（HP低いほど大きい）
+        float pulseStrength = 0.15f + (1.0f - ratio / 0.3f) * 0.4f;
+        pulse = 1.0f + t * pulseStrength;
+    }
+
+    // === 最終アルファ ===
+    // intensity（0?1）× pulse（1?1.5くらい）
+    float alpha = intensity * pulse;
+    if (alpha > 1.0f) alpha = 1.0f;
+
+    // === SpriteBatchで画面全体にテクスチャを描画 ===
+    auto context = m_d3dContext.Get();
+
+    // ブレンドステート: アルファブレンド
+    // （テクスチャのアルファ × 頂点カラーのアルファ で合成される）
+    m_spriteBatch->Begin(
+        DirectX::SpriteSortMode_Deferred,   // ソート方式
+        m_states->NonPremultiplied()         // // PNG用（プリマルチプライドじゃない）
+    );
+
+    // 画面全体に描画
+    RECT destRect = { 0, 0, (LONG)m_outputWidth, (LONG)m_outputHeight };
+
+    // 色の調整:
+    // - RGBで赤の濃さを制御
+    // - Aでアルファ（不透明度）を制御
+    DirectX::XMVECTORF32 tintColor = { {
+        1.0f,          // R: そのまま
+        0.0f,          // G: 緑を消す（より赤く）
+        0.0f,          // B: 青を消す
+        alpha * 1.7f  // A: HPに連動（最大85%）
+    } };
+
+    m_spriteBatch->Draw(
+        m_lowHealthVignetteSRV.Get(),  // テクスチャ
+        destRect,                       // 描画先（画面全体）
+        tintColor                       // 色とアルファ
+    );
+
+    m_spriteBatch->End();
 }
 
 //  スピードライン描画 
@@ -10338,7 +10609,7 @@ void Game::RenderGameOver()
         }
 
         // --- Press R to Restart（右パネル下）---
-        if (timer > 4.0f)
+        if (timer > 4.0f && m_rankingSaved)
         {
             float restartT = min((timer - 4.0f) / 0.3f, 1.0f);
             float restartAlpha = EaseOutCubic(restartT);
@@ -10350,6 +10621,89 @@ void Game::RenderGameOver()
             float restartW = DirectX::XMVectorGetX(restartSize);
             m_font->DrawString(m_spriteBatch.get(), L"Press R to Restart",
                 DirectX::XMFLOAT2(rightCX - restartW * 0.5f, panelBot + 15.0f), restartColor);
+        }
+
+        // --- L: RANKING 案内テキスト ---
+        if (timer > 4.0f && m_rankingSaved)
+        {
+            float lT = min((timer - 4.0f) / 0.3f, 1.0f);
+            float lAlpha = EaseOutCubic(lT);
+            float lBlink = (sinf(timer * 2.5f) + 1.0f) * 0.5f;
+            float lFinal = lAlpha * (0.3f + lBlink * 0.5f);
+
+            DirectX::XMVECTORF32 lColor = { 0.8f, 0.6f, 0.2f, lFinal };
+            DirectX::XMVECTOR lSize = m_font->MeasureString(L"L: RANKING");
+            float lW = DirectX::XMVectorGetX(lSize);
+            m_font->DrawString(m_spriteBatch.get(), L"L: RANKING",
+                DirectX::XMFLOAT2(rightCX - lW * 0.5f, panelBot + 40.0f), lColor);
+        }
+
+        // =============================================
+        // 名前入力 UI
+        // =============================================
+        if (m_nameInputActive)
+        {
+            float inputY = panelBot + 75.0f;
+            float inputCenterX = rightCX;
+
+            // --- 入力ボックス背景 ---
+            RECT inputBg = {
+                (LONG)(inputCenterX - 140), (LONG)(inputY - 5),
+                (LONG)(inputCenterX + 140), (LONG)(inputY + 35)
+            };
+            DirectX::XMVECTORF32 bgColor = { 0.0f, 0.0f, 0.0f, 0.7f };
+            m_spriteBatch->Draw(m_whitePixel.Get(), inputBg, bgColor);
+
+            // --- 入力ボックス枠 ---
+            float borderPulse = sinf(timer * 3.0f) * 0.3f + 0.7f;
+            DirectX::XMVECTORF32 borderColor = { 0.9f, 0.6f, 0.1f, borderPulse };
+
+            // 上枠
+            RECT borderTop = { inputBg.left, inputBg.top, inputBg.right, inputBg.top + 2 };
+            m_spriteBatch->Draw(m_whitePixel.Get(), borderTop, borderColor);
+            // 下枠
+            RECT borderBot = { inputBg.left, inputBg.bottom - 2, inputBg.right, inputBg.bottom };
+            m_spriteBatch->Draw(m_whitePixel.Get(), borderBot, borderColor);
+            // 左枠
+            RECT borderL = { inputBg.left, inputBg.top, inputBg.left + 2, inputBg.bottom };
+            m_spriteBatch->Draw(m_whitePixel.Get(), borderL, borderColor);
+            // 右枠
+            RECT borderR = { inputBg.right - 2, inputBg.top, inputBg.right, inputBg.bottom };
+            m_spriteBatch->Draw(m_whitePixel.Get(), borderR, borderColor);
+
+            // --- "ENTER YOUR NAME" ラベル ---
+            DirectX::XMVECTORF32 labelColor = { 1.0f, 0.8f, 0.3f, 1.0f };
+            DirectX::XMVECTOR labelSize = m_font->MeasureString(L"ENTER YOUR NAME");
+            float labelW = DirectX::XMVectorGetX(labelSize);
+            m_font->DrawString(m_spriteBatch.get(), L"ENTER YOUR NAME",
+                DirectX::XMFLOAT2(inputCenterX - labelW * 0.5f, inputY - 28.0f), labelColor);
+
+            // --- 入力テキスト表示 ---
+            wchar_t wideNameBuf[32] = {};
+            for (int c = 0; c < m_nameLength && c < 15; c++)
+                wideNameBuf[c] = (wchar_t)m_nameBuffer[c];
+            wideNameBuf[m_nameLength] = L'\0';
+
+            // 点滅カーソルを追加
+            float cursorBlink = sinf(timer * 6.0f);
+            if (cursorBlink > 0.0f && m_nameLength < 15)
+            {
+                wideNameBuf[m_nameLength] = L'_';
+                wideNameBuf[m_nameLength + 1] = L'\0';
+            }
+
+            DirectX::XMVECTORF32 nameColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+            DirectX::XMVECTOR nameSize = m_font->MeasureString(wideNameBuf);
+            float nameW = DirectX::XMVectorGetX(nameSize);
+            m_font->DrawString(m_spriteBatch.get(), wideNameBuf,
+                DirectX::XMFLOAT2(inputCenterX - nameW * 0.5f, inputY + 3.0f), nameColor);
+
+            // --- "PRESS ENTER TO CONFIRM" ---
+            DirectX::XMVECTORF32 hintColor = { 0.6f, 0.6f, 0.5f, 0.6f + sinf(timer * 2.0f) * 0.2f };
+            DirectX::XMVECTOR hintSize = m_font->MeasureString(L"ENTER: OK    BACKSPACE: DELETE");
+            float hintW = DirectX::XMVectorGetX(hintSize);
+            m_font->DrawString(m_spriteBatch.get(), L"ENTER: OK    BACKSPACE: DELETE",
+                DirectX::XMFLOAT2(inputCenterX - hintW * 0.5f, inputY + 42.0f), hintColor);
         }
 
         m_spriteBatch->End();
@@ -10942,7 +11296,6 @@ void Game::DrawFullscreenQuad()
 // ============================================================
 void Game::SpawnHealthPickup()
 {
-    // 上限チェック
     int activeCount = 0;
     for (auto& p : m_healthPickups)
         if (p.isActive) activeCount++;
@@ -10952,18 +11305,21 @@ void Game::SpawnHealthPickup()
 
     HealthPickup pickup;
 
-    // プレイヤーから8～25m離れたランダム位置
     float angle = ((float)rand() / RAND_MAX) * 6.2832f;
     float dist = 8.0f + ((float)rand() / RAND_MAX) * 17.0f;
 
     pickup.position.x = playerPos.x + cosf(angle) * dist;
-    pickup.position.y = 0.5f;   // 地面から少し浮かせる
+    pickup.position.y = 0.5f;
     pickup.position.z = playerPos.z + sinf(angle) * dist;
 
-    pickup.healAmount = 20 + (rand() % 3) * 5;  // 20, 25, 30 のどれか
+    //  マップ内にクランプ（歩行エリア内のみ）
+    pickup.position.x = (std::max)(-31.0f, (std::min)(42.0f, pickup.position.x));
+    pickup.position.z = (std::max)(-8.0f, (std::min)(22.0f, pickup.position.z));
+
+    pickup.healAmount = 20 + (rand() % 3) * 5;
     pickup.lifetime = 30.0f;
     pickup.maxLifetime = 30.0f;
-    pickup.bobTimer = ((float)rand() / RAND_MAX) * 6.28f;  // ボブ開始位相をバラす
+    pickup.bobTimer = ((float)rand() / RAND_MAX) * 6.28f;
     pickup.spinAngle = 0.0f;
     pickup.isActive = true;
 
@@ -11403,6 +11759,514 @@ void Game::DrawScorePopups()
                 textColor, 0.0f, DirectX::XMFLOAT2(0, 0),
                 DirectX::XMFLOAT2(0.9f * s, 0.9f * s));
         }
+    }
+
+    m_spriteBatch->End();
+}
+
+// =====================================================================
+// UpdateRanking() - ランキング画面の更新
+// 【役割】演出タイマー進行＋キー入力
+// =====================================================================
+// =====================================================================
+// UpdateRanking() - ランキング画面の更新
+// =====================================================================
+void Game::UpdateRanking()
+{
+    m_rankingTimer += 1.0f / 60.0f;
+
+    // ESCキーでタイトルに戻る
+    if (m_rankingTimer > 0.5f && (GetAsyncKeyState(VK_ESCAPE) & 0x8000))
+    {
+        m_gameState = GameState::TITLE;
+        m_rankingTimer = 0.0f;
+    }
+
+    // Rキーでリスタート
+    if (m_rankingTimer > 0.5f && (GetAsyncKeyState('R') & 0x8000))
+    {
+        ResetGame();
+        m_gameOverTimer = 0.0f;
+        m_gameOverScore = 0;
+        m_gameOverWave = 0;
+        m_gameOverCountUp = 0.0f;
+        m_gameOverRank = 0;
+        m_gameOverNoiseT = 0.0f;
+        m_gameState = GameState::TITLE;
+    }
+}
+
+// =====================================================================
+// RenderRanking() - ランキング画面の描画
+// 【修正点】
+//   - テキスト色を明るくして視認性アップ
+//   - NAME列を追加
+//   - テキストに影（シャドウ）を付けて読みやすく
+// =====================================================================
+void Game::RenderRanking()
+{
+    // =============================================
+    // イージング関数
+    // =============================================
+    auto EaseOutQuad = [](float t) -> float {
+        return 1.0f - (1.0f - t) * (1.0f - t);
+        };
+
+    auto EaseOutBack = [](float t) -> float {
+        float c = 1.70158f;
+        float u = t - 1.0f;
+        return 1.0f + (c + 1.0f) * u * u * u + c * u * u;
+        };
+
+    auto EaseOutCubic = [](float t) -> float {
+        float u = 1.0f - t;
+        return 1.0f - u * u * u;
+        };
+
+    auto EaseOutBounce = [](float t) -> float {
+        if (t < 1.0f / 2.75f)
+            return 7.5625f * t * t;
+        else if (t < 2.0f / 2.75f) {
+            t -= 1.5f / 2.75f;
+            return 7.5625f * t * t + 0.75f;
+        }
+        else if (t < 2.5f / 2.75f) {
+            t -= 2.25f / 2.75f;
+            return 7.5625f * t * t + 0.9375f;
+        }
+        else {
+            t -= 2.625f / 2.75f;
+            return 7.5625f * t * t + 0.984375f;
+        }
+        };
+
+    // テキストに影を描くヘルパー（読みやすさ大幅アップ）
+    // 本体の2px右下に黒い影を描いてから本体を描く
+    auto DrawTextWithShadow = [&](DirectX::SpriteFont* font,
+        const wchar_t* text, DirectX::XMFLOAT2 pos,
+        DirectX::XMVECTORF32 color)
+        {
+            // 影（黒・半透明）
+            DirectX::XMVECTORF32 shadowColor = { 0.0f, 0.0f, 0.0f, color.f[3] * 0.8f };
+            font->DrawString(m_spriteBatch.get(), text,
+                DirectX::XMFLOAT2(pos.x + 2.0f, pos.y + 2.0f), shadowColor);
+            // 本体
+            font->DrawString(m_spriteBatch.get(), text, pos, color);
+        };
+
+    float timer = m_rankingTimer;
+    float screenW = (float)m_outputWidth;
+    float screenH = (float)m_outputHeight;
+    float centerX = screenW * 0.5f;
+    float centerY = screenH * 0.5f;
+
+    auto context = m_d3dContext.Get();
+
+    // =============================================
+    // Layer 0: 背景（より濃いビネット）
+    // =============================================
+    {
+        float overlayT = (std::min)(timer / 0.8f, 1.0f);
+        float overlayAlpha = EaseOutQuad(overlayT) * 0.95f;  // // 0.92→0.95 より暗く
+
+        DirectX::XMMATRIX view = DirectX::XMMatrixIdentity();
+        DirectX::XMMATRIX projection = DirectX::XMMatrixOrthographicLH(
+            screenW, screenH, 0.1f, 10.0f);
+
+        m_effect->SetView(view);
+        m_effect->SetProjection(projection);
+        m_effect->SetWorld(DirectX::XMMatrixIdentity());
+        m_effect->SetVertexColorEnabled(true);
+        m_effect->Apply(context);
+        context->IASetInputLayout(m_inputLayout.Get());
+
+        auto primBatch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
+        primBatch->Begin();
+
+        float hw = screenW * 0.5f;
+        float hh = screenH * 0.5f;
+
+        // // 中央もかなり暗くして文字との対比を強くする
+        DirectX::XMFLOAT4 centerColor(0.06f, 0.0f, 0.02f, overlayAlpha * 0.85f);
+        DirectX::XMFLOAT4 edgeColor(0.01f, 0.0f, 0.0f, overlayAlpha);
+
+        DirectX::VertexPositionColor vc(DirectX::XMFLOAT3(0, 0, 1.0f), centerColor);
+        DirectX::VertexPositionColor vTL(DirectX::XMFLOAT3(-hw, hh, 1.0f), edgeColor);
+        DirectX::VertexPositionColor vTR(DirectX::XMFLOAT3(hw, hh, 1.0f), edgeColor);
+        DirectX::VertexPositionColor vBR(DirectX::XMFLOAT3(hw, -hh, 1.0f), edgeColor);
+        DirectX::VertexPositionColor vBL(DirectX::XMFLOAT3(-hw, -hh, 1.0f), edgeColor);
+
+        primBatch->DrawTriangle(vc, vTL, vTR);
+        primBatch->DrawTriangle(vc, vTR, vBR);
+        primBatch->DrawTriangle(vc, vBR, vBL);
+        primBatch->DrawTriangle(vc, vBL, vTL);
+
+        primBatch->End();
+    }
+
+    // =============================================
+    // Layer 1: SpriteBatchで全UI描画
+    // =============================================
+    if (!m_spriteBatch || !m_states || !m_font || !m_whitePixel)
+        return;
+
+    m_spriteBatch->Begin(
+        DirectX::SpriteSortMode_Deferred,
+        m_states->AlphaBlend(),
+        nullptr,
+        m_states->DepthNone()
+    );
+
+    const auto& entries = m_rankingSystem->GetEntries();
+    int entryCount = (int)entries.size();
+
+    // =============================================
+    // 装飾線（上）
+    // =============================================
+    if (timer > 0.2f)
+    {
+        float lineT = (std::min)((timer - 0.2f) / 0.5f, 1.0f);
+        float lineProgress = EaseOutBack(lineT);
+        float lineHalfW = 320.0f * lineProgress;  // // 280→320 少し長く
+        float lineY = 55.0f;
+
+        RECT leftLine = {
+            (LONG)(centerX - lineHalfW), (LONG)lineY,
+            (LONG)centerX, (LONG)(lineY + 2)
+        };
+        RECT rightLine = {
+            (LONG)centerX, (LONG)lineY,
+            (LONG)(centerX + lineHalfW), (LONG)(lineY + 2)
+        };
+
+        // // 色をより明るい赤金に
+        DirectX::XMVECTORF32 lineColor = { 0.9f, 0.3f, 0.05f, 0.95f * lineT };
+        m_spriteBatch->Draw(m_whitePixel.Get(), leftLine, lineColor);
+        m_spriteBatch->Draw(m_whitePixel.Get(), rightLine, lineColor);
+
+        RECT diamond = {
+            (LONG)(centerX - 5), (LONG)(lineY - 4),
+            (LONG)(centerX + 5), (LONG)(lineY + 6)
+        };
+        m_spriteBatch->Draw(m_whitePixel.Get(), diamond, lineColor);
+    }
+
+    // =============================================
+    // タイトル "LEADERBOARD" ? バウンスで落ちてくる
+    // =============================================
+    if (timer > 0.3f && m_fontLarge)
+    {
+        float titleT = (std::min)((timer - 0.3f) / 0.6f, 1.0f);
+        float bounceT = EaseOutBounce(titleT);
+        float titleAlpha = (std::min)((timer - 0.3f) * 4.0f, 1.0f);
+
+        float slideY = (1.0f - bounceT) * -60.0f;
+        float titleY = 65.0f + slideY;
+
+        DirectX::XMVECTOR titleSize = m_fontLarge->MeasureString(L"LEADERBOARD");
+        float titleW = DirectX::XMVectorGetX(titleSize);
+        float titleX = centerX - titleW * 0.5f;
+
+        // // グロー色をより明るく
+        float glowAlpha = titleAlpha * 0.3f;
+        DirectX::XMVECTORF32 glowColor = { 1.0f, 0.3f, 0.0f, glowAlpha };
+        for (int dx = -2; dx <= 2; dx += 4)
+        {
+            for (int dy = -2; dy <= 2; dy += 4)
+            {
+                m_fontLarge->DrawString(m_spriteBatch.get(), L"LEADERBOARD",
+                    DirectX::XMFLOAT2(titleX + dx, titleY + dy), glowColor);
+            }
+        }
+
+        // // 影を追加
+        DirectX::XMVECTORF32 shadowColor = { 0.0f, 0.0f, 0.0f, titleAlpha * 0.7f };
+        m_fontLarge->DrawString(m_spriteBatch.get(), L"LEADERBOARD",
+            DirectX::XMFLOAT2(titleX + 3, titleY + 3), shadowColor);
+
+        // // 本体色を明るいゴールドに
+        DirectX::XMVECTORF32 titleColor = { 1.0f, 0.9f, 0.75f, titleAlpha };
+        m_fontLarge->DrawString(m_spriteBatch.get(), L"LEADERBOARD",
+            DirectX::XMFLOAT2(titleX, titleY), titleColor);
+    }
+
+    // =============================================
+    // 装飾線（タイトルの下）
+    // =============================================
+    if (timer > 0.4f)
+    {
+        float lineT = (std::min)((timer - 0.4f) / 0.5f, 1.0f);
+        float lineProgress = EaseOutBack(lineT);
+        float lineHalfW = 320.0f * lineProgress;
+        float lineY = 115.0f;
+
+        RECT leftLine = {
+            (LONG)(centerX - lineHalfW), (LONG)lineY,
+            (LONG)centerX, (LONG)(lineY + 1)
+        };
+        RECT rightLine = {
+            (LONG)centerX, (LONG)lineY,
+            (LONG)(centerX + lineHalfW), (LONG)(lineY + 1)
+        };
+
+        DirectX::XMVECTORF32 lineColor = { 0.9f, 0.3f, 0.05f, 0.8f * lineT };
+        m_spriteBatch->Draw(m_whitePixel.Get(), leftLine, lineColor);
+        m_spriteBatch->Draw(m_whitePixel.Get(), rightLine, lineColor);
+    }
+
+    // =============================================
+    // ヘッダー行: #  NAME  SCORE  WAVE  KILLS
+    // =============================================
+    if (timer > 0.6f)
+    {
+        float headerAlpha = (std::min)((timer - 0.6f) * 3.0f, 1.0f);
+        // // ヘッダー色をより明るい金色に（白だと内容と紛らわしい）
+        DirectX::XMVECTORF32 headerColor = { 1.0f, 0.75f, 0.35f, headerAlpha * 0.9f };
+
+        float headerY = 130.0f;
+
+        // // 列の配置を変更（NAME列を追加）
+        float colNum = centerX - 310.0f;   // #
+        float colName = centerX - 250.0f;   // NAME  //新規
+        float colScore = centerX - 60.0f;    // SCORE
+        float colWave = centerX + 100.0f;   // WAVE
+        float colKills = centerX + 210.0f;   // KILLS
+
+        DrawTextWithShadow(m_font.get(), L"#",
+            DirectX::XMFLOAT2(colNum, headerY), headerColor);
+        DrawTextWithShadow(m_font.get(), L"NAME",
+            DirectX::XMFLOAT2(colName, headerY), headerColor);
+        DrawTextWithShadow(m_font.get(), L"SCORE",
+            DirectX::XMFLOAT2(colScore, headerY), headerColor);
+        DrawTextWithShadow(m_font.get(), L"WAVE",
+            DirectX::XMFLOAT2(colWave, headerY), headerColor);
+        DrawTextWithShadow(m_font.get(), L"KILLS",
+            DirectX::XMFLOAT2(colKills, headerY), headerColor);
+    }
+
+    // =============================================
+    // 各エントリー
+    // =============================================
+    float entryStartTime = 0.8f;
+    float entryDelay = 0.12f;
+    float entryBaseY = 160.0f;
+    float entryHeight = 42.0f;
+
+    // 列のX座標（ヘッダーと同じ）
+    float colNum = centerX - 310.0f;
+    float colName = centerX - 250.0f;
+    float colScore = centerX - 60.0f;
+    float colWave = centerX + 100.0f;
+    float colKills = centerX + 210.0f;
+
+    for (int i = 0; i < entryCount && i < 10; i++)
+    {
+        float startT = entryStartTime + i * entryDelay;
+
+        if (timer < startT)
+            continue;
+
+        // --- スライドインアニメーション ---
+        float slideT = (std::min)((timer - startT) / 0.5f, 1.0f);
+        float slideProgress = EaseOutCubic(slideT);
+
+        float slideX = (1.0f - slideProgress) * -300.0f;
+        float alpha = slideProgress;
+
+        float rowY = entryBaseY + i * entryHeight;
+
+        bool isNewRecord = (i == m_newRecordRank);
+
+        // --- 背景バー ---
+        {
+            float barAlpha = alpha * 0.25f;  // // 0.15→0.25 バーをより目立たせる
+
+            if (isNewRecord)
+            {
+                float pulse = sinf(timer * 4.0f) * 0.5f + 0.5f;
+                barAlpha = alpha * (0.3f + pulse * 0.2f);
+            }
+
+            if (i == 0)
+                barAlpha = alpha * 0.3f;
+
+            RECT bar = {
+                (LONG)(centerX - 330.0f + slideX), (LONG)(rowY - 2),
+                (LONG)(centerX + 330.0f + slideX), (LONG)(rowY + entryHeight - 8)
+            };
+
+            DirectX::XMVECTORF32 barColor;
+            if (isNewRecord)
+                barColor = { 1.0f, 0.8f, 0.1f, barAlpha };
+            else if (i == 0)
+                barColor = { 1.0f, 0.75f, 0.2f, barAlpha };
+            else if (i == 1)
+                barColor = { 0.75f, 0.75f, 0.85f, barAlpha };
+            else if (i == 2)
+                barColor = { 0.75f, 0.5f, 0.2f, barAlpha };
+            else
+                barColor = { 0.4f, 0.2f, 0.15f, barAlpha };
+
+            m_spriteBatch->Draw(m_whitePixel.Get(), bar, barColor);
+        }
+
+        // --- 順位の色（ 全体的に明るく） ---
+        DirectX::XMVECTORF32 rankNumColor;
+        if (i == 0)
+            rankNumColor = { 1.0f, 0.9f, 0.3f, alpha };      // 1位: 明るい金
+        else if (i == 1)
+            rankNumColor = { 0.9f, 0.9f, 1.0f, alpha };       // 2位: 明るい銀
+        else if (i == 2)
+            rankNumColor = { 1.0f, 0.65f, 0.3f, alpha };      // 3位: 明るい銅
+        else
+            rankNumColor = { 0.85f, 0.8f, 0.7f, alpha };      //  他: 明るいベージュ
+
+        if (isNewRecord)
+        {
+            float pulse = sinf(timer * 5.0f) * 0.5f + 0.5f;
+            rankNumColor = { 1.0f, 0.8f + pulse * 0.2f, 0.2f + pulse * 0.3f, alpha };
+        }
+
+        // --- テキスト色（ 明るく） ---
+        DirectX::XMVECTORF32 textColor;
+        if (isNewRecord)
+        {
+            float pulse = sinf(timer * 5.0f) * 0.5f + 0.5f;
+            textColor = { 1.0f, 0.9f + pulse * 0.1f, 0.6f + pulse * 0.3f, alpha };
+        }
+        else
+        {
+            textColor = { 1.0f, 0.95f, 0.85f, alpha };  // // 明るいクリーム色
+        }
+
+        const RankingEntry& e = entries[i];
+
+        // --- 順位番号 ---
+        wchar_t rankBuf[16];
+        swprintf_s(rankBuf, L"%d.", i + 1);
+        DrawTextWithShadow(m_font.get(), rankBuf,
+            DirectX::XMFLOAT2(colNum + slideX, rowY), rankNumColor);
+
+        // ---  名前（新規列） ---
+        wchar_t nameBuf[32] = {};
+        if (e.name[0] != '\0')
+        {
+            // char[16] → wchar_t に変換
+            for (int c = 0; c < 15 && e.name[c] != '\0'; c++)
+                nameBuf[c] = (wchar_t)e.name[c];
+        }
+        else
+        {
+            wcscpy_s(nameBuf, L"---");  // 名前なし（旧データ互換）
+        }
+
+        // 名前は順位と同じ色系統（1位金, 2位銀...）
+        DrawTextWithShadow(m_font.get(), nameBuf,
+            DirectX::XMFLOAT2(colName + slideX, rowY), rankNumColor);
+
+        // --- スコア（カウントアップ演出） ---
+        float countUpT = (std::min)((timer - startT) / 1.0f, 1.0f);
+        float easedCount = EaseOutQuad(countUpT);
+        int displayScore = (int)(e.score * easedCount);
+
+        wchar_t scoreBuf[32];
+        swprintf_s(scoreBuf, L"%d", displayScore);
+        DrawTextWithShadow(m_font.get(), scoreBuf,
+            DirectX::XMFLOAT2(colScore + slideX, rowY), textColor);
+
+        // --- ウェーブ ---
+        wchar_t waveBuf[16];
+        swprintf_s(waveBuf, L"W%d", e.wave);
+        DrawTextWithShadow(m_font.get(), waveBuf,
+            DirectX::XMFLOAT2(colWave + slideX, rowY), textColor);
+
+        // --- キル数 ---
+        wchar_t killBuf[16];
+        swprintf_s(killBuf, L"%d", e.kills);
+        DrawTextWithShadow(m_font.get(), killBuf,
+            DirectX::XMFLOAT2(colKills + slideX, rowY), textColor);
+
+        // --- 新記録マーク ---
+        if (isNewRecord && slideT > 0.5f)
+        {
+            float newAlpha = (std::min)((slideT - 0.5f) * 4.0f, 1.0f);
+            float pulse = sinf(timer * 6.0f) * 0.5f + 0.5f;
+
+            DirectX::XMVECTORF32 newColor = {
+                1.0f, 0.85f + pulse * 0.15f, 0.0f, newAlpha
+            };
+
+            DrawTextWithShadow(m_font.get(), L"NEW!",
+                DirectX::XMFLOAT2(colKills + 70.0f + slideX, rowY), newColor);
+        }
+    }
+
+    // =============================================
+    // エントリー0件
+    // =============================================
+    if (entryCount == 0 && timer > 1.0f)
+    {
+        float emptyAlpha = (std::min)((timer - 1.0f) * 2.0f, 1.0f);
+        DirectX::XMVECTORF32 emptyColor = { 0.8f, 0.7f, 0.5f, emptyAlpha };
+
+        const wchar_t* emptyText = L"NO RECORDS YET";
+        DirectX::XMVECTOR emptySize = m_font->MeasureString(emptyText);
+        float emptyW = DirectX::XMVectorGetX(emptySize);
+
+        DrawTextWithShadow(m_font.get(), emptyText,
+            DirectX::XMFLOAT2(centerX - emptyW * 0.5f, centerY - 20.0f), emptyColor);
+    }
+
+    // =============================================
+    // 装飾線（下部）
+    // =============================================
+    if (timer > 1.5f)
+    {
+        float lineT = (std::min)((timer - 1.5f) / 0.5f, 1.0f);
+        float lineProgress = EaseOutBack(lineT);
+        float lineHalfW = 320.0f * lineProgress;
+        float lineY = entryBaseY + 10 * entryHeight + 10.0f;
+        if (lineY > screenH - 80.0f) lineY = screenH - 80.0f;
+
+        RECT leftLine = {
+            (LONG)(centerX - lineHalfW), (LONG)lineY,
+            (LONG)centerX, (LONG)(lineY + 1)
+        };
+        RECT rightLine = {
+            (LONG)centerX, (LONG)lineY,
+            (LONG)(centerX + lineHalfW), (LONG)(lineY + 1)
+        };
+
+        DirectX::XMVECTORF32 lineColor = { 0.9f, 0.3f, 0.05f, 0.6f * lineT };
+        m_spriteBatch->Draw(m_whitePixel.Get(), leftLine, lineColor);
+        m_spriteBatch->Draw(m_whitePixel.Get(), rightLine, lineColor);
+
+        RECT diamond = {
+            (LONG)(centerX - 3), (LONG)(lineY - 2),
+            (LONG)(centerX + 3), (LONG)(lineY + 3)
+        };
+        m_spriteBatch->Draw(m_whitePixel.Get(), diamond, lineColor);
+    }
+
+    // =============================================
+    // フッター: 操作案内
+    // =============================================
+    if (timer > 2.0f)
+    {
+        float footerAlpha = (std::min)((timer - 2.0f) * 2.0f, 1.0f);
+        float pulse = sinf(timer * 2.0f) * 0.15f + 0.85f;
+
+        //  フッター色をもっと明るく
+        DirectX::XMVECTORF32 footerColor = { 0.85f, 0.75f, 0.55f, footerAlpha * pulse };
+
+        float footerY = screenH - 50.0f;
+
+        const wchar_t* backText = L"ESC: BACK     R: RESTART";
+        DirectX::XMVECTOR backSize = m_font->MeasureString(backText);
+        float backW = DirectX::XMVectorGetX(backSize);
+
+        DrawTextWithShadow(m_font.get(), backText,
+            DirectX::XMFLOAT2(centerX - backW * 0.5f, footerY), footerColor);
     }
 
     m_spriteBatch->End();

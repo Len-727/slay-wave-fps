@@ -75,6 +75,8 @@ public:
     // IsMouseCaptured - マウスが固定されているか
     bool IsMouseCaptured() const { return m_mouseCaptured; }
 
+    void SetMouseCaptured(bool captured) { m_mouseCaptured = captured; m_firstMouse = true; }
+
     //  プレイヤー位置設定
     void SetPosition(DirectX::XMFLOAT3 pos) { m_position = pos; }
 

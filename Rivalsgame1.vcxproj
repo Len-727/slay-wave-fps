@@ -260,6 +260,7 @@
     <ClInclude Include="Model.h" />
     <ClInclude Include="ParticleSystem.h" />
     <ClInclude Include="Player.h" />
+    <ClInclude Include="RankingSystem.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Rivalsgame1.h" />
     <ClInclude Include="Shadow.h" />
@@ -344,6 +345,7 @@
     <ClCompile Include="Model.cpp" />
     <ClCompile Include="ParticleSystem.cpp" />
     <ClCompile Include="Player.cpp" />
+    <ClCompile Include="RankingSystem.cpp" />
     <ClCompile Include="Shadow.cpp" />
     <ClCompile Include="StyleRankSystem.cpp" />
     <ClCompile Include="TexturedQuad.cpp" />

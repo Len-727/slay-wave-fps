@@ -198,142 +198,132 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 		enemy.touchingPlayer = false;
 	}
 
-	// === プレイヤーに接触しているなら攻撃 ===
-	if (enemy.touchingPlayer)
+	// --- タイプ別パラメータを先に取得 ---
+	float attackHitTime;
+	float attackDuration;
+	float attackAnimSpeed;
+	switch (enemy.type)
 	{
-		if (enemy.currentAnimation != "Attack")
-		{
-			//	モーションが同時にならないように
-			enemy.currentAnimation = "Attack";
-			float maxOffset;
-			switch (enemy.type)
-			{
-			case EnemyType::RUNNER:  maxOffset = m_runnerAttackHitTime * 0.5f; break;
-			case EnemyType::TANK:    maxOffset = m_tankAttackHitTime * 0.5f;   break;
-			default:                 maxOffset = m_normalAttackHitTime * 0.5f;  break;
-			}
-			enemy.animationTime = ((float)rand() / RAND_MAX) * maxOffset;
+	case EnemyType::RUNNER:
+		attackHitTime = m_runnerAttackHitTime;
+		attackDuration = m_runnerAttackDuration;
+		attackAnimSpeed = m_animSpeed_Attack[1];
+		break;
+	case EnemyType::TANK:
+		attackHitTime = m_tankAttackHitTime;
+		attackDuration = m_tankAttackDuration;
+		attackAnimSpeed = m_animSpeed_Attack[2];
+		break;
+	default:
+		attackHitTime = m_normalAttackHitTime;
+		attackDuration = m_normalAttackDuration;
+		attackAnimSpeed = m_animSpeed_Attack[0];
+		break;
+	}
 
-			enemy.attackJustLanded = false; // まだ殴ってない
-		}
+	// --- 現在「攻撃モーション中」かどうか ---
+	bool isInAttackAnim = (enemy.currentAnimation == "Attack");
 
-		// --- 攻撃中は止まる ---
+	// =============================================
+	// パターン1: 攻撃モーション再生中 → 最後まで振り切る
+	// =============================================
+	if (isInAttackAnim)
+	{
+		// 攻撃中は足を止める
 		enemy.velocity.x = 0.0f;
 		enemy.velocity.z = 0.0f;
 
-		// アニメが「殴る瞬間」に達したらダメージ発生
-		// === タイプ別あったっくタイミング==
-		float attackHitTime;
-		switch (enemy.type)
-		{
-		case EnemyType::RUNNER:
-			attackHitTime = m_runnerAttackHitTime;
-			break;
-		case EnemyType::TANK:
-			attackHitTime = m_tankAttackHitTime;
-			break;
-		default:
-			attackHitTime = m_normalAttackHitTime;
-			break;
-		}
-		float attackAnimSpeed;
-		switch (enemy.type)
-		{
-		case EnemyType::RUNNER:  attackAnimSpeed = m_animSpeed_Attack[1]; break;
-		case EnemyType::TANK:    attackAnimSpeed = m_animSpeed_Attack[2]; break;
-		default:                 attackAnimSpeed = m_animSpeed_Attack[0]; break;
-		}
+		// アニメーション時間を進める
 		float prevTime = enemy.animationTime;
 		enemy.animationTime += deltaTime * attackAnimSpeed;
 
-		// prevTime < hitTime <= currentTime → 殴る瞬間を通過した！
+		// 「殴る瞬間」を通過したらダメージフラグON
 		if (prevTime < attackHitTime && enemy.animationTime >= attackHitTime)
 		{
-			enemy.attackJustLanded = true;
-
-			char buf[128];
-			sprintf_s(buf, "[ATTACK] Enemy ID:%d STRIKE! (animTime=%.2f)\n",
-				enemy.id, enemy.animationTime);
-			//OutputDebugStringA(buf);
+			// // プレイヤーがまだ近くにいる時だけダメージ判定
+			// （振り切りはするが、空振りならノーダメージ）
+			if (enemy.touchingPlayer)
+			{
+				enemy.attackJustLanded = true;
+			}
 		}
 		else
 		{
 			enemy.attackJustLanded = false;
 		}
 
-		// アタックアニメのループ（終了→最初に戻る）
-		float attackDuration;
-		switch (enemy.type)
-		{
-		case EnemyType::RUNNER:
-			attackDuration = m_runnerAttackDuration;
-			break;
-		case EnemyType::TANK:
-			attackDuration = m_tankAttackDuration;
-			break;
-		default:
-			attackDuration = m_normalAttackDuration;
-			break;
-		}
+		// アニメーション完了 → 次のアクションを決定
 		if (enemy.animationTime >= attackDuration)
 		{
 			enemy.animationTime = 0.0f;
+			enemy.attackJustLanded = false;
+
+			if (enemy.touchingPlayer)
+			{
+				// まだ近い → 連続攻撃（アニメを最初からループ）
+				// animationTime は 0 にリセット済み
+			}
+			else
+			{
+				// 離れた → 追いかけに切り替え
+				enemy.currentAnimation = "Walk";
+			}
 		}
 	}
-	//	動いているなら移動
+	// =============================================
+	// パターン2: 攻撃中じゃない & プレイヤーが近い → 攻撃開始
+	// =============================================
+	else if (enemy.touchingPlayer)
+	{
+		// 攻撃モーション開始
+		enemy.currentAnimation = "Attack";
+
+		// 敵同士の攻撃が同時にならないようにランダムオフセット
+		float maxOffset;
+		switch (enemy.type)
+		{
+		case EnemyType::RUNNER:  maxOffset = m_runnerAttackHitTime * 0.5f; break;
+		case EnemyType::TANK:   maxOffset = m_tankAttackHitTime * 0.5f;   break;
+		default:                maxOffset = m_normalAttackHitTime * 0.5f;  break;
+		}
+		enemy.animationTime = ((float)rand() / RAND_MAX) * maxOffset;
+		enemy.attackJustLanded = false;
+
+		// 攻撃開始と同時に足を止める
+		enemy.velocity.x = 0.0f;
+		enemy.velocity.z = 0.0f;
+	}
+	// =============================================
+	// パターン3: 攻撃中じゃない & プレイヤーが遠い → 移動
+	// =============================================
 	else
 	{
 		enemy.attackJustLanded = false;
 
-		//	速度の長さ(スピード計算)
-		float speed = sqrtf(enemy.velocity.x * enemy.velocity.x + enemy.velocity.z * enemy.velocity.z);
+		// 速度の長さ（スピード計算）
+		float speed = sqrtf(enemy.velocity.x * enemy.velocity.x +
+			enemy.velocity.z * enemy.velocity.z);
 
-		//	===	タイプ別の速度倍率	===
+		// タイプ別の速度倍率
 		float speedMultiplier = 1.0f;
-
 		switch (enemy.type)
 		{
-		case EnemyType::NORMAL:
-			speedMultiplier = 2.5f;	//	通常速度
-			break;
-
-		case EnemyType::RUNNER:
-			speedMultiplier = 3.0f;	//	2倍速い
-			break;
-
-		case EnemyType::TANK:
-			speedMultiplier = 1.5f;	//	半分遅い
-			break;
+		case EnemyType::NORMAL: speedMultiplier = 2.5f; break;
+		case EnemyType::RUNNER: speedMultiplier = 3.0f; break;
+		case EnemyType::TANK:   speedMultiplier = 1.5f; break;
 		}
 
-		//	最終的な速度を計算（倍率をかける）
 		float finalSpeed = speed * speedMultiplier * m_waveSpeedMult;
 
-		//	スピードが速ければ「走り」、遅ければ「歩き」
+		// アニメーション選択
 		std::string moveAnim = (finalSpeed > 4.0f) ? "Run" : "Walk";
-
-		//	とまっている(速度がほぼ0)なら待機
 		if (finalSpeed < 0.1f)
-		{
 			moveAnim = "Idle";
-		}
 
-		//	アニメーション変更
-		if (enemy.currentAnimation != moveAnim && enemy.currentAnimation != "Attack")
-		{
+		if (enemy.currentAnimation != moveAnim)
 			enemy.currentAnimation = moveAnim;
-		}
 
-		//	攻撃モーションが終わったら移動に戻す処理
-		if (enemy.currentAnimation == "Attack")
-		{
-			if (!enemy.touchingPlayer)
-			{
-				enemy.currentAnimation = moveAnim;
-			}
-		}
-
-		//	位置を更新（ここで倍率を使う）
+		// 位置を更新
 		enemy.position.x += enemy.velocity.x * finalSpeed * deltaTime;
 		enemy.position.z += enemy.velocity.z * finalSpeed * deltaTime;
 	}
@@ -394,6 +384,10 @@ void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 		candidatePos.y = 0.0f;
 		candidatePos.z = playerPos.z + sinf(angle) * distance;
 
+		//  FBXダンジョンの範囲内にクランプ
+		candidatePos.x = (std::max)(-31.0f, (std::min)(42.0f, candidatePos.x));
+		candidatePos.z = (std::max)(-8.0f, (std::min)(22.0f, candidatePos.z));
+
 		if (IsPositionValid(candidatePos, MIN_SPAWN_DISTANCE))
 		{
 			enemy.position = candidatePos;
@@ -409,12 +403,18 @@ void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 		enemy.position.x = playerPos.x + cosf(angle) * distance;
 		enemy.position.y = 0.0f;
 		enemy.position.z = playerPos.z + sinf(angle) * distance;
+
+		//  クランプ
+		enemy.position.x = (std::max)(-31.0f, (std::min)(42.0f, enemy.position.x));
+		enemy.position.z = (std::max)(-8.0f, (std::min)(22.0f, enemy.position.z));
 	}
 
 	// === 初期速度 ===
 	enemy.velocity.x = 0.0f;
 	enemy.velocity.y = 0.0f;
 	enemy.velocity.z = 0.0f;
+	// 即座に方向計算させる（棒立ち防止）
+	enemy.moveTimer = 99.0f;
 
 	// === ステータス ===
 	enemy.isAlive = true;
@@ -454,6 +454,10 @@ void EnemySystem::SpawnMidBoss(DirectX::XMFLOAT3 playerPos)
 	enemy.position.y = 0.0f;
 	enemy.position.z = playerPos.z + sinf(angle) * distance;
 
+	//  クランプ
+	enemy.position.x = (std::max)(-31.0f, (std::min)(42.0f, enemy.position.x));
+	enemy.position.z = (std::max)(-8.0f, (std::min)(22.0f, enemy.position.z));
+
 	enemy.velocity = { 0.0f, 0.0f, 0.0f };
 	enemy.isAlive = true;
 	enemy.isDying = false;
@@ -461,6 +465,7 @@ void EnemySystem::SpawnMidBoss(DirectX::XMFLOAT3 playerPos)
 	enemy.isStaggered = false;
 	enemy.headDestroyed = false;
 	enemy.staggerFlashTimer = 0.0f;
+	enemy.moveTimer = 99.0f;
 	enemy.currentAnimation = "Idle";
 	enemy.animationTime = 0.0f;
 	enemy.corpseTimer = 0.0f;
@@ -495,6 +500,10 @@ void EnemySystem::SpawnBoss(DirectX::XMFLOAT3 playerPos)
 	enemy.position.x = playerPos.x + cosf(angle) * distance;
 	enemy.position.y = 0.0f;
 	enemy.position.z = playerPos.z + sinf(angle) * distance;
+
+	//  クランプ
+	enemy.position.x = (std::max)(-31.0f, (std::min)(42.0f, enemy.position.x));
+	enemy.position.z = (std::max)(-8.0f, (std::min)(22.0f, enemy.position.z));
 
 	enemy.velocity = { 0.0f, 0.0f, 0.0f };
 	enemy.isAlive = true;
@@ -1140,6 +1149,7 @@ void EnemySystem::SpawnEnemyOfType(EnemyType type, DirectX::XMFLOAT3 playerPos)
 	enemy.position.z = playerPos.z + sinf(angle) * distance;
 
 	enemy.velocity = { 0.0f, 0.0f, 0.0f };
+	enemy.moveTimer = 99.0f;
 	enemy.isAlive = true;
 
 	enemy.currentAnimation = "Idle";

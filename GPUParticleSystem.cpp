@@ -683,7 +683,7 @@ void GPUParticleSystem::Draw(XMMATRIX view, XMMATRIX proj, XMFLOAT3 cameraPos)
     m_context->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
     m_context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
     m_context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
-    // ★ 2つのテクスチャをバインド
+    // // 2つのテクスチャをバインド
     ID3D11ShaderResourceView* mistSRV = m_bloodMistSRV.Get();
     m_context->PSSetShaderResources(1, 1, &mistSRV);      // t1 = 霧
 
@@ -707,7 +707,7 @@ void GPUParticleSystem::Draw(XMMATRIX view, XMMATRIX proj, XMFLOAT3 cameraPos)
     RestoreState(saved);
 
     //  t1スロットをクリア
-   // ★ t1, t2スロットをクリア
+   // // t1, t2スロットをクリア
     ID3D11ShaderResourceView* nullSRV = nullptr;
     m_context->PSSetShaderResources(1, 1, &nullSRV);
     m_context->PSSetShaderResources(2, 1, &nullSRV);

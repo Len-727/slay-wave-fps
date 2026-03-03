@@ -10,7 +10,8 @@
 enum class GameState {
 	TITLE,
 	PLAYING,
-	GAMEOVER
+	GAMEOVER,
+	RANKING
 };
 
 //	•Ší‚ÌŽí—Þ

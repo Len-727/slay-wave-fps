@@ -54,6 +54,7 @@
 #include "Furrenderer.h"
 #include "BloodSystem.h"
 #include "GPUParticleSystem.h"
+#include "RankingSystem.h"
 
 class Game
 {
@@ -176,8 +177,11 @@ private:
     void RenderTitle();
     void RenderPlaying();
     void RenderGameOver();
+    void UpdateRanking();
+    void RenderRanking();
     void RenderFade();
     void RenderDamageFlash();
+    void RenderLowHealthVignette();
     void RenderGloryKillFlash();
 
 
@@ -422,12 +426,11 @@ private:
     // === パリィ＆ボス攻撃チューニング ===
     // パリィウィンドウ
     // m_parryWindowDuration は既存（0.15f）→ スライダー化
-
     // ジャンプ叩きつけ
     float m_slamRadiusBoss = 8.0f;       // BOSS叩き範囲
     float m_slamRadiusMidBoss = 6.0f;    // MIDBOSS叩き範囲
-    float m_slamDamageBoss = 40.0f;      // BOSSダメージ
-    float m_slamDamageMidBoss = 25.0f;   // MIDBOSSダメージ
+    float m_slamDamageBoss = 20.0f;      // BOSSダメージ
+    float m_slamDamageMidBoss = 15.0f;   // MIDBOSSダメージ
     float m_slamStunDamage = 60.0f;      // パリィ時スタン量
 
     // 斬撃プロジェクタイル
@@ -641,6 +644,16 @@ private:
     int   m_goStatScores[9] = {};       // 各スタッツのボーナスポイント
     int   m_goTotalScore = 0;           // 合計スコア
     float m_goStatCountUp[9] = {};      // 各行のカウントアップ進行（0→1）
+    std::unique_ptr<RankingSystem> m_rankingSystem;
+    float m_rankingTimer = 0.0f;
+    int   m_newRecordRank = -1;
+    bool  m_rankingSaved = false;
+    // === 名前入力 ===
+    bool  m_nameInputActive = false;    // 名前入力中かどうか
+    char  m_nameBuffer[16] = {};        // 入力バッファ（最大15文字+null）
+    int   m_nameLength = 0;             // 現在の入力文字数
+    float m_nameKeyTimer = 0.0f;        // キー入力クールダウン（連続入力防止）
+    bool  m_nameKeyWasDown = false;
 
     // インスタンシング描画用（毎フレーム再利用でヒープ確保を防ぐ）
     std::vector<DirectX::XMMATRIX> m_instWorlds;
@@ -673,6 +686,7 @@ private:
 
     // 血パーティクル用ソフト円テクスチャ
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_bloodParticleSRV;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_lowHealthVignetteSRV;  // 充血テクスチャ
     std::unique_ptr<DirectX::BasicEffect>            m_particleEffect;
     Microsoft::WRL::ComPtr<ID3D11InputLayout>        m_particleInputLayout;
 
