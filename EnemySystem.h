@@ -41,6 +41,8 @@ public:
 	//   - &: 参照（コピーしないので高速）
 	const std::vector<Enemy>& GetEnemies() const { return m_enemies; }
 
+    std::vector<Enemy>& GetEnemiesMutable() { return m_enemies; }
+
 	// GetEnemies (非const版) - 敵の配列を変更可能な形で取得
     // 【用途】射撃時にダメージを与えるなど「変更する」処理で使う
     // 【戻り値】std::vector<Enemy>&
