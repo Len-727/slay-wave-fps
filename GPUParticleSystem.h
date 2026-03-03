@@ -41,13 +41,18 @@ public:
     void Emit(DirectX::XMFLOAT3 position, int count, float power = 5.0f,
         float sizeMin = 0.08f, float sizeMax = 0.25f);
 
+    void EmitSplash(DirectX::XMFLOAT3 position, DirectX::XMFLOAT3 direction,
+        int count = 8, float power = 4.0f);
+
+    void EmitMist(DirectX::XMFLOAT3 position, int count = 120, float power = 2.0f);
+
     // 毎フレーム更新(CS実行)
     void Update(float deltaTime);
 
     // 通常描画(従来のビルボード方式)
     void Draw(DirectX::XMMATRIX view, DirectX::XMMATRIX proj, DirectX::XMFLOAT3 cameraPos);
 
-    // ★ 流体描画(マルチパス)
+    // 流体描画(マルチパス)
     void DrawFluid(DirectX::XMMATRIX view, DirectX::XMMATRIX proj,
         DirectX::XMFLOAT3 cameraPos,
         ID3D11ShaderResourceView* sceneColorSRV,
@@ -107,6 +112,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D11DepthStencilState> m_depthState;
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_indexBuffer;
 
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_bloodFlipbookSRV;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_bloodMistSRV;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_bloodSplashSRV;
+    Microsoft::WRL::ComPtr<ID3D11SamplerState> m_linearSampler;
+
     // --- CPU側 ---
     std::vector<Particle> m_emitQueue;
 
@@ -117,9 +127,9 @@ private:
     int   m_activeCount = 0;
     int   m_nextSlot = 0;
     float m_totalTime = 0.0f;
-    int   m_screenWidth = 1920;
-    int   m_screenHeight = 1080;
-    bool  m_fluidEnabled = true;
+    int   m_screenWidth = 1280;
+    int   m_screenHeight = 960;
+    bool  m_fluidEnabled = false;
 
     // --- 定数バッファ構造体(HLSL一致) ---
     struct alignas(16) UpdateCBData
@@ -136,7 +146,7 @@ private:
         DirectX::XMFLOAT3   CameraRight;
         float                Time;
         DirectX::XMFLOAT3   CameraUp;
-        float                Padding;
+        float                SizeScale;
     };
 
     struct alignas(16) BlurCBData

@@ -1207,7 +1207,7 @@ void Model::UpdateNodeTransforms(
 		}
 	}
 
-	// ★ デバッグ：対応関係を一度だけ出す
+	// デバッグ：対応関係を一度だけ出す
 	//static bool sPrinted = false;
 	//if (!sPrinted && node.boneIndex != -1) {
 	//	char buf[512];

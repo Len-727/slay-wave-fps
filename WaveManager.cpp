@@ -35,6 +35,11 @@ void WaveManager::Update(float deltaTime, DirectX::XMFLOAT3 playerPos, EnemySyst
 			m_betweenWaves = false;
 			m_enemiesKilledThisWave = 0;
 
+			//  ウェーブ難易度スケーリング適用
+			enemySystem->SetWaveScaling(m_currentWave);
+
+			m_totalEnemiesThisWave = GetEnemyCountForWave(m_currentWave);
+
 			m_totalEnemiesThisWave = GetEnemyCountForWave(m_currentWave);
 
 			// MIDBOSS = 3の倍数（ただし10の倍数は除く）

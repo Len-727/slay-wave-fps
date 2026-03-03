@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <algorithm>
+#include <WICTextureLoader.h>
 
 #pragma comment(lib, "d3dcompiler.lib")
 
@@ -40,6 +41,7 @@ bool GPUParticleSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
         return false;
     }
 
+    
     // GPUバッファ作成
     if (!CreateBuffers())
     {
@@ -58,7 +60,59 @@ bool GPUParticleSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
     sprintf_s(msg, "[GPUParticle] Initialized OK! Max particles: %d\n", m_maxParticles);
     OutputDebugStringA(msg);
 
-    // ★ 流体レンダリング用リソース(失敗しても通常描画にフォールバック)
+    //  霧テクスチャ読み込み
+    {
+        HRESULT hr = DirectX::CreateWICTextureFromFile(
+            m_device,
+            L"Assets/Texture/blood_mist_v2.png",
+            nullptr,
+            m_bloodMistSRV.GetAddressOf()
+        );
+        if (SUCCEEDED(hr))
+            OutputDebugStringA("[GPUParticle] Blood MIST texture loaded!\n");
+        else
+            OutputDebugStringA("[GPUParticle] WARNING: mist texture NOT found!\n");
+    }
+
+    //  液体スプラッシュテクスチャ読み込み
+    {
+        HRESULT hr = DirectX::CreateWICTextureFromFile(
+            m_device,
+            L"Assets/Texture/blood_splash_v2.png",
+            nullptr,
+            m_bloodSplashSRV.GetAddressOf()
+        );
+        if (SUCCEEDED(hr))
+            OutputDebugStringA("[GPUParticle] Blood SPLASH texture loaded!\n");
+        else
+            OutputDebugStringA("[GPUParticle] WARNING: splash texture NOT found!\n");
+    }
+
+    //  リニアサンプラー作成
+   // 【何をしている？】
+   // テクスチャからピクセルを読むときの「補間ルール」を定義する。
+   //
+   // Filter = LINEAR → 隣接ピクセルを滑らかに補間（ぼかし効果）
+   //          POINT にすると補間なし（ドット絵風、カクカク）
+   //
+   // AddressU/V = CLAMP → テクスチャの端をはみ出したら端の色を使う
+   //              WRAP にすると繰り返し（タイル状）
+    {
+        D3D11_SAMPLER_DESC sd = {};
+        sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR; // 滑らか補間
+        sd.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;      // はみ出し防止
+        sd.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sd.MaxLOD = D3D11_FLOAT32_MAX;
+
+        HRESULT hr = m_device->CreateSamplerState(&sd, m_linearSampler.GetAddressOf());
+        if (SUCCEEDED(hr))
+            OutputDebugStringA("[GPUParticle] Linear sampler created!\n");
+    }
+
+
+
+    // // 流体レンダリング用リソース(失敗しても通常描画にフォールバック)
     if (CompileFluidShaders())
     {
         CreateFluidResources();
@@ -307,13 +361,118 @@ void GPUParticleSystem::Emit(XMFLOAT3 position, int count, float power, float si
         float phi = ((float)rand() / RAND_MAX) * 3.14159f * 0.5f;   // 仰角(0~90度)
         float speed = power * (0.5f + ((float)rand() / RAND_MAX) * 1.0f);
 
-        p.velocity.x = cosf(theta) * sinf(phi) * speed;
-        p.velocity.y = cosf(phi) * speed * 0.8f + 1.0f;   // 上向きバイアス
-        p.velocity.z = sinf(theta) * sinf(phi) * speed;
+        p.velocity.x = cosf(theta) * sinf(phi) * speed * 1.5f;
+        p.velocity.y = cosf(phi) * speed * 1.2f + 3.0f;   // 上に強く飛ばす
+        p.velocity.z = sinf(theta) * sinf(phi) * speed * 1.5f;
 
         p.life = 1.5f + ((float)rand() / RAND_MAX) * 2.5f;   // 1.5~4秒
         p.maxLife = p.life;
         p.size = sizeMin + ((float)rand() / RAND_MAX) * (sizeMax - sizeMin);
+
+        m_emitQueue.push_back(p);
+    }
+}
+
+// ============================================================
+//  EmitSplash: 血の飛沫（細かい飛び散り）
+//
+//  【イメージ】
+//  水風船が割れた瞬間のパシャッ！
+//  細かい飛沫が弾の方向にバーッと弾ける。
+//
+//  【パラメータ設計】
+//  サイズ: 0.03~0.12（とても小さい → 細かい飛沫感）
+//  数:     30~60個（中量 → 密度感）
+//  速度:   速い（power × 1.5~3.0 → パッと弾ける）
+//  寿命:   0.3~1.0秒（短い → パッと出てサッと消える）
+//  方向:   弾の進行方向に偏る + ランダム散らし
+// ============================================================
+void GPUParticleSystem::EmitSplash(XMFLOAT3 position, XMFLOAT3 direction, int count, float power)
+{
+    // 方向ベクトルを正規化
+    float len = sqrtf(direction.x * direction.x +
+        direction.y * direction.y +
+        direction.z * direction.z);
+    if (len < 0.001f)
+    {
+        direction = XMFLOAT3(0.0f, 1.0f, 0.0f);
+        len = 1.0f;
+    }
+    float inv = 1.0f / len;
+    direction.x *= inv;
+    direction.y *= inv;
+    direction.z *= inv;
+
+    for (int i = 0; i < count; i++)
+    {
+        Particle p = {};
+        p.position = position;
+
+        // ランダム散らし（-1~+1）
+        float sx = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+        float sy = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+        float sz = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+
+        // 速度: 速めでバラつきあり（power × 1.5~3.0）
+        float speed = power * (1.5f + ((float)rand() / RAND_MAX) * 1.5f);
+
+        // メイン方向 + 大きめの散らし → 弾ける感じ
+        p.velocity.x = direction.x * speed + sx * power * 1.5f;
+        p.velocity.y = direction.y * speed + sy * power * 1.0f + 2.0f;
+        p.velocity.z = direction.z * speed + sz * power * 1.5f;
+
+        // 寿命: 短い（0.3~1.0秒）→ パッと消える
+        p.life = 0.5f + ((float)rand() / RAND_MAX) * 1.0f;
+        p.maxLife = p.life;
+
+        // サイズ: 小さい（0.03~0.12）→ 細かい飛沫
+        p.size = 0.001f + ((float)rand() / RAND_MAX) * 0.17f;
+
+        m_emitQueue.push_back(p);
+    }
+}
+
+// ============================================================
+//  EmitMist: 血の霧（ふわっと広がる赤い靄）
+//
+//  【イメージ】
+//  赤いスプレーをシュッと吹いた感じ。
+//  細かい粒子が全方向にふわ?っと広がって漂う。
+//
+//  【パラメータ設計】
+//  サイズ: 0.02~0.08（極小 → 霧っぽい）
+//  数:     80~200個（大量 → 密度で霧感を出す）
+//  速度:   遅い（power × 0.3~1.0 → ゆっくり広がる）
+//  寿命:   1.0~3.0秒（長め → じわ?っと消える）
+//  方向:   全方向均等（球面ランダム）
+// ============================================================
+void GPUParticleSystem::EmitMist(XMFLOAT3 position, int count, float power)
+{
+    for (int i = 0; i < count; i++)
+    {
+        Particle p = {};
+        p.position = position;
+
+        // --- 球面上の均等ランダム方向 ---
+        // theta: 0~2π（水平角）
+        // phi:   acos(2r-1)（仰角、均等分布にするためのテクニック）
+        float theta = ((float)rand() / RAND_MAX) * 6.2832f;
+        float u = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+        float phi = acosf(u);
+
+        // 速度: 遅め（power × 0.3~1.0）→ ふわっと
+        float speed = power * (0.5f + ((float)rand() / RAND_MAX) * 1.0f);
+
+        p.velocity.x = cosf(theta) * sinf(phi) * speed;
+        p.velocity.y = cosf(phi) * speed + 0.5f;   // 微妙に上昇（煙は上に行く）
+        p.velocity.z = sinf(theta) * sinf(phi) * speed;
+
+        // 寿命: 長め（1.0~3.0秒）→ じわ?っと
+        p.life = 1.0f + ((float)rand() / RAND_MAX) * 2.0f;
+        p.maxLife = p.life;
+
+        // サイズ: 極小（0.02~0.08）→ 霧の粒
+        p.size = 0.04f + ((float)rand() / RAND_MAX) * 0.08f;
 
         m_emitQueue.push_back(p);
     }
@@ -329,34 +488,43 @@ void GPUParticleSystem::UploadEmitQueue()
     int count = (int)m_emitQueue.size();
     if (count > m_maxParticles) count = m_maxParticles;
 
-    // GPUバッファ -> ステージングにコピー(現在のデータを読む)
-    m_context->CopyResource(m_stagingBuffer.Get(), m_particleBuffer.Get());
+    // === リングバッファの連続領域ごとにUpdateSubresource ===
+    // GPU→CPU往復コピー不要！直接GPUバッファに書き込む
+    int emitIdx = 0;
 
-    D3D11_MAPPED_SUBRESOURCE mapped;
-    HRESULT hr = m_context->Map(m_stagingBuffer.Get(), 0, D3D11_MAP_READ_WRITE, 0, &mapped);
-    if (FAILED(hr))
+    // チャンク1: m_nextSlot ～ バッファ末尾
+    int firstChunk = (std::min)(count, m_maxParticles - m_nextSlot);
+    if (firstChunk > 0)
     {
-        m_emitQueue.clear();
-        return;
+        D3D11_BOX box = {};
+        box.left = m_nextSlot * sizeof(Particle);   // バイトオフセット開始
+        box.right = box.left + firstChunk * sizeof(Particle); // バイトオフセット終了
+        box.top = 0; box.bottom = 1;
+        box.front = 0; box.back = 1;
+
+        m_context->UpdateSubresource(
+            m_particleBuffer.Get(), 0, &box,
+            &m_emitQueue[emitIdx], sizeof(Particle), 0);
+        emitIdx += firstChunk;
     }
 
-    Particle* gpuData = (Particle*)mapped.pData;
-
-    // リングバッファのスロットに新しいパーティクルを書き込み
-    for (int i = 0; i < count; i++)
+    // チャンク2: バッファ先頭に折り返し（リングバッファ）
+    int secondChunk = count - firstChunk;
+    if (secondChunk > 0)
     {
-        gpuData[m_nextSlot] = m_emitQueue[i];
-        m_nextSlot = (m_nextSlot + 1) % m_maxParticles;  // 端まで行ったら先頭に戻る
+        D3D11_BOX box = {};
+        box.left = 0;
+        box.right = secondChunk * sizeof(Particle);
+        box.top = 0; box.bottom = 1;
+        box.front = 0; box.back = 1;
+
+        m_context->UpdateSubresource(
+            m_particleBuffer.Get(), 0, &box,
+            &m_emitQueue[emitIdx], sizeof(Particle), 0);
     }
 
-    m_context->Unmap(m_stagingBuffer.Get(), 0);
-
-    // ステージング -> GPUバッファにコピー
-    m_context->CopyResource(m_particleBuffer.Get(), m_stagingBuffer.Get());
-
+    m_nextSlot = (m_nextSlot + count) % m_maxParticles;
     m_emitQueue.clear();
-
-    // アクティブ数の概算を更新
     m_activeCount = (std::min)(m_activeCount + count, m_maxParticles);
 }
 
@@ -378,10 +546,10 @@ void GPUParticleSystem::Update(float deltaTime)
         {
             UpdateCBData* cb = (UpdateCBData*)mapped.pData;
             cb->DeltaTime = deltaTime;
-            cb->Gravity = -15.0f;     // 強めの重力(血は重い)
-            cb->Drag = 0.985f;     // 軽い空気抵抗
+            cb->Gravity = -6.0f;     // 強めの重力(血は重い)
+            cb->Drag = 0.975f;     // 軽い空気抵抗
             cb->FloorY = 0.02f;      // 床のちょっと上
-            cb->BounceFactor = 0.2f;       // 血はあまりバウンスしない
+            cb->BounceFactor = 0.35f;       // 血はあまりバウンスしない
             cb->Time = m_totalTime;
             cb->Padding[0] = 0.0f;
             cb->Padding[1] = 0.0f;
@@ -480,7 +648,7 @@ void GPUParticleSystem::RestoreState(const SavedState& s)
 // ============================================================
 void GPUParticleSystem::Draw(XMMATRIX view, XMMATRIX proj, XMFLOAT3 cameraPos)
 {
-    // ★ 流体モードがONなら通常描画はスキップ(DrawFluidを使う)
+    // // 流体モードがONなら通常描画はスキップ(DrawFluidを使う)
     // ここでは従来のビルボード描画(フォールバック用)
 
     SavedState saved;
@@ -504,7 +672,7 @@ void GPUParticleSystem::Draw(XMMATRIX view, XMMATRIX proj, XMFLOAT3 cameraPos)
             cb->CameraRight = camRight;
             cb->Time = m_totalTime;
             cb->CameraUp = camUp;
-            cb->Padding = 0.0f;
+            cb->SizeScale = 1.0f;
             m_context->Unmap(m_cameraCB.Get(), 0);
         }
     }
@@ -515,7 +683,20 @@ void GPUParticleSystem::Draw(XMMATRIX view, XMMATRIX proj, XMFLOAT3 cameraPos)
     m_context->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
     m_context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
     m_context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
+    // ★ 2つのテクスチャをバインド
+    ID3D11ShaderResourceView* mistSRV = m_bloodMistSRV.Get();
+    m_context->PSSetShaderResources(1, 1, &mistSRV);      // t1 = 霧
+
+    ID3D11ShaderResourceView* splashSRV = m_bloodSplashSRV.Get();
+    m_context->PSSetShaderResources(2, 1, &splashSRV);     // t2 = 液体
+
     m_context->VSSetShaderResources(0, 1, m_particleSRV.GetAddressOf());
+
+    // サンプラー
+    ID3D11SamplerState* sampler = m_linearSampler.Get();
+    m_context->PSSetSamplers(0, 1, &sampler);
+
+    m_context->PSSetSamplers(0, 1, &sampler);
     m_context->VSSetConstantBuffers(0, 1, m_cameraCB.GetAddressOf());
     float bf[4] = { 0, 0, 0, 0 };
     m_context->OMSetBlendState(m_blendState.Get(), bf, 0xFFFFFFFF);
@@ -524,6 +705,14 @@ void GPUParticleSystem::Draw(XMMATRIX view, XMMATRIX proj, XMFLOAT3 cameraPos)
     m_context->DrawIndexed(m_maxParticles * 6, 0, 0);
 
     RestoreState(saved);
+
+    //  t1スロットをクリア
+   // ★ t1, t2スロットをクリア
+    ID3D11ShaderResourceView* nullSRV = nullptr;
+    m_context->PSSetShaderResources(1, 1, &nullSRV);
+    m_context->PSSetShaderResources(2, 1, &nullSRV);
+
+
 }
 
 // ============================================================
@@ -729,7 +918,7 @@ void GPUParticleSystem::FluidDepthPass(XMMATRIX view, XMMATRIX proj, XMFLOAT3 ca
             cb->CameraRight = camRight;
             cb->Time = m_totalTime;
             cb->CameraUp = camUp;
-            cb->Padding = 0.0f;
+            cb->SizeScale = 3.0f;
             m_context->Unmap(m_cameraCB.Get(), 0);
         }
     }
@@ -739,12 +928,12 @@ void GPUParticleSystem::FluidDepthPass(XMMATRIX view, XMMATRIX proj, XMFLOAT3 ca
     m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     m_context->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
     m_context->VSSetShader(m_vertexShader.Get(), nullptr, 0);       // 既存ビルボードVS
-    m_context->PSSetShader(m_fluidDepthPS.Get(), nullptr, 0);       // ★深度PS
+    m_context->PSSetShader(m_fluidDepthPS.Get(), nullptr, 0);       // //深度PS
     m_context->VSSetShaderResources(0, 1, m_particleSRV.GetAddressOf());
     m_context->VSSetConstantBuffers(0, 1, m_cameraCB.GetAddressOf());
 
     // ブレンド: 最小値書き込み(手前の深度を優先)
-    // ★ 加算ブレンドではなく不透明で上書き(深度は混ぜない)
+    // // 加算ブレンドではなく不透明で上書き(深度は混ぜない)
     m_context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
     m_context->OMSetDepthStencilState(nullptr, 0);
 
@@ -778,8 +967,8 @@ void GPUParticleSystem::FluidBlurPass()
         {
             BlurCBData* cb = (BlurCBData*)mapped.pData;
             cb->TexelSize = XMFLOAT2(texelW, texelH);
-            cb->BlurRadius = 7.0f;        // 7ピクセル半径
-            cb->DepthThreshold = 0.01f;    // 深度差1%以上は混ぜない
+            cb->BlurRadius = 15.0f;        // 7ピクセル半径
+            cb->DepthThreshold = 0.05f;    // 深度差1%以上は混ぜない
             cb->BlurDirection = XMFLOAT2(1.0f, 0.0f);  // 水平
             cb->Padding[0] = cb->Padding[1] = 0.0f;
             m_context->Unmap(m_blurCB.Get(), 0);
@@ -816,8 +1005,8 @@ void GPUParticleSystem::FluidBlurPass()
         {
             BlurCBData* cb = (BlurCBData*)mapped.pData;
             cb->TexelSize = XMFLOAT2(texelW, texelH);
-            cb->BlurRadius = 7.0f;
-            cb->DepthThreshold = 0.01f;
+            cb->BlurRadius = 15.0f;
+            cb->DepthThreshold = 0.05f;
             cb->BlurDirection = XMFLOAT2(0.0f, 1.0f);  // 垂直
             cb->Padding[0] = cb->Padding[1] = 0.0f;
             m_context->Unmap(m_blurCB.Get(), 0);
@@ -850,7 +1039,7 @@ void GPUParticleSystem::FluidCompositePass(XMMATRIX proj, XMFLOAT3 cameraPos,
             XMStoreFloat4x4(&cb->InvProjection, XMMatrixTranspose(invProj));
             cb->TexelSize = XMFLOAT2(1.0f / m_screenWidth, 1.0f / m_screenHeight);
             cb->Time = m_totalTime;
-            cb->Thickness = 0.7f;           // 血の厚み
+            cb->Thickness = 0.3f;           // 血の厚み
             cb->LightDir = XMFLOAT3(0.3f, -0.8f, 0.5f);  // 斜め上からの光
             cb->SpecularPower = 128.0f;     // 鋭いスペキュラ
             cb->CameraPos = cameraPos;
@@ -889,11 +1078,6 @@ void GPUParticleSystem::FluidCompositePass(XMMATRIX proj, XMFLOAT3 cameraPos,
 void GPUParticleSystem::DrawFluid(XMMATRIX view, XMMATRIX proj, XMFLOAT3 cameraPos,
     ID3D11ShaderResourceView* sceneColorSRV, ID3D11RenderTargetView* finalRTV)
 {
-    ////  パーティクルが0なら何もしない
-    //if (m_activeCount <= 0)
-    //    return;
-
-    // 流体シェーダーが準備できてなければ通常描画にフォールバック
     if (!m_fluidShadersReady || !m_fluidEnabled)
     {
         Draw(view, proj, cameraPos);
@@ -910,6 +1094,9 @@ void GPUParticleSystem::DrawFluid(XMMATRIX view, XMMATRIX proj, XMFLOAT3 cameraP
     vp.Height = (float)m_screenHeight;
     vp.MaxDepth = 1.0f;
     m_context->RSSetViewports(1, &vp);
+
+    // // ラスタライザをデフォルトに(カリング問題を防止)
+    m_context->RSSetState(nullptr);
 
     // Pass 1: パーティクル深度を描画
     FluidDepthPass(view, proj, cameraPos);

@@ -413,7 +413,7 @@ Game::RaycastResult Game::RaycastPhysics(
 
                     char buffer[512];
                     sprintf_s(buffer,
-                        "[BULLET] ★★★ HIT ENEMY! ★★★ ID:%d at (%.2f, %.2f, %.2f) - Enemy at (%.2f, %.2f, %.2f)\n",
+                        "[BULLET] ////// HIT ENEMY! ////// ID:%d at (%.2f, %.2f, %.2f) - Enemy at (%.2f, %.2f, %.2f)\n",
                         enemyID,
                         result.hitPoint.x, result.hitPoint.y, result.hitPoint.z,
                         enemy.position.x, enemy.position.y, enemy.position.z);
@@ -850,7 +850,7 @@ void Game::Clear()
     // 画面を青でクリア
     m_d3dContext->ClearRenderTargetView(m_renderTargetView.Get(), Colors::Black);
 
-    // ★重要: 深度バッファ(DEPTH) と ステンシルバッファ(STENCIL) の両方をクリアする
+    // //重要: 深度バッファ(DEPTH) と ステンシルバッファ(STENCIL) の両方をクリアする
     m_d3dContext->ClearDepthStencilView(
         m_depthStencilView.Get(),
         D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, // 両方のフラグを立てる
@@ -979,18 +979,18 @@ void Game::CreateResources()
 
     // 深度バッファ作成
     CD3D11_TEXTURE2D_DESC depthStencilDesc(
-        DXGI_FORMAT_R24G8_TYPELESS,  // ★ D24_UNORM_S8_UINT → TYPELESSに変更
+        DXGI_FORMAT_R24G8_TYPELESS,  // // D24_UNORM_S8_UINT → TYPELESSに変更
         backBufferWidth,
         backBufferHeight,
         1,  // 配列サイズ
         1,  // ミップレベル
-        D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE  // ★ SRVフラグ追加
+        D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE  // // SRVフラグ追加
     );
 
     hr = m_d3dDevice->CreateTexture2D(
         &depthStencilDesc,
         nullptr,
-        m_depthTexture.ReleaseAndGetAddressOf()  // ★ メンバー変数に保存
+        m_depthTexture.ReleaseAndGetAddressOf()  // // メンバー変数に保存
     );
     if (FAILED(hr)) throw std::runtime_error("CreateTexture2D failed");
 
@@ -1351,6 +1351,16 @@ void Game::CreateRenderResources()
             ////OutputDebugStringA("Failed to load arm texture!\n");
         }
     }
+
+
+    // スコアポップアップ用テクスチャ
+    DirectX::CreateWICTextureFromFile(m_d3dDevice.Get(), L"Assets/Texture/HUD/score_glow.png", nullptr, m_scoreGlow.ReleaseAndGetAddressOf());
+    DirectX::CreateWICTextureFromFile(m_d3dDevice.Get(), L"Assets/Texture/HUD/score_glow_red.png", nullptr, m_scoreGlowRed.ReleaseAndGetAddressOf());
+    DirectX::CreateWICTextureFromFile(m_d3dDevice.Get(), L"Assets/Texture/HUD/score_glow_blue.png", nullptr, m_scoreGlowBlue.ReleaseAndGetAddressOf());
+    DirectX::CreateWICTextureFromFile(m_d3dDevice.Get(), L"Assets/Texture/HUD/score_burst.png", nullptr, m_scoreBurst.ReleaseAndGetAddressOf());
+    DirectX::CreateWICTextureFromFile(m_d3dDevice.Get(), L"Assets/Texture/HUD/score_skull.png", nullptr, m_scoreSkull.ReleaseAndGetAddressOf());
+    DirectX::CreateWICTextureFromFile(m_d3dDevice.Get(), L"Assets/Texture/HUD/score_headshot.png", nullptr, m_scoreHeadshot.ReleaseAndGetAddressOf());
+
 
     m_gloryKillKnifeModel = std::make_unique<Model>();
     if (!m_gloryKillKnifeModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/GloryKill/Knife.fbx"))
@@ -3978,7 +3988,7 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 if (!enemy.isAlive || enemy.isDying) continue;
                 if (enemy.type != EnemyType::TANK) continue;
                 if (!enemy.headDestroyed) continue;
-                if (enemy.currentAnimation == "Attack") continue;  // ★ 元のロジック維持
+                if (enemy.currentAnimation == "Attack") continue;  // // 元のロジック維持
 
                 float s = 0.01f;
                 m_instWorlds.push_back(
@@ -4375,7 +4385,7 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
 
                 if (timeToHit < parryZone)
                 {
-                    // ★ 緑 = 「今パリィ！」
+                    // // 緑 = 「今パリィ！」
                     float pulse = (sinf(m_gameTime * 30.0f) + 1.0f) * 0.5f;
                     alpha = 0.8f + pulse * 0.2f;
                     ringColor = { 0.0f, 1.0f, 0.3f, alpha };
@@ -4924,7 +4934,7 @@ void Game::DrawShield()
     if (!m_shieldModel)
         return;
 
-    // ★ 盾投げ中は別の描画（ワールド空間で飛んでる盾）
+    // // 盾投げ中は別の描画（ワールド空間で飛んでる盾）
     if (m_shieldState == ShieldState::Throwing)
     {
         DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
@@ -5126,13 +5136,13 @@ void Game::RenderPlaying()
 
         // オフスクリーンに通常描画
         ID3D11RenderTargetView* offscreenRTV = m_offscreenRTV.Get();
-        m_d3dContext->OMSetRenderTargets(1, &offscreenRTV, m_offscreenDepthStencilView.Get());  // ★ 変更
+        m_d3dContext->OMSetRenderTargets(1, &offscreenRTV, m_offscreenDepthStencilView.Get());  // // 変更
 
         // オフスクリーンをクリア
         DirectX::XMVECTORF32 clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
         m_d3dContext->ClearRenderTargetView(m_offscreenRTV.Get(), clearColor);
         m_d3dContext->ClearDepthStencilView(
-            m_offscreenDepthStencilView.Get(),  // ★ 変更
+            m_offscreenDepthStencilView.Get(),  // // 変更
             D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
             1.0f,
             0
@@ -5361,15 +5371,18 @@ void Game::RenderPlaying()
             
         }
         m_bloodSystem->DrawScreenBlood(m_outputWidth, m_outputHeight);
+        DrawHealthPickups(viewMatrix, projectionMatrix);
         m_bloodSystem->DrawBloodDecals(viewMatrix, projectionMatrix, m_player->GetPosition());
        
+        m_gpuParticles->Draw(viewMatrix, projectionMatrix, m_player->GetPosition());
         //  流体レンダリング: シーンをコピーしてからDrawFluid
-        m_d3dContext->CopyResource(m_sceneCopyTex.Get(), m_offscreenTexture.Get());
-        m_gpuParticles->DrawFluid(viewMatrix, projectionMatrix, m_player->GetPosition(),
-            m_sceneCopySRV.Get(), m_offscreenRTV.Get());
+        //m_d3dContext->CopyResource(m_sceneCopyTex.Get(), m_offscreenTexture.Get());
+        /*m_gpuParticles->DrawFluid(viewMatrix, projectionMatrix, m_player->GetPosition(),
+            nullptr, m_offscreenRTV.Get());*/
 
         // UI描画（オフスクリーンへ）
         DrawUI();
+        DrawScorePopups();
 
         //  最終画面にブラーを適用して描画
         ID3D11RenderTargetView* finalRTV = m_renderTargetView.Get();
@@ -5382,7 +5395,7 @@ void Game::RenderPlaying()
         BlurParams params;
         params.texelSize = DirectX::XMFLOAT2(1.0f / m_outputWidth, 1.0f / m_outputHeight);
         params.blurStrength = m_gloryKillDOFIntensity * 5.0f;
-        params.focalDepth = m_gloryKillFocalDepth;  // ★ padding → focalDepthに変更
+        params.focalDepth = m_gloryKillFocalDepth;  // // padding → focalDepthに変更
 
         D3D11_MAPPED_SUBRESOURCE mappedResource;
         m_d3dContext->Map(m_blurConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
@@ -5639,22 +5652,16 @@ void Game::RenderPlaying()
             
         }
         m_bloodSystem->DrawScreenBlood(m_outputWidth, m_outputHeight);
+        DrawHealthPickups(viewMatrix, projectionMatrix);
         m_bloodSystem->DrawBloodDecals(viewMatrix, projectionMatrix, m_player->GetPosition());
 
-        //  流体レンダリング: バックバッファをコピーしてからDrawFluid
-        //  GetBuffer毎フレームはCOMオーバーヘッド大 → 直接テクスチャ使用
-        {
-            // バックバッファの中身をシーンコピーテクスチャに取得
-            Microsoft::WRL::ComPtr<ID3D11Resource> backBufRes;
-            m_renderTargetView->GetResource(backBufRes.GetAddressOf());
-            m_d3dContext->CopyResource(m_sceneCopyTex.Get(), backBufRes.Get());
-        }
-        m_gpuParticles->DrawFluid(viewMatrix, projectionMatrix, m_player->GetPosition(),
-            m_sceneCopySRV.Get(), m_renderTargetView.Get());
-        
+        m_gpuParticles->Draw(viewMatrix, projectionMatrix, m_player->GetPosition());        //  流体レンダリング: バックバッファをコピーしてからDrawFluid
+       /* m_gpuParticles->DrawFluid(viewMatrix, projectionMatrix, m_player->GetPosition(),
+            nullptr, m_renderTargetView.Get());*/
 
         // UI描画
         DrawUI();
+        DrawScorePopups();
     }
 
     // ダメージエフェクト（ブラーの上に重ねる）
@@ -6655,7 +6662,9 @@ void Game::UpdatePlaying()
 
             // スクリーンブラッド
             m_bloodSystem->OnGloryKill(m_gloryKillTargetEnemy->position);
-            m_gpuParticles->Emit(m_gloryKillTargetEnemy->position, 400, 10.0f);
+            m_gpuParticles->EmitSplash(m_gloryKillTargetEnemy->position, XMFLOAT3(0.0f, 1.0f, 0.0f), 50, 10.0f);
+            m_gpuParticles->EmitMist(m_gloryKillTargetEnemy->position, 150, 3.0f);
+            m_gpuParticles->Emit(m_gloryKillTargetEnemy->position, 100, 8.0f);
 
             // HP回復（最大HPを超えないように）
             int currentHP = m_player->GetHealth();
@@ -6666,10 +6675,12 @@ void Game::UpdatePlaying()
 
             //  wavemanagerに加算
             int waveBonus = m_waveManager->OnEnemyKilled();
+            if (waveBonus > 0) SpawnScorePopup(waveBonus, ScorePopupType::WAVE_BONUS);
 
             //  ポイント加算
             int totalPoints = 200 + waveBonus;  //  グローリーキル = 200points
             m_player->AddPoints(totalPoints);
+            SpawnScorePopup(totalPoints, ScorePopupType::GLORY_KILL);
 
             // スコア換算
             m_score += 100;
@@ -7145,7 +7156,7 @@ void Game::UpdatePlaying()
             DirectX::XMVECTOR right = DirectX::XMVectorSet(
                 cosf(playerRot.y), 0.0f, -sinf(playerRot.y), 0.0f);
 
-            // up = forward × right（★ワールド固定じゃなくカメラの上！）
+            // up = forward × right（//ワールド固定じゃなくカメラの上！）
             DirectX::XMVECTOR up = DirectX::XMVector3Cross(forward, right);
 
             // 銃口 = プレイヤー位置 + 前0.8 + 右0.45 + 下0.15
@@ -7423,7 +7434,9 @@ void Game::UpdatePlaying()
                             //    weapon.damage, (int)currentWeapon);
                             ////OutputDebugStringA(debugDamage);
 
-                            m_particleSystem->CreateBloodEffect(rayResult.hitPoint, shotDir, 15);
+                            //m_particleSystem->CreateBloodEffect(rayResult.hitPoint, shotDir, 15);
+                            m_gpuParticles->EmitSplash(rayResult.hitPoint, shotDir, 15, 4.0f);
+                            m_gpuParticles->EmitMist(rayResult.hitPoint, 30, 1.5f);
                             hitEnemy->health -= weapon.damage;
                             m_statDamageDealt += weapon.damage;  //  与ダメ記録
 
@@ -7450,21 +7463,7 @@ void Game::UpdatePlaying()
                                 m_cameraShake = 0.25f;
                                 m_cameraShakeTimer = 0.2;
 
-
-                                // 胴体キルでも爆散エフェクト
-                                for (int b = 0; b < 3; b++)
-                                {
-                                    DirectX::XMFLOAT3 randomDir;
-                                    randomDir.x = ((rand() % 200) - 100) / 100.0f;
-                                    randomDir.y = ((rand() % 100) + 50) / 100.0f;
-                                    randomDir.z = ((rand() % 200) - 100) / 100.0f;
-                                    m_particleSystem->CreateBloodEffect(rayResult.hitPoint, randomDir, 30);
-                                }
-                                m_particleSystem->CreateExplosion(rayResult.hitPoint);
-
                                 m_bloodSystem->OnEnemyKilled(hitEnemy->position, m_player->GetPosition());
-                                m_gpuParticles->Emit(hitEnemy->position, 150, 6.0f);
-                                SpawnGibs(hitEnemy->position, 5, 10.0f);
 
                                 float knockbackPower = 10.0f;
 
@@ -7496,9 +7495,9 @@ void Game::UpdatePlaying()
                         }
 
                         // ノックバック
-                        float knockbackStrength = isHeadShot ? 0.5f : 0.2f;
+                        /*float knockbackStrength = isHeadShot ? 0.5f : 0.2f;
                         hitEnemy->position.x += shotDir.x * knockbackStrength;
-                        hitEnemy->position.z += shotDir.z * knockbackStrength;
+                        hitEnemy->position.z += shotDir.z * knockbackStrength;*/
 
                         // 死亡処理
                         if (hitEnemy->health <= 0)
@@ -7524,7 +7523,9 @@ void Game::UpdatePlaying()
                                 RemoveEnemyPhysicsBody(hitEnemy->id);
 
                                 m_bloodSystem->OnEnemyKilled(hitEnemy->position, m_player->GetPosition());
-                                m_gpuParticles->Emit(hitEnemy->position, 150, 6.0f);
+                                m_gpuParticles->EmitSplash(hitEnemy->position, XMFLOAT3(hitEnemy->position.x - m_player->GetPosition().x, hitEnemy->position.y - m_player->GetPosition().y, hitEnemy->position.z - m_player->GetPosition().z), 40, 7.0f);
+                                m_gpuParticles->EmitMist(rayResult.hitPoint, 100, 2.0f);
+                                m_gpuParticles->Emit(hitEnemy->position, 60, 5.0f);
 
                                 // MIDBOSSが死んだらビーム停止
                                 if (hitEnemy->type == EnemyType::MIDBOSS &&
@@ -7543,8 +7544,10 @@ void Game::UpdatePlaying()
 
                             // ポイント加算
                             int waveBonus = m_waveManager->OnEnemyKilled();
+                            if (waveBonus > 0) SpawnScorePopup(waveBonus, ScorePopupType::WAVE_BONUS);
                             int totalPoints = (isHeadShot ? 150 : 60) + waveBonus;
                             m_player->AddPoints(totalPoints);
+                            SpawnScorePopup(totalPoints, isHeadShot ? ScorePopupType::HEADSHOT : ScorePopupType::KILL);
 
                             //  スタイルランク：キル通知
                             m_styleRank->NotifyKill(isHeadShot);
@@ -7687,7 +7690,6 @@ void Game::UpdatePlaying()
     m_particleSystem->Update(deltaTime);
 
     m_bloodSystem->Update(deltaTime);
-    m_gpuParticles->Update(deltaTime);
 
     //  グローリーキル中は敵の更新を停止
     if (!m_gloryKillCameraActive)
@@ -8148,12 +8150,16 @@ void Game::UpdatePlaying()
                         {
                             float intensity = 1.0f - (bDist / 8.0f);
                             m_bloodSystem->OnExplosionKill(enemy.position, m_player->GetPosition());
-                            m_gpuParticles->Emit(enemy.position, 250, 8.0f);
+                            m_gpuParticles->EmitSplash(enemy.position, XMFLOAT3(enemy.position.x - m_player->GetPosition().x, enemy.position.y - m_player->GetPosition().y, enemy.position.z - m_player->GetPosition().z), 50, 9.0f);
+                            m_gpuParticles->EmitMist(enemy.position, 150, 3.5f);
+                            m_gpuParticles->Emit(enemy.position, 80, 7.0f);
                         }
                     }
 
                     int waveBonus = m_waveManager->OnEnemyKilled();
+                    if (waveBonus > 0) SpawnScorePopup(waveBonus, ScorePopupType::WAVE_BONUS);
                     m_player->AddPoints(100 + waveBonus);
+                    SpawnScorePopup(100 + waveBonus, ScorePopupType::MELEE_KILL);
 
                     //  肉片を生成（8個、爆発力15）
                     SpawnGibs(enemy.position, 12, 18.0f);
@@ -8190,7 +8196,9 @@ void Game::UpdatePlaying()
                         RemoveEnemyPhysicsBody(enemy.id);
                         // スクリーンブラッド
                         m_bloodSystem->OnMeleeKill(enemy.position);
-                        m_gpuParticles->Emit(enemy.position, 200, 7.0f);
+                        m_gpuParticles->EmitSplash(enemy.position, XMFLOAT3(enemy.position.x - m_player->GetPosition().x, enemy.position.y - m_player->GetPosition().y, enemy.position.z - m_player->GetPosition().z), 45, 8.0f);
+                        m_gpuParticles->EmitMist(enemy.position, 120, 2.5f);
+                        m_gpuParticles->Emit(enemy.position, 70, 6.0f);
                         m_statKills++;       //  総キル
                         m_statMeleeKills++;  //  近接キル
 
@@ -8348,7 +8356,9 @@ void Game::UpdatePlaying()
                         RemoveEnemyPhysicsBody(enemy.id);
 
                         int waveBonus = m_waveManager->OnEnemyKilled();
+                        if (waveBonus > 0) SpawnScorePopup(waveBonus, ScorePopupType::WAVE_BONUS);
                         m_player->AddPoints(100 + waveBonus);
+                        SpawnScorePopup(100 + waveBonus, ScorePopupType::SHIELD_KILL);
                     }
 
                     // スタン
@@ -8357,6 +8367,19 @@ void Game::UpdatePlaying()
                     // 血エフェクト
                     DirectX::XMFLOAT3 upDir = { 0.0f, 1.0f, 0.0f };
                     //m_particleSystem->CreateBloodEffect(enemy.position, upDir, 80);
+                    //  盾投げヒット血エフェクト（GPU）
+                    {
+                        // 盾の飛行方向を血の飛散方向に使う
+                        DirectX::XMFLOAT3 splashDir = m_thrownShieldDir;
+                        splashDir.y += 0.3f;  // 少し上向きに飛ばす
+
+                        // 敵の位置（少し上＝胴体）からスプラッシュ
+                        DirectX::XMFLOAT3 hitPos = enemy.position;
+                        hitPos.y += 0.8f;
+
+                        m_gpuParticles->EmitSplash(hitPos, splashDir, 25, 6.0f);
+                        m_gpuParticles->EmitMist(hitPos, 40, 1.5f);
+                    }
 
                     // カメラシェイク（軽め）
                     m_cameraShake = 0.15f;
@@ -8412,6 +8435,12 @@ void Game::UpdatePlaying()
         m_shieldGlowIntensity += (targetGlow - m_shieldGlowIntensity) * min(1.0f, 12.0f * deltaTime);
     }
 
+    m_gpuParticles->Update(deltaTime);
+    //  回復アイテム更新
+    UpdateHealthPickups(deltaTime);
+    UpdateScorePopups(deltaTime);
+
+
     // パリィ成功エフェクトタイマー
     if (m_parryFlashTimer > 0.0f)
     {
@@ -8454,7 +8483,7 @@ void Game::UpdatePlaying()
                 float dist = sqrtf(dx * dx + dz * dz);
 
                 float slamRadius = (enemy.type == EnemyType::BOSS) ? m_slamRadiusBoss : m_slamRadiusMidBoss;
-                float slamDamage = (enemy.type == EnemyType::BOSS) ? m_slamDamageBoss : m_slamDamageMidBoss;
+                float slamDamage = ((enemy.type == EnemyType::BOSS) ? m_slamDamageBoss : m_slamDamageMidBoss) * enemy.damageMultiplier;  //  ウェーブ倍率
 
                 if (dist < slamRadius)
                 {
@@ -8476,6 +8505,9 @@ void Game::UpdatePlaying()
                         m_lastParryResultTime = m_gameTime;
                         m_lastParryWasSuccess = true;
                         m_parrySuccessCount++;
+                        m_player->AddPoints(150);
+                        SpawnScorePopup(150, ScorePopupType::PARRY);
+                        m_styleRank->NotifyParry();
                         m_parryFlashTimer = 0.3f;
 
                          // パリィエフェクト再生
@@ -8596,7 +8628,7 @@ void Game::UpdatePlaying()
 
                     proj.speed = m_slashSpeed;
                     proj.lifetime = 3.0f;
-                    proj.damage = m_slashDamage;
+                    proj.damage = m_slashDamage * enemy.damageMultiplier;
                     proj.ownerID = enemy.id;
                     proj.isActive = true;
 
@@ -8679,10 +8711,10 @@ void Game::UpdatePlaying()
                 float beamLength = m_beamLength;
                 float beamDPS = m_beamDPS;
 
-                // ★ ビーム到達後のみダメージ判定
+                // // ビーム到達後のみダメージ判定
                 if (beamReached && projDist > 0.0f && projDist < beamLength && perpDist < beamWidth)
                 {
-                    float frameDamage = beamDPS * (1.0f / 60.0f);
+                    float frameDamage = beamDPS * (1.0f / 60.0f) * enemy.damageMultiplier;  //  ウェーブ倍率
 
                     if (m_shieldState == ShieldState::Parrying && enemy.bossBeamParriable)
                     {
@@ -8699,6 +8731,9 @@ void Game::UpdatePlaying()
                             m_meleeCharges++;
 
                         m_parryFlashTimer = 0.3f;
+                        m_player->AddPoints(150);
+                        SpawnScorePopup(150, ScorePopupType::PARRY);
+                        m_styleRank->NotifyParry();
 
                         // パリィエフェクト再生
                         if (m_effectParry != nullptr && m_effekseerManager != nullptr)
@@ -8801,6 +8836,9 @@ void Game::UpdatePlaying()
                 m_lastParryResultTime = m_gameTime;
                 m_lastParryWasSuccess = true;
                 m_parrySuccessCount++;
+                m_player->AddPoints(75);
+                SpawnScorePopup(75, ScorePopupType::PARRY);
+                m_styleRank->NotifyParry();
                 m_parryFlashTimer = 0.3f;
 
                 // パリィエフェクト再生
@@ -8870,6 +8908,7 @@ void Game::UpdatePlaying()
                 case EnemyType::TANK:   rawDamage = 25.0f; break;
                 default:                rawDamage = 10.0f; break;
                 }
+                rawDamage *= enemy.damageMultiplier;  //  ウェーブ倍率
 
                 float reducedDamage = rawDamage * (1.0f - m_guardDamageReduction);
                 m_statDamageTaken += (int)reducedDamage;  //  被ダメ記録
@@ -8914,6 +8953,8 @@ void Game::UpdatePlaying()
                 case EnemyType::TANK:   rawDamage = 25.0f; break;
                 default:                rawDamage = 10.0f; break;
                 }
+                rawDamage *= enemy.damageMultiplier;  //  ウェーブ倍率
+
                 bool died = m_player->TakeDamage((int)rawDamage);
                 m_statDamageTaken += (int)rawDamage;  //  被ダメ記録
 
@@ -9039,6 +9080,9 @@ void Game::UpdatePlaying()
                     m_hitStopTimer = 0.1f;
                     m_timeScale = 0.2f;
                     m_slowMoTimer = 0.4f;
+                    m_player->AddPoints(150);
+                    SpawnScorePopup(150, ScorePopupType::PARRY);
+                    m_styleRank->NotifyParry();
 
                     // エフェクト停止
                     if (proj.effectHandle >= 0 && m_effekseerManager != nullptr)
@@ -9144,6 +9188,9 @@ void Game::ResetGame()
 
     // === プレイヤー ===
     m_player->SetHealth(100);
+    m_healthPickups.clear();     //  アイテムもリセット
+    m_pickupSpawnTimer = 0.0f;   // 
+    m_scorePopups.clear();
     m_player->SetPosition(DirectX::XMFLOAT3(0.0f, 1.8f, 0.0f));
     m_player->GetPointsRef() = 500;  // 初期ポイント
 
@@ -10057,7 +10104,7 @@ void Game::RenderGameOver()
                 DirectX::XMFLOAT2(rightCX - rlW * 0.5f, panelTop + 25.0f), rlCol);
         }
 
-        // ★ ランク登場フラッシュ（文字の形に沿って放射状に光る）
+        // // ランク登場フラッシュ（文字の形に沿って放射状に光る）
         if (timer > 2.15f && timer < 4.0f && m_fontLarge)
         {
             float flashT = (timer - 2.15f) / 1.85f;  // 0→1（1.85秒かけてゆっくり減衰）
@@ -10888,4 +10935,475 @@ void Game::DrawFullscreenQuad()
     // シェーダーをクリア
     m_d3dContext->VSSetShader(nullptr, nullptr, 0);
     m_d3dContext->PSSetShader(nullptr, nullptr, 0);
+}
+
+// ============================================================
+//  回復アイテムをランダム位置にスポーン
+// ============================================================
+void Game::SpawnHealthPickup()
+{
+    // 上限チェック
+    int activeCount = 0;
+    for (auto& p : m_healthPickups)
+        if (p.isActive) activeCount++;
+    if (activeCount >= m_maxPickups) return;
+
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+
+    HealthPickup pickup;
+
+    // プレイヤーから8～25m離れたランダム位置
+    float angle = ((float)rand() / RAND_MAX) * 6.2832f;
+    float dist = 8.0f + ((float)rand() / RAND_MAX) * 17.0f;
+
+    pickup.position.x = playerPos.x + cosf(angle) * dist;
+    pickup.position.y = 0.5f;   // 地面から少し浮かせる
+    pickup.position.z = playerPos.z + sinf(angle) * dist;
+
+    pickup.healAmount = 20 + (rand() % 3) * 5;  // 20, 25, 30 のどれか
+    pickup.lifetime = 30.0f;
+    pickup.maxLifetime = 30.0f;
+    pickup.bobTimer = ((float)rand() / RAND_MAX) * 6.28f;  // ボブ開始位相をバラす
+    pickup.spinAngle = 0.0f;
+    pickup.isActive = true;
+
+    m_healthPickups.push_back(pickup);
+}
+
+// ============================================================
+//  回復アイテムの更新（寿命・拾い判定・演出）
+// ============================================================
+void Game::UpdateHealthPickups(float deltaTime)
+{
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+
+    for (auto& pickup : m_healthPickups)
+    {
+        if (!pickup.isActive) continue;
+
+        // 寿命カウントダウン
+        pickup.lifetime -= deltaTime;
+        if (pickup.lifetime <= 0.0f)
+        {
+            pickup.isActive = false;
+            continue;
+        }
+
+        // ボブ＆回転演出
+        pickup.bobTimer += deltaTime * 3.0f;
+        pickup.spinAngle += deltaTime * 2.0f;
+
+        // === 拾い判定 ===
+        float dx = playerPos.x - pickup.position.x;
+        float dz = playerPos.z - pickup.position.z;
+        float distSq = dx * dx + dz * dz;
+
+        if (distSq < m_pickupRadius * m_pickupRadius)
+        {
+            int currentHP = m_player->GetHealth();
+            int maxHP = m_player->GetMaxHealth();
+
+            // 最大HPなら拾わない（もったいないから残す）
+            if (currentHP < maxHP)
+            {
+                int newHP = (std::min)(currentHP + pickup.healAmount, maxHP);
+                m_player->SetHealth(newHP);
+                pickup.isActive = false;
+
+                // 拾った演出：軽いカメラシェイク（心地よい）
+                m_cameraShake = 0.02f;
+                m_cameraShakeTimer = 0.1f;
+            }
+        }
+    }
+
+    // 死んだアイテムを削除
+    m_healthPickups.erase(
+        std::remove_if(m_healthPickups.begin(), m_healthPickups.end(),
+            [](const HealthPickup& p) { return !p.isActive; }),
+        m_healthPickups.end());
+
+    // 定期スポーン
+    m_pickupSpawnTimer += deltaTime;
+    if (m_pickupSpawnTimer >= m_pickupSpawnInterval)
+    {
+        m_pickupSpawnTimer = 0.0f;
+        SpawnHealthPickup();
+    }
+}
+
+// ============================================================
+//  回復アイテム描画（緑の十字ビルボード）
+// ============================================================
+void Game::DrawHealthPickups(DirectX::XMMATRIX view, DirectX::XMMATRIX proj)
+{
+    if (m_healthPickups.empty()) return;
+
+    auto* context = m_d3dContext.Get();
+
+    m_effect->SetView(view);
+    m_effect->SetProjection(proj);
+    m_effect->SetWorld(DirectX::XMMatrixIdentity());
+    m_effect->SetVertexColorEnabled(true);
+    m_effect->Apply(context);
+    context->IASetInputLayout(m_inputLayout.Get());
+
+    auto batch = std::make_unique<DirectX::PrimitiveBatch<DirectX::VertexPositionColor>>(context);
+    batch->Begin();
+
+    // カメラのRight/Upベクトル取得
+    DirectX::XMMATRIX invView = DirectX::XMMatrixInverse(nullptr, view);
+    DirectX::XMFLOAT4X4 ivF;
+    DirectX::XMStoreFloat4x4(&ivF, invView);
+    DirectX::XMFLOAT3 camRight(ivF._11, ivF._12, ivF._13);
+    DirectX::XMFLOAT3 camUp(ivF._21, ivF._22, ivF._23);
+
+    for (auto& pickup : m_healthPickups)
+    {
+        if (!pickup.isActive) continue;
+
+        // ボブ演出（上下に浮遊）
+        float bobY = sinf(pickup.bobTimer) * 0.2f;
+
+        // フェード（残り5秒で点滅）
+        float alpha = 1.0f;
+        if (pickup.lifetime < 5.0f)
+            alpha = (sinf(pickup.lifetime * 8.0f) * 0.5f + 0.5f);
+
+        // 緑色（明るめ）
+        DirectX::XMFLOAT4 color(0.1f, 1.0f, 0.2f, alpha);
+
+        DirectX::XMFLOAT3 center = pickup.position;
+        center.y += bobY + 0.5f;
+
+        float size = 0.4f;
+
+        // --- 十字の縦棒 ---
+        DirectX::XMFLOAT3 vTop, vBot, vTopR, vBotR;
+        vTop.x = center.x + camUp.x * size;
+        vTop.y = center.y + camUp.y * size;
+        vTop.z = center.z + camUp.z * size;
+        vBot.x = center.x - camUp.x * size;
+        vBot.y = center.y - camUp.y * size;
+        vBot.z = center.z - camUp.z * size;
+        vTopR.x = center.x + camUp.x * size + camRight.x * size * 0.3f;
+        vTopR.y = center.y + camUp.y * size + camRight.y * size * 0.3f;
+        vTopR.z = center.z + camUp.z * size + camRight.z * size * 0.3f;
+        vBotR.x = center.x - camUp.x * size + camRight.x * size * 0.3f;
+        vBotR.y = center.y - camUp.y * size + camRight.y * size * 0.3f;
+        vBotR.z = center.z - camUp.z * size + camRight.z * size * 0.3f;
+
+        DirectX::XMFLOAT3 vTopL, vBotL;
+        vTopL.x = center.x + camUp.x * size - camRight.x * size * 0.3f;
+        vTopL.y = center.y + camUp.y * size - camRight.y * size * 0.3f;
+        vTopL.z = center.z + camUp.z * size - camRight.z * size * 0.3f;
+        vBotL.x = center.x - camUp.x * size - camRight.x * size * 0.3f;
+        vBotL.y = center.y - camUp.y * size - camRight.y * size * 0.3f;
+        vBotL.z = center.z - camUp.z * size - camRight.z * size * 0.3f;
+
+        batch->DrawTriangle(
+            DirectX::VertexPositionColor(vTopL, color),
+            DirectX::VertexPositionColor(vTopR, color),
+            DirectX::VertexPositionColor(vBotR, color));
+        batch->DrawTriangle(
+            DirectX::VertexPositionColor(vTopL, color),
+            DirectX::VertexPositionColor(vBotR, color),
+            DirectX::VertexPositionColor(vBotL, color));
+
+        // --- 十字の横棒 ---
+        DirectX::XMFLOAT3 hL, hR, hLU, hRU, hLD, hRD;
+        hL.x = center.x - camRight.x * size;
+        hL.y = center.y - camRight.y * size;
+        hL.z = center.z - camRight.z * size;
+        hR.x = center.x + camRight.x * size;
+        hR.y = center.y + camRight.y * size;
+        hR.z = center.z + camRight.z * size;
+
+        hLU.x = hL.x + camUp.x * size * 0.3f;
+        hLU.y = hL.y + camUp.y * size * 0.3f;
+        hLU.z = hL.z + camUp.z * size * 0.3f;
+        hRU.x = hR.x + camUp.x * size * 0.3f;
+        hRU.y = hR.y + camUp.y * size * 0.3f;
+        hRU.z = hR.z + camUp.z * size * 0.3f;
+        hLD.x = hL.x - camUp.x * size * 0.3f;
+        hLD.y = hL.y - camUp.y * size * 0.3f;
+        hLD.z = hL.z - camUp.z * size * 0.3f;
+        hRD.x = hR.x - camUp.x * size * 0.3f;
+        hRD.y = hR.y - camUp.y * size * 0.3f;
+        hRD.z = hR.z - camUp.z * size * 0.3f;
+
+        batch->DrawTriangle(
+            DirectX::VertexPositionColor(hLU, color),
+            DirectX::VertexPositionColor(hRU, color),
+            DirectX::VertexPositionColor(hRD, color));
+        batch->DrawTriangle(
+            DirectX::VertexPositionColor(hLU, color),
+            DirectX::VertexPositionColor(hRD, color),
+            DirectX::VertexPositionColor(hLD, color));
+    }
+
+    batch->End();
+}
+
+void Game::SpawnScorePopup(int points, ScorePopupType type)
+{
+    ScorePopup popup;
+    float cx = m_outputWidth * 0.5f + 120.0f;
+    float cy = m_outputHeight * 0.5f - 60.0f;
+
+    // タイプごとに出現位置を少しバラす（画面中央付近）
+    float randX = ((float)rand() / RAND_MAX - 0.5f) * 60.0f;
+    float randY = ((float)rand() / RAND_MAX - 0.5f) * 30.0f;
+
+    switch (type)
+    {
+    case ScorePopupType::HEADSHOT:
+        popup.screenX = cx + randX;
+        popup.screenY = cy - 40.0f + randY;   // 少し上
+        popup.maxTime = 1.6f;
+        break;
+    case ScorePopupType::GLORY_KILL:
+        popup.screenX = cx + randX;
+        popup.screenY = cy - 30.0f + randY;
+        popup.maxTime = 2.0f;                  // 長めに表示
+        break;
+    case ScorePopupType::WAVE_BONUS:
+        popup.screenX = cx;
+        popup.screenY = cy - 80.0f;            // 上の方
+        popup.maxTime = 2.0f;
+        break;
+    default:
+        popup.screenX = cx + randX;
+        popup.screenY = cy - 20.0f + randY;
+        popup.maxTime = 1.2f;
+        break;
+    }
+
+    popup.points = points;
+    popup.type = type;
+    popup.timer = 0.0f;
+    popup.scale = 1.0f;
+    popup.alpha = 1.0f;
+    popup.offsetY = 0.0f;
+    popup.burstAngle = ((float)rand() / RAND_MAX) * 6.28f;
+    popup.isActive = true;
+
+    m_scorePopups.push_back(popup);
+}
+
+void Game::UpdateScorePopups(float deltaTime)
+{
+    for (auto& popup : m_scorePopups)
+    {
+        if (!popup.isActive) continue;
+
+        popup.timer += deltaTime;
+        float t = popup.timer / popup.maxTime;  // 0.0?1.0
+
+        if (t >= 1.0f)
+        {
+            popup.isActive = false;
+            continue;
+        }
+
+        // === アニメーション ===
+
+        // Phase 1 (0?0.1): パンチイン（大きく出て縮む）
+        if (t < 0.1f)
+        {
+            float p = t / 0.1f;
+            popup.scale = 2.0f - p * 1.0f;    // 2.0 → 1.0
+            popup.alpha = 1.0f;
+        }
+        // Phase 2 (0.1?0.7): 安定表示＋ゆっくり上昇
+        else if (t < 0.7f)
+        {
+            popup.scale = 1.0f;
+            popup.alpha = 1.0f;
+        }
+        // Phase 3 (0.7?1.0): フェードアウト＋加速上昇
+        else
+        {
+            float fadeT = (t - 0.7f) / 0.3f;   // 0→1
+            popup.scale = 1.0f - fadeT * 0.3f;  // 少し縮む
+            popup.alpha = 1.0f - fadeT;          // 透明に
+        }
+
+        // 上昇（イージング付き）
+        popup.offsetY = t * t * 120.0f;
+
+        // バースト回転
+        popup.burstAngle += deltaTime * 1.5f;
+    }
+
+    // 消えたポップアップを削除
+    m_scorePopups.erase(
+        std::remove_if(m_scorePopups.begin(), m_scorePopups.end(),
+            [](const ScorePopup& p) { return !p.isActive; }),
+        m_scorePopups.end());
+}
+
+void Game::DrawScorePopups()
+{
+    if (m_scorePopups.empty() || !m_spriteBatch || !m_fontLarge) return;
+
+    m_spriteBatch->Begin(
+        DirectX::SpriteSortMode_Deferred,
+        m_states->NonPremultiplied());
+
+    for (auto& popup : m_scorePopups)
+    {
+        if (!popup.isActive) continue;
+
+        float x = popup.screenX;
+        float y = popup.screenY - popup.offsetY;
+        float s = popup.scale;
+        float a = popup.alpha;
+
+        // === グロウ/バースト背景 ===
+        ID3D11ShaderResourceView* glowTex = nullptr;
+        DirectX::XMVECTORF32 glowColor = { 1, 1, 1, a * 0.6f };
+
+        switch (popup.type)
+        {
+        case ScorePopupType::HEADSHOT:
+            // バースト + グロウ両方
+            if (m_scoreBurst.Get())
+            {
+                float burstSize = 160.0f * s;
+                RECT burstRect = {
+                    (LONG)(x - burstSize * 0.5f), (LONG)(y - burstSize * 0.5f),
+                    (LONG)(x + burstSize * 0.5f), (LONG)(y + burstSize * 0.5f)
+                };
+                DirectX::XMVECTORF32 burstColor = { 1, 0.9f, 0.3f, a * 0.5f };
+                m_spriteBatch->Draw(m_scoreBurst.Get(), burstRect, nullptr,
+                    burstColor, popup.burstAngle,
+                    DirectX::XMFLOAT2(64, 64));
+            }
+            glowTex = m_scoreGlow.Get();
+            glowColor = { 1, 0.85f, 0.2f, a * 0.7f };
+            break;
+
+        case ScorePopupType::GLORY_KILL:
+            glowTex = m_scoreGlowRed.Get();
+            glowColor = { 1, 0.3f, 0.2f, a * 0.8f };
+            break;
+
+        case ScorePopupType::WAVE_BONUS:
+            glowTex = m_scoreGlowBlue.Get();
+            glowColor = { 0.7f, 0.5f, 1, a * 0.6f };
+            break;
+
+        case ScorePopupType::PARRY:
+            glowTex = m_scoreGlowBlue.Get();
+            glowColor = { 0.2f, 1.0f, 0.4f, a * 0.6f };
+            break;
+
+        default:
+            glowTex = m_scoreGlow.Get();
+            glowColor = { 1, 0.9f, 0.4f, a * 0.5f };
+            break;
+        }
+
+        // グロウ描画
+        if (glowTex)
+        {
+            float glowSize = 120.0f * s;
+            RECT glowRect = {
+                (LONG)(x - glowSize * 0.5f), (LONG)(y - glowSize * 0.5f),
+                (LONG)(x + glowSize * 0.5f), (LONG)(y + glowSize * 0.5f)
+            };
+            m_spriteBatch->Draw(glowTex, glowRect, glowColor);
+        }
+
+        // === アイコン（ヘッドショット/グローリーキル） ===
+        ID3D11ShaderResourceView* iconTex = nullptr;
+        if (popup.type == ScorePopupType::HEADSHOT)
+            iconTex = m_scoreHeadshot.Get();
+        else if (popup.type == ScorePopupType::GLORY_KILL)
+            iconTex = m_scoreSkull.Get();
+
+        if (iconTex)
+        {
+            float iconSize = 32.0f * s;
+            RECT iconRect = {
+                (LONG)(x - 70.0f * s - iconSize), (LONG)(y - iconSize * 0.5f),
+                (LONG)(x - 70.0f * s),             (LONG)(y + iconSize * 0.5f)
+            };
+            DirectX::XMVECTORF32 iconColor = { 1, 1, 1, a };
+            m_spriteBatch->Draw(iconTex, iconRect, iconColor);
+        }
+
+        // === スコアテキスト ===
+        wchar_t buf[32];
+        swprintf_s(buf, L"+%d", popup.points);
+
+        // テキストサイズ測定（中央揃え用）
+        DirectX::XMVECTOR textSize = m_fontLarge->MeasureString(buf);
+        float tw = DirectX::XMVectorGetX(textSize);
+        float th = DirectX::XMVectorGetY(textSize);
+
+        DirectX::XMFLOAT2 textPos(x - tw * 0.5f * s, y - th * 0.5f * s);
+
+        // テキスト色（タイプ別）
+        DirectX::XMVECTORF32 textColor;
+        DirectX::XMVECTORF32 shadowColor = { 0, 0, 0, a * 0.8f };
+
+        switch (popup.type)
+        {
+        case ScorePopupType::HEADSHOT:
+            textColor = { 1.0f, 0.85f, 0.1f, a };   // 金色
+            break;
+        case ScorePopupType::GLORY_KILL:
+            textColor = { 1.0f, 0.2f, 0.15f, a };    // 赤
+            break;
+        case ScorePopupType::WAVE_BONUS:
+            textColor = { 0.7f, 0.5f, 1.0f, a };     // 紫
+            break;
+        case ScorePopupType::SHIELD_KILL:
+            textColor = { 0.3f, 0.8f, 1.0f, a };     // 水色
+            break;
+        case ScorePopupType::PARRY:
+            textColor = { 0.2f, 1.0f, 0.4f, a };
+        default:
+            textColor = { 1.0f, 1.0f, 1.0f, a };     // 白
+            break;
+        }
+
+        // 影（2px オフセット）
+        DirectX::XMFLOAT2 shadowPos(textPos.x + 2.0f, textPos.y + 2.0f);
+        m_fontLarge->DrawString(m_spriteBatch.get(), buf, shadowPos,
+            shadowColor, 0.0f, DirectX::XMFLOAT2(0, 0),
+            DirectX::XMFLOAT2(s, s));
+
+        // 本体テキスト
+        m_fontLarge->DrawString(m_spriteBatch.get(), buf, textPos,
+            textColor, 0.0f, DirectX::XMFLOAT2(0, 0),
+            DirectX::XMFLOAT2(s, s));
+
+        // === ラベルテキスト（HEADSHOT! / GLORY KILL! 等） ===
+        const wchar_t* label = nullptr;
+        switch (popup.type)
+        {
+        case ScorePopupType::HEADSHOT:    label = L"HEADSHOT";    break;
+        case ScorePopupType::GLORY_KILL:  label = L"GLORY KILL";  break;
+        case ScorePopupType::WAVE_BONUS:  label = L"WAVE CLEAR";  break;
+        case ScorePopupType::SHIELD_KILL: label = L"SHIELD KILL"; break;
+        case ScorePopupType::PARRY:       label = L"PARRY";       break;
+        default: break;
+        }
+
+        if (label && m_font)
+        {
+            DirectX::XMVECTOR labelSize = m_font->MeasureString(label);
+            float lw = DirectX::XMVectorGetX(labelSize);
+            DirectX::XMFLOAT2 labelPos(x - lw * 0.5f, y + th * 0.5f * s + 4.0f);
+
+            m_font->DrawString(m_spriteBatch.get(), label, labelPos,
+                textColor, 0.0f, DirectX::XMFLOAT2(0, 0),
+                DirectX::XMFLOAT2(0.9f * s, 0.9f * s));
+        }
+    }
+
+    m_spriteBatch->End();
 }

@@ -5,6 +5,7 @@
 #include <vector>
 #include <DirectXMath.h>
 #include <unordered_map>
+#include <algorithm>
 
 class EnemySystem {
 public:
@@ -72,6 +73,20 @@ public:
     float m_animSpeed_Run[5] = { 1.0f, 1.20f, 1.0f, 1.0f, 1.0f };
     float m_animSpeed_Attack[5] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.00f };
     float m_animSpeed_Death[5] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
+
+
+    //  ウェーブ難易度スケーリング
+    float m_waveHpMult = 1.0f;  // HP倍率
+    float m_waveSpeedMult = 1.0f;  // 移動速度倍率
+    float m_waveDamageMult = 1.0f; // 攻撃力倍率
+
+    void SetWaveScaling(int wave)
+    {
+        float w = (float)(wave - 1);
+        m_waveHpMult = (std::min)(1.0f + w * 0.08f, 3.0f);  // 最大3倍（Wave26で到達）
+        m_waveSpeedMult = (std::min)(1.0f + w * 0.03f, 1.8f);   // 最大1.8倍（Wave27で到達）
+        m_waveDamageMult = (std::min)(1.0f + w * 0.06f, 2.5f);  // 最大2.5倍（Wave26で到達）
+    }
 private:
     // グリッドセルのキー（X, Z座標のペア）
     struct GridKey

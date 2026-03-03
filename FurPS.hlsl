@@ -100,10 +100,10 @@ float4 main(PS_INPUT input) : SV_TARGET
     // 色計算
     // ==============================================
     
-    // ★coarseはストランド判定で既に計算済みだから使い回す
+    // //coarseはストランド判定で既に計算済みだから使い回す
     float3 furColor = lerp(BaseColor, TipColor, layer);
     
-    // ★colorVarもfbmじゃなくnoiseで十分
+    // //colorVarもfbmじゃなくnoiseで十分
     float colorVar = noise(input.TexCoord * 45.0 + 7.1);
     furColor *= (0.65 + colorVar * 0.7);
     

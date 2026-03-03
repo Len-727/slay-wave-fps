@@ -34,7 +34,7 @@ private:
 	ComPtr<ID3D11Buffer> m_vertexBuffer;
 	ComPtr<ID3D11Buffer> m_indexBuffer;
 
-	// ★追加：丸い影の画像データ
+	// 丸い影の画像データ
 	ComPtr<ID3D11ShaderResourceView> m_textureView;
 
 	// ステート
@@ -50,6 +50,6 @@ private:
 	bool CreateDepthStencilState(ID3D11Device* device);
 	bool CreateRasterizerState(ID3D11Device* device);
 
-	// ★追加：丸い画像をプログラムで作る関数
+	// 丸い画像をプログラムで作る関数
 	bool CreateCircleTexture(ID3D11Device* device);
 };

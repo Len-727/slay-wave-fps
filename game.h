@@ -557,6 +557,29 @@ private:
 
     //  ボスプロジェクトタイル
     std::vector<BossProjectile> m_bossProjectiles;
+    // === 回復アイテム ===
+    std::vector<HealthPickup> m_healthPickups;
+    float m_pickupSpawnTimer = 0.0f;         // スポーン間隔タイマー
+    float m_pickupSpawnInterval = 12.0f;     // 何秒ごとにスポーン
+    int   m_maxPickups = 5;                  // 同時に存在できる最大数
+    float m_pickupRadius = 1.5f;             // 拾える距離
+
+    // === スコアポップアップ ===
+    std::vector<ScorePopup> m_scorePopups;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreGlow;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreGlowRed;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreGlowBlue;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreBurst;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreSkull;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreHeadshot;
+
+    void SpawnScorePopup(int points, ScorePopupType type);
+    void UpdateScorePopups(float deltaTime);
+    void DrawScorePopups();
+
+    void SpawnHealthPickup();
+    void UpdateHealthPickups(float deltaTime);
+    void DrawHealthPickups(DirectX::XMMATRIX view, DirectX::XMMATRIX proj);
 
     // --- シールドHUDテクスチャ ---
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_shieldHudFrame;

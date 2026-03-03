@@ -40,6 +40,9 @@ public:
     // --- ダメージを受けた時に呼ぶ ---
     void NotifyDamage();
 
+    // --- パリィ成功時に呼ぶ --- 
+    void NotifyParry();
+
     // --- 現在のランクを取得 ---
     StyleRank GetRank() const { return m_currentRank; }
 

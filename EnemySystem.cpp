@@ -1,7 +1,8 @@
 //	EnemySystem.cpp	敵管理システムの実装
+#define NOMINMAX
 #include "EnemySystem.h"
 #include<windows.h>
-#include <Algorithm>	//	std::remmove_if(配列から要素を削除)を使うため
+#include <algorithm>	//	std::remmove_if(配列から要素を削除)を使うため
 #include <cmath>		//	sprtf(平方根), conf, sinfを使うため
 
 //	コンストラクタ	EnemySystemで作られた時の初期化
@@ -306,7 +307,7 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 		}
 
 		//	最終的な速度を計算（倍率をかける）
-		float finalSpeed = speed * speedMultiplier;
+		float finalSpeed = speed * speedMultiplier * m_waveSpeedMult;
 
 		//	スピードが速ければ「走り」、遅ければ「歩き」
 		std::string moveAnim = (finalSpeed > 4.0f) ? "Run" : "Walk";
@@ -355,22 +356,22 @@ void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 	if (typeRoll < 60)
 	{
 		enemy.type = EnemyType::NORMAL;
-		enemy.health = 100;
-		enemy.maxHealth = 100;
+		enemy.health = (int)(100 * m_waveHpMult);     //  ウェーブ倍率
+		enemy.maxHealth = enemy.health;
 		enemy.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 	else if (typeRoll < 85)
 	{
 		enemy.type = EnemyType::RUNNER;
-		enemy.health = 50;
-		enemy.maxHealth = 50;
+		enemy.health = (int)(50 * m_waveHpMult);      // 
+		enemy.maxHealth = enemy.health;
 		enemy.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 	else
 	{
 		enemy.type = EnemyType::TANK;
-		enemy.health = 300;
-		enemy.maxHealth = 300;
+		enemy.health = (int)(300 * m_waveHpMult);     // 
+		enemy.maxHealth = enemy.health;
 		enemy.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 
@@ -430,6 +431,7 @@ void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 
 	enemy.justSpawned = true;
 
+	enemy.damageMultiplier = m_waveDamageMult;  //  攻撃力倍率を敵に持たせる
 	m_enemies.push_back(enemy);
 }
 
@@ -440,8 +442,8 @@ void EnemySystem::SpawnMidBoss(DirectX::XMFLOAT3 playerPos)
 
 	// MIDBOSS固定ステータス
 	enemy.type = EnemyType::MIDBOSS;
-	enemy.health = 5000;
-	enemy.maxHealth = 5000;
+	enemy.health = (int)(5000 * m_waveHpMult);     // 
+	enemy.maxHealth = enemy.health;
 	enemy.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
 
 	// プレイヤーの正面やや遠くにスポーン
@@ -467,6 +469,7 @@ void EnemySystem::SpawnMidBoss(DirectX::XMFLOAT3 playerPos)
 
 	enemy.justSpawned = true;
 
+	enemy.damageMultiplier = m_waveDamageMult;
 	m_enemies.push_back(enemy);
 
 
@@ -482,8 +485,8 @@ void EnemySystem::SpawnBoss(DirectX::XMFLOAT3 playerPos)
 	enemy.id = m_nextEnemyID++;
 
 	enemy.type = EnemyType::BOSS;
-	enemy.health = 15000;        // MIDBOSSの3倍！
-	enemy.maxHealth = 15000;
+	enemy.health = (int)(15000 * m_waveHpMult);    // 
+	enemy.maxHealth = enemy.health;
 	enemy.color = DirectX::XMFLOAT4(0.8f, 0.1f, 0.1f, 1.0f);  // 赤黒い
 
 	float angle = (float)rand() / RAND_MAX * 2.0f * 3.14159f;
@@ -507,6 +510,7 @@ void EnemySystem::SpawnBoss(DirectX::XMFLOAT3 playerPos)
 
 	enemy.justSpawned = true;
 
+	enemy.damageMultiplier = m_waveDamageMult;
 	m_enemies.push_back(enemy);
 
 	char buf[128];
@@ -761,7 +765,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 			enemy.velocity.x = nx * speed;
 			enemy.velocity.z = nz * speed;
 
-			float finalSpeed = (enemy.type == EnemyType::BOSS) ? 0.3f : 0.4f;
+			float finalSpeed = ((enemy.type == EnemyType::BOSS) ? 1.0f : 0.4f) * m_waveSpeedMult;
 			enemy.position.x += enemy.velocity.x * finalSpeed * deltaTime;
 			enemy.position.z += enemy.velocity.z * finalSpeed * deltaTime;
 
@@ -909,7 +913,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 			enemy.position.y = 0.0f;
 			enemy.bossJumpHeight = 0.0f;
 
-			// ★ ここでダメージ判定とエフェクトを発生させる
+			// // ここでダメージ判定とエフェクトを発生させる
 			//   (game.cppで処理 - attackJustLandedを流用)
 			enemy.attackJustLanded = true;
 
@@ -970,7 +974,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 			enemy.bossPhaseTimer = 0.0f;
 			enemy.bossTargetPos = playerPos;  // 発射方向を確定
 
-			// ★ game.cppで3本のプロジェクタイルを生成する
+			// // game.cppで3本のプロジェクタイルを生成する
 			//   (フラグで通知)
 			enemy.attackJustLanded = true;
 

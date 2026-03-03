@@ -39,28 +39,37 @@ static const int MAX_RADIUS = 15;
 
 float main(PSInput input) : SV_Target
 {
-    // === 中心ピクセルの深度 ===
-    // SampleLevel(0) = ミップレベル0(最高解像度)で直接読む
-    // ※ Sample()はループ内で使うとgradient命令エラーになる
     float centerDepth = DepthTexture.SampleLevel(PointSampler, input.texcoord, 0);
 
-    // 深度が0(=何もない) or 1(=無限遠)ならスキップ
-    if (centerDepth <= 0.0f || centerDepth >= 1.0f)
+    //Dilation(膨張): 深度0の隙間を近傍パーティクルの深度で埋める 
+    // これがないと粒と粒の「隙間」が永遠に0のままで融合しない
+    if (centerDepth <= 0.0f)
+    {
+        float maxDepth = 0.0f;
+        [unroll]
+        for (int d = -5; d <= 5; d++)
+        {
+            float2 sampleUV = input.texcoord + BlurDirection * TexelSize * (float) d;
+            float s = DepthTexture.SampleLevel(PointSampler, sampleUV, 0);
+            maxDepth = max(maxDepth, s);
+        }
+        if (maxDepth > 0.0f)
+            centerDepth = maxDepth * 0.8f; // 少し奥にオフセットして自然に
+        else
+            return 0.0f; // 周囲にパーティクルなし→完全スキップ
+    }
+
+    if (centerDepth >= 1.0f)
         return centerDepth;
 
-    // === バイラテラルブラー(カーネルサイズ = radius * 2 + 1) ===
-    float totalWeight = 0.0f; // 重みの合計(正規化用)
-    float totalDepth = 0.0f; // 重み付き深度の合計
+    float totalWeight = 0.0f;
+    float totalDepth = 0.0f;
 
-    // ブラー半径(int化、MAX_RADIUSでクランプ)
     int radius = min((int) BlurRadius, MAX_RADIUS);
 
-    // ガウシアンのσ(標準偏差) = 半径の半分
     float sigma = max((float) radius * 0.5f, 0.001f);
-    // 事前計算: -1/(2σ?) をループ外で計算して負荷軽減
     float invTwoSigmaSq = -1.0f / (2.0f * sigma * sigma);
 
-    // 深度閾値の事前計算: -1/(2T?)
     float invTwoThreshSq = -1.0f / (2.0f * DepthThreshold * DepthThreshold);
 
     //  [unroll] + 固定MAX_RADIUSループ → コンパイラが確実に展開できる
@@ -77,6 +86,10 @@ float main(PSInput input) : SV_Target
 
         //  SampleLevel(0)で安全に読む(gradient不要)
         float sampleDepth = DepthTexture.SampleLevel(PointSampler, sampleUV, 0);
+        
+        // // 追加: 深度0のサンプルはスキップ（隙間は合算に入れない）
+        if (sampleDepth <= 0.0f)
+            continue;
 
         // === ガウシアン重み(距離が遠いほど影響小) ===
         float gaussWeight = exp((float) (i * i) * invTwoSigmaSq);

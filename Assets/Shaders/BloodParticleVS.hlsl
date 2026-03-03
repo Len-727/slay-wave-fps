@@ -40,7 +40,7 @@ cbuffer CameraCB : register(b0)
     float3 CameraRight; // カメラの右方向ベクトル
     float Time; // 累計時間
     float3 CameraUp; // カメラの上方向ベクトル
-    float Padding;
+    float SizeScale;
 };
 
 // --- ピクセルシェーダーへの出力 ---
@@ -50,6 +50,7 @@ struct VSOutput
     float2 texcoord : TEXCOORD0; // UV座標(0~1)
     float4 color : COLOR0; // パーティクルの色
     float life : TEXCOORD1; // 寿命の割合(0~1)
+    float size : TEXCOORD2;
 };
 
 // === 4つの角のオフセットテーブル ===
@@ -96,10 +97,36 @@ VSOutput main(uint vertexID : SV_VertexID)
     }
 
     // === ビルボード頂点位置の計算 ===
-    // パーティクルの中心位置 + カメラ方向に沿ったオフセット
-    float2 offset = cornerOffsets[cornerIdx] * p.size;
+    // 速度ストレッチ: 速いパーティクルは進行方向に細長くなる
+    float3 vel = p.velocity;
+    float speedLen = length(vel);
+    
+    // speedLen > 2.0 なら進行方向に伸ばす（遅いやつは普通の正方形）
+    float stretchAmount = saturate((speedLen - 2.0f) / 8.0f) * 2.0f;
+    // stretchAmount: 0（遅い=正方形）～ 2.0（速い=3倍に伸びる）
 
-    // ワールド座標 = 中心 + 右方向×横オフセット + 上方向×縦オフセット
+    // 速度方向をビュー空間に変換
+    float3 velView = mul(float4(vel, 0.0f), View).xyz;
+    float2 velDir2D = normalize(velView.xy + float2(0.001f, 0.001f));
+    
+    // 進行方向ベクトルと直交ベクトル
+    float2 forward = velDir2D * (1.0f + stretchAmount); // 伸ばす
+    float2 side = float2(-velDir2D.y, velDir2D.x) * 0.5f; // 横は細く
+    
+    float2 corner = cornerOffsets[cornerIdx];
+    float2 offset;
+    
+    if (stretchAmount > 0.05f)
+    {
+        // 速い → 細長いビルボード
+        offset = (forward * corner.y + side * corner.x) * p.size * SizeScale;
+    }
+    else
+    {
+        // 遅い → 通常の正方形ビルボード（ミスト等）
+        offset = cornerOffsets[cornerIdx] * p.size * SizeScale;
+    }
+
     float3 worldPos = p.position
                     + CameraRight * offset.x
                     + CameraUp * offset.y;
@@ -124,6 +151,7 @@ VSOutput main(uint vertexID : SV_VertexID)
 
     output.color = float4(bloodColor, alpha);
     output.life = lifeRatio;
+    output.size = p.size;
 
     return output;
 }

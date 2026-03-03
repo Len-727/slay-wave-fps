@@ -232,6 +232,7 @@ struct Enemy {
 	float staggerFlashTimer;	//	点滅用タイマー
 
 	//	パリィ・スタンシステム
+	float damageMultiplier = 1.0f;  //  ウェーブ攻撃力倍率
 	float stunValue = 0.0f;	//	現在のスタン蓄積値
 	float maxStunValue = 100.0f;	//	スタン値がこれに達するとスタが～
 
@@ -289,6 +290,43 @@ struct BossProjectile {
 	bool  isActive = true;          // 生きてるか
 	int   ownerID = -1;             // 発射した敵のID
 	int   effectHandle = -1;
+};
+
+// === 回復アイテム ===
+struct HealthPickup {
+	DirectX::XMFLOAT3 position;     // ワールド位置
+	int   healAmount = 25;           // 回復量
+	float lifetime = 30.0f;        // 残り時間（秒）
+	float maxLifetime = 30.0f;       // 最大寿命（フェード用）
+	float bobTimer = 0.0f;         // 上下ボブ演出用
+	float spinAngle = 0.0f;         // 回転演出用
+	bool  isActive = true;         // 生きてるか
+};
+
+// === スコアポップアップの種類 ===
+enum class ScorePopupType {
+	KILL,          // 通常キル（白、金グロウ）
+	HEADSHOT,      // ヘッドショット（金、バースト）
+	GLORY_KILL,    // グローリーキル（赤、ドクロ）
+	WAVE_BONUS,    // ウェーブボーナス（紫、青グロウ）
+	MELEE_KILL,    // 近接キル
+	SHIELD_KILL,    // 盾投げキル
+	PARRY
+};
+
+// === スコアポップアップ ===
+struct ScorePopup {
+	float screenX = 0.0f;          // スクリーンX（中心基準）
+	float screenY = 0.0f;          // スクリーンY
+	int   points = 0;             // 表示ポイント
+	ScorePopupType type = ScorePopupType::KILL;
+	float timer = 0.0f;          // 経過時間
+	float maxTime = 1.4f;          // 総表示時間
+	float scale = 1.0f;          // 現在のスケール
+	float alpha = 1.0f;          // 現在の透明度
+	float offsetY = 0.0f;          // 上方向のオフセット（浮き上がり）
+	float burstAngle = 0.0f;       // バースト回転角
+	bool  isActive = true;
 };
 
 //	パーティクル

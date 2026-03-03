@@ -10,7 +10,7 @@
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
-// ★変更：位置(Position) + 画像座標(UV) を持つ頂点
+// 位置(Position) + 画像座標(UV) を持つ頂点
 struct ShadowVertex {
 	XMFLOAT3 position;
 	XMFLOAT2 uv;
@@ -30,11 +30,11 @@ bool Shadow::Initialize(ID3D11Device* device)
 	m_effect = std::make_unique<BasicEffect>(device);
 	m_effect->SetVertexColorEnabled(false);
 
-	// ★変更：テクスチャを有効にする
+	//テクスチャを有効にする
 	m_effect->SetTextureEnabled(true);
 	m_effect->SetLightingEnabled(false);
 
-	// ★追加：丸い影のテクスチャを作成
+	//丸い影のテクスチャを作成
 	if (!CreateCircleTexture(device)) return false;
 
 	// エフェクトにテクスチャをセット
@@ -44,7 +44,7 @@ bool Shadow::Initialize(ID3D11Device* device)
 	size_t byteCodeLength;
 	m_effect->GetVertexShaderBytecode(&shaderByteCode, &byteCodeLength);
 
-	// ★変更：入力レイアウトに UV (TEXCOORD) を追加
+	// 入力レイアウトに UV (TEXCOORD) を追加
 	D3D11_INPUT_ELEMENT_DESC inputElements[] = {
 		{ "SV_Position", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 		{ "TEXCOORD",    0, DXGI_FORMAT_R32G32_FLOAT,    0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -61,7 +61,7 @@ bool Shadow::Initialize(ID3D11Device* device)
 	return true;
 }
 
-// ★追加：プログラムで「ボヤけた円」の画像を作る関数
+// プログラムで「ボヤけた円」の画像を作る関数
 bool Shadow::CreateCircleTexture(ID3D11Device* device)
 {
 	const int size = 64; // 64x64ピクセル

@@ -136,7 +136,7 @@ void Player::UpdateMouseLook(HWND window)
         m_rotation.y += deltaX * mouseSensitivity;  // 左右回転
         m_rotation.x += deltaY * mouseSensitivity;  // 上下回転
 
-        // ★上下方向の回転を制限する（真上・真下まで行き過ぎないようにする）
+        // 上下方向の回転を制限する（真上・真下まで行き過ぎないようにする）
         float maxPitch = 1.5f; // だいたい 85度 くらい（ラジアン）
         if (m_rotation.x > maxPitch)
         {

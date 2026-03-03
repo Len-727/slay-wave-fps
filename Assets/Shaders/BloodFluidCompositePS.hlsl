@@ -1,12 +1,14 @@
 // ============================================================
 //  BloodFluidCompositePS.hlsl
-//  Pass 3: 合成パス - ぼかした深度から法線復元 → PBR血ライティング
+//  Pass 3: 合成パス - 血がある場所だけ描画(αブレンド方式)
 //
-//  【修正点】
-//  - 血の色を大幅に明るく(暗すぎて見えなかった)
-//  - Thickness計算を修正(×2で常にdarkBloodだった)
-//  - スペキュラを柔らかく・見えやすく
-//  - デバッグモードのコメントを残す
+//  【新アプローチ】
+//  旧: 全画面を上書き(シーンコピー必要 → CopyResource失敗で真っ黒)
+//  新: 血がある場所だけ描画、他はdiscard(シーンコピー不要！)
+//
+//  メリット:
+//  - CopyResource不要 → パフォーマンス向上
+//  - シーンが消えない(既存の描画結果の上に血を重ねるだけ)
 // ============================================================
 
 struct PSInput
@@ -17,7 +19,7 @@ struct PSInput
 
 // --- テクスチャ ---
 Texture2D<float> BlurredDepth : register(t0); // ブラー済み深度
-Texture2D<float4> SceneColor : register(t1); // 元のシーンカラー
+// t1: 不要になった(シーンコピーなし)
 SamplerState PointSampler : register(s0);
 
 // --- 定数バッファ ---
@@ -33,7 +35,7 @@ cbuffer CompositeCB : register(b0)
     float FluidAlpha;
 };
 
-// === ヘルパー: 深度からビュー空間座標を復元 ===
+// === 深度からビュー空間座標を復元 ===
 float3 ReconstructViewPos(float2 uv, float depth)
 {
     float4 clipPos;
@@ -50,17 +52,13 @@ float4 main(PSInput input) : SV_Target
 {
     float depth = BlurredDepth.SampleLevel(PointSampler, input.texcoord, 0);
 
-    // 深度がない = 血がないピクセル → シーンカラーをそのまま返す
+    // // 血がないピクセルは完全にスキップ(シーンに触らない！)
     if (depth <= 0.0f || depth >= 1.0f)
     {
-        return SceneColor.SampleLevel(PointSampler, input.texcoord, 0);
+        discard;
     }
 
-    // ★ デバッグ: 血がある場所を蛍光グリーンで表示(問題切り分け用)
-    // 下の1行のコメントを外すと血の位置が一目でわかる
-    return float4(0.0f, 1.0f, 0.0f, 1.0f);
-
-    // === 周囲4ピクセルの深度から法線を復元(中心差分) ===
+    // === 周囲4ピクセルの深度から法線を復元 ===
     float depthL = BlurredDepth.SampleLevel(PointSampler, input.texcoord + float2(-TexelSize.x, 0), 0);
     float depthR = BlurredDepth.SampleLevel(PointSampler, input.texcoord + float2(TexelSize.x, 0), 0);
     float depthU = BlurredDepth.SampleLevel(PointSampler, input.texcoord + float2(0, -TexelSize.y), 0);
@@ -80,13 +78,16 @@ float4 main(PSInput input) : SV_Target
     float3 lightDir = normalize(LightDir);
     float3 viewDir = float3(0, 0, -1);
 
+    // ディフューズ(ハーフランバート)
     float NdotL = saturate(dot(normal, -lightDir));
     float diffuse = NdotL * 0.5f + 0.5f;
 
+    // スペキュラ(Blinn-Phong)
     float3 halfVec = normalize(-lightDir + viewDir);
     float NdotH = saturate(dot(normal, halfVec));
     float specular = pow(NdotH, 32.0f) * 2.0f;
 
+    // フレネル
     float NdotV = saturate(dot(normal, -viewDir));
     float fresnel = pow(1.0f - NdotV, 2.0f) * 0.6f;
 
@@ -97,14 +98,14 @@ float4 main(PSInput input) : SV_Target
     float thicknessFactor = saturate(Thickness);
     float3 bloodColor = lerp(freshBlood, darkBlood, thicknessFactor * 0.5f);
 
+    // === 最終合成 ===
     float3 litColor = bloodColor * diffuse;
     litColor += float3(1.0f, 0.7f, 0.5f) * specular;
     litColor += float3(0.8f, 0.15f, 0.05f) * fresnel;
 
+    // HDRトーンマッピング
     litColor = litColor / (litColor + 0.3f);
 
-    float4 scene = SceneColor.SampleLevel(PointSampler, input.texcoord, 0);
-    float3 finalColor = lerp(scene.rgb, litColor, FluidAlpha);
-
-    return float4(finalColor, 1.0f);
+    // // αブレンドで出力(FluidAlphaで透明度を制御)
+    return float4(litColor, FluidAlpha);
 }
