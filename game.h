@@ -170,6 +170,8 @@ private:
 
 
     void UpdateTitle();
+    void UpdateLoading();
+    void RenderLoading();
     void UpdatePlaying();
     void UpdateGameOver();
     void UpdateFade();
@@ -277,6 +279,13 @@ private:
     float m_fadeAlpha;
     bool m_fadingIn;
     bool m_fadeActive;
+
+    // === ロード画面 ===
+    float m_loadingTimer = 0.0f;         // 経過時間
+    float m_loadingDuration = 3.5f;      // ロード画面の表示時間
+    int   m_loadingPhase = 0;            // 現在のメッセージフェーズ
+    float m_loadingBarTarget = 0.0f;     // バーの目標
+    float m_loadingBarCurrent = 0.0f;    // バーの現在値
 
    
 
@@ -526,7 +535,18 @@ private:
     float m_targetFOV = 70.0f;  //  目標FOV
     float m_speedLineAlpha = 0.0f;  //  スピードラインの透明度
 
+    // === ダッシュ演出 ===
+    bool  m_isSprinting = false;           // ダッシュ中か
+    float m_dashOverlayAlpha = 0.0f;       // テクスチャオーバーレイのアルファ（0?1）
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_dashSpeedlineSRV;  // テクスチャ
+
+    // === 弾切れ警告UI ===
+    float m_reloadWarningTimer = 0.0f;     // 警告の表示時間（アニメ用）
+    float m_reloadWarningAlpha = 0.0f;     // フェードイン/アウト
+
     void RenderSpeedLines();    //  スピードライン描画
+    void RenderDashOverlay();
+    void RenderReloadWarning();
 
     bool m_chargeHasTarget = false;          // ロックオン対象がいるか
     int m_chargeTargetEnemyID = -1;          // ロックオン対象の敵ID

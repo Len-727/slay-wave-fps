@@ -43,9 +43,9 @@ void WaveManager::Update(float deltaTime, DirectX::XMFLOAT3 playerPos, EnemySyst
 			m_totalEnemiesThisWave = GetEnemyCountForWave(m_currentWave);
 
 			// MIDBOSS = 3‚Ì”{”i‚½‚¾‚µ10‚Ì”{”‚Íœ‚­j
-			bool isMidBossWave = (m_currentWave % 3 == 0) && (m_currentWave % 10 != 0);
+			bool isMidBossWave = (m_currentWave % 2 == 0) && (m_currentWave % 10 != 0);
 			// BOSS = 10‚Ì”{”
-			bool isBossWave = (m_currentWave % 5 == 0);
+			bool isBossWave = (m_currentWave % 3 == 0);
 
 			if (isMidBossWave)
 			{
@@ -179,7 +179,7 @@ bool WaveManager::IsVictoryWave() const
 
 void WaveManager::Reset()
 {
-	m_currentWave = 5;
+	m_currentWave = 3;
 	m_enemiesKilledThisWave = 0;
 	m_totalEnemiesThisWave = 10;
 	m_betweenWaves = true;

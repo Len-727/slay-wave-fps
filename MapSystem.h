@@ -82,6 +82,18 @@ public:
     void CreateDefaultMap();
 
     void SetDrawPrimitives(bool draw) { m_drawPrimitives = draw; }
+
+    // === ライト調整パラメータ（ImGuiで触る用） ===
+    XMFLOAT3 m_lightDir0 = { 0.0f, -1.0f, 0.3f };       // メインライト方向
+    XMFLOAT4 m_lightColor0 = { 0.6f, 0.45f, 0.3f, 1.0f }; // メインライト色
+    XMFLOAT3 m_lightDir1 = { -0.5f, -0.3f, -0.7f };      // 補助ライト方向
+    XMFLOAT4 m_lightColor1 = { 0.15f, 0.15f, 0.25f, 1.0f };// 補助ライト色
+    XMFLOAT4 m_ambientColor = { 0.08f, 0.06f, 0.05f, 1.0f };// 環境光
+
+
+    // ライトを反映する関数
+    void ApplyLightSettings();
+
     void SetMapTransform(XMFLOAT3 pos, float rotY, float scale);
 
     const std::vector<MapObject>& GetObjects() const { return m_objects; }
@@ -101,8 +113,11 @@ private:
     std::unique_ptr<GeometricPrimitive> m_cylinder;
     std::unique_ptr<DirectX::CommonStates> m_states;
 
+    ComPtr<ID3D11ShaderResourceView> m_floorTexture;
+    ComPtr<ID3D11ShaderResourceView> m_wallTexture;
 
-
+    //  タイル描画用 InputLayout（m_mapEffect と GeometricPrimitive を繋ぐ）
+    ComPtr<ID3D11InputLayout> m_boxInputLayout;
 
     std::vector<StaticSubMesh> m_subMeshes;
     std::vector<MapMaterial>   m_materials;

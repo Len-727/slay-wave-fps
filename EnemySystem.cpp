@@ -905,10 +905,17 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 		// 0.6秒で空中 → ターゲット位置に向かって移動
 		float jumpDuration = 0.6f;
 		float progress = enemy.bossPhaseTimer / jumpDuration;
+		if (progress > 1.0f) progress = 1.0f;
 
 		// 放物線（sin で山なり）
 		enemy.bossJumpHeight = sinf(progress * 3.14159f) * 8.0f;
 		enemy.position.y = enemy.bossJumpHeight;
+
+		//	ジャンプ中もプレイヤーのほうに向く
+		float dx = enemy.bossTargetPos.x - enemy.position.x;
+		float dz = enemy.bossTargetPos.z - enemy.position.z;
+		if (dx * dx + dz * dz > 0.01f)
+			enemy.rotationY = atan2f(dx, dz) + 3.14159f;
 
 		// 水平移動（ターゲットに向かって補間）
 		float lerpSpeed = 5.0f * deltaTime;

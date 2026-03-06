@@ -63,7 +63,51 @@ bool MapSystem::Initialize(ID3D11DeviceContext* context, ID3D11Device* device)
 	}
 
 	OutputDebugStringA("MapSystem::Initialize - Success\n");
+
+	hr = CreateWICTextureFromFile(
+		device, L"Assets/Models/Map/textures/MALL_TIL23.jpg",   // ← 床テクスチャのパス
+		nullptr, m_floorTexture.ReleaseAndGetAddressOf());
+	if (SUCCEEDED(hr))
+		OutputDebugStringA("[MapSystem] Floor tile texture loaded!\n");
+	else
+		OutputDebugStringA("[MapSystem] WARNING: floor tile texture not found\n");
+
+	hr = CreateWICTextureFromFile(
+		device, L"Assets/Models/Map/textures/OffsetCobblestoneDC19.jpg",    // ← 壁テクスチャのパス
+		nullptr, m_wallTexture.ReleaseAndGetAddressOf());
+	if (SUCCEEDED(hr))
+		OutputDebugStringA("[MapSystem] Wall tile texture loaded!\n");
+	else
+		OutputDebugStringA("[MapSystem] WARNING: wall tile texture not found\n");
+
+
+	m_box->CreateInputLayout(m_mapEffect.get(),
+		m_boxInputLayout.ReleaseAndGetAddressOf());
+
+	if (m_boxInputLayout)
+		OutputDebugStringA("[MapSystem] Box InputLayout created from m_mapEffect!\n");
+	else
+		OutputDebugStringA("[MapSystem] ERROR: Box InputLayout creation failed!\n");
+
+
 	return true;
+}
+
+void MapSystem::ApplyLightSettings()
+{
+	if (!m_mapEffect) return;
+
+	m_mapEffect->SetLightDirection(0,
+		XMVectorSet(m_lightDir0.x, m_lightDir0.y, m_lightDir0.z, 0.0f));
+	m_mapEffect->SetLightDiffuseColor(0,
+		XMLoadFloat4(&m_lightColor0));
+
+	m_mapEffect->SetLightDirection(1,
+		XMVectorSet(m_lightDir1.x, m_lightDir1.y, m_lightDir1.z, 0.0f));
+	m_mapEffect->SetLightDiffuseColor(1,
+		XMLoadFloat4(&m_lightColor1));
+
+	m_mapEffect->SetAmbientLightColor(XMLoadFloat4(&m_ambientColor));
 }
 
 // ============================================
@@ -368,6 +412,10 @@ bool MapSystem::LoadMapFBX(const std::string& fbxPath,
 void MapSystem::DrawMapModel(ID3D11DeviceContext* context,
 	XMMATRIX view, XMMATRIX projection)
 {
+
+	//  ImGuiの値を反映
+	ApplyLightSettings();
+
 	if (!m_mapLoaded || !m_mapEffect) return;
 
 	// 描画状態を完全リセット
@@ -397,7 +445,7 @@ void MapSystem::DrawMapModel(ID3D11DeviceContext* context,
 		// コリジョン用メッシュは描画スキップ
 		if (sub.meshName.find("collision") != std::string::npos ||
 			sub.meshName.find("collsion") != std::string::npos ||
-			sub.meshName.find("Plane") != std::string::npos ||
+			//sub.meshName.find("Plane") != std::string::npos ||
 			sub.meshName.find("Ferrari") != std::string::npos ||
 			sub.meshName.find("Lamborghini") != std::string::npos ||
 			sub.meshName.find("polySurface735") != std::string::npos ||
@@ -484,6 +532,13 @@ void MapSystem::Draw(ID3D11DeviceContext* context,
 void MapSystem::DrawPrimitives(ID3D11DeviceContext* context,
 	XMMATRIX view, XMMATRIX projection)
 {
+	if (!m_mapEffect || !m_boxInputLayout) return;
+
+	//  m_mapEffect を使ってプリミティブを描画
+	//    FBXと同じエフェクト → ライト・テクスチャ確実に動作
+	m_mapEffect->SetView(view);
+	m_mapEffect->SetProjection(projection);
+
 	for (const auto& obj : m_objects)
 	{
 		XMMATRIX s = XMMatrixScaling(obj.scale.x, obj.scale.y, obj.scale.z);
@@ -492,18 +547,54 @@ void MapSystem::DrawPrimitives(ID3D11DeviceContext* context,
 		XMMATRIX t = XMMatrixTranslation(
 			obj.position.x, obj.position.y, obj.position.z);
 		XMMATRIX w = s * r * t;
-		XMVECTOR color = XMLoadFloat4(&obj.color);
+
+		m_mapEffect->SetWorld(w);
 
 		switch (obj.type)
 		{
 		case MapObjectType::FLOOR:
-		case MapObjectType::WALL:
-		case MapObjectType::BOX:
-			m_box->Draw(w, view, projection, color);
+			if (m_floorTexture)
+			{
+				m_mapEffect->SetTextureEnabled(true);
+				m_mapEffect->SetTexture(m_floorTexture.Get());
+				m_mapEffect->SetDiffuseColor(XMVectorSet(1, 1, 1, 1));
+			}
+			else
+			{
+				m_mapEffect->SetTextureEnabled(false);
+				m_mapEffect->SetDiffuseColor(XMLoadFloat4(&obj.color));
+			}
+			m_box->Draw(m_mapEffect.get(), m_boxInputLayout.Get());
 			context->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 			break;
+
+		case MapObjectType::WALL:
+			if (m_wallTexture)
+			{
+				m_mapEffect->SetTextureEnabled(true);
+				m_mapEffect->SetTexture(m_wallTexture.Get());
+				m_mapEffect->SetDiffuseColor(XMVectorSet(1, 1, 1, 1));
+			}
+			else
+			{
+				m_mapEffect->SetTextureEnabled(false);
+				m_mapEffect->SetDiffuseColor(XMLoadFloat4(&obj.color));
+			}
+			m_box->Draw(m_mapEffect.get(), m_boxInputLayout.Get());
+			context->OMSetDepthStencilState(m_states->DepthDefault(), 0);
+			break;
+
+		case MapObjectType::BOX:
+			m_mapEffect->SetTextureEnabled(false);
+			m_mapEffect->SetDiffuseColor(XMLoadFloat4(&obj.color));
+			m_box->Draw(m_mapEffect.get(), m_boxInputLayout.Get());
+			context->OMSetDepthStencilState(m_states->DepthDefault(), 0);
+			break;
+
 		case MapObjectType::CYLINDER:
-			m_cylinder->Draw(w, view, projection, color);
+			m_mapEffect->SetTextureEnabled(false);
+			m_mapEffect->SetDiffuseColor(XMLoadFloat4(&obj.color));
+			m_cylinder->Draw(w, view, projection, XMLoadFloat4(&obj.color));
 			context->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 			break;
 		}
@@ -661,9 +752,9 @@ void MapSystem::CreateDefaultMap()
 	XMFLOAT4 cBuild = { 0.8f, 0.0f, 0.0f, 0.5f };
 	XMFLOAT4 cFloor = { 0.3f, 0.3f, 0.3f, 0.3f };
 
-	// 床
-	AddFloor(XMFLOAT3(0.0f, -0.05f, 5.0f),
-		XMFLOAT3(60.0f, 0.1f, 120.0f), cFloor);
+	//// 床
+	//AddFloor(XMFLOAT3(0.0f, 0.1f, 5.0f),
+	//	XMFLOAT3(60.0f, 0.1f, 120.0f), cFloor);
 
 	// 外壁
 	AddWall(XMFLOAT3(-33.0f, 3.0f, 5.0f), XMFLOAT3(1.0f, 8.0f, 112.0f), cOuter); // 西

@@ -9,6 +9,7 @@
 //	ƒQ[ƒ€‚Ìó‘Ô
 enum class GameState {
 	TITLE,
+	LOADING,
 	PLAYING,
 	GAMEOVER,
 	RANKING

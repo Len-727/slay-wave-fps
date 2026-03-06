@@ -483,7 +483,7 @@ void Game::AddEnemyPhysicsBody(Enemy& enemy)
     transform.setIdentity();
     transform.setOrigin(btVector3(
         enemy.position.x,
-        totalHeight / 2.0f,
+        enemy.position.y + totalHeight / 2.0f,
         enemy.position.z
     ));
 
@@ -762,7 +762,7 @@ void Game::UpdateEnemyPhysicsBody(Enemy& enemy)
     transform.setIdentity();
     transform.setOrigin(btVector3(
         enemy.position.x,
-        totalHeight / 2.0f,
+        enemy.position.y + totalHeight / 2.0f, 
         enemy.position.z
     ));
 
@@ -828,6 +828,10 @@ void Game::Update()
     {
     case GameState::TITLE:
         UpdateTitle();
+        break;
+
+    case GameState::LOADING:
+        UpdateLoading();
         break;
 
     case GameState::PLAYING:
@@ -1552,6 +1556,17 @@ void Game::CreateRenderResources()
             OutputDebugStringA("[Game] WARNING: low_health_vignette.png not found!\n");
     }
 
+    // ダッシュ用スピードラインテクスチャ
+    {
+        HRESULT hr = DirectX::CreateWICTextureFromFile(
+            m_d3dDevice.Get(),
+            L"Assets/Texture/dash_speedline.png",
+            nullptr,
+            m_dashSpeedlineSRV.GetAddressOf());
+        if (SUCCEEDED(hr))
+            OutputDebugStringA("[Game] Dash speedline texture loaded!\n");
+    }
+
     //  === MapSystem   初期化 ===
     m_mapSystem = std::make_unique<MapSystem>();
     if (!m_mapSystem->Initialize(m_d3dContext.Get(), m_d3dDevice.Get()))
@@ -1723,6 +1738,7 @@ void Game::DrawDebugUI()
     // === デバッグウィンドウ ===
     if (m_showDebugWindow)
     {
+        
         ImGui::Begin("Gothic Swarm Debug", &m_showDebugWindow, ImGuiWindowFlags_AlwaysAutoResize);
 
         // FPS表示
@@ -1758,6 +1774,51 @@ void Game::DrawDebugUI()
                 break;
             }
         }
+
+        // === ライト調整 ===
+        if (m_mapSystem && ImGui::CollapsingHeader("Map Lighting"))
+        {
+            ImGui::Text("--- Main Light ---");
+            ImGui::SliderFloat3("Direction 0", &m_mapSystem->m_lightDir0.x, -1.0f, 1.0f);
+            ImGui::ColorEdit3("Color 0", &m_mapSystem->m_lightColor0.x);
+
+            ImGui::Text("--- Fill Light ---");
+            ImGui::SliderFloat3("Direction 1", &m_mapSystem->m_lightDir1.x, -1.0f, 1.0f);
+            ImGui::ColorEdit3("Color 1", &m_mapSystem->m_lightColor1.x);
+
+            ImGui::Text("--- Ambient ---");
+            ImGui::ColorEdit3("Ambient", &m_mapSystem->m_ambientColor.x);
+
+            // プリセット
+            if (ImGui::Button("Preset: Gothic Dark"))
+            {
+                m_mapSystem->m_lightDir0 = { 0.0f, -1.0f, 0.3f };
+                m_mapSystem->m_lightColor0 = { 0.6f, 0.45f, 0.3f, 1.0f };
+                m_mapSystem->m_lightDir1 = { -0.5f, -0.3f, -0.7f };
+                m_mapSystem->m_lightColor1 = { 0.15f, 0.15f, 0.25f, 1.0f };
+                m_mapSystem->m_ambientColor = { 0.08f, 0.06f, 0.05f, 1.0f };
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Preset: Bright"))
+            {
+                m_mapSystem->m_lightDir0 = { 0.3f, -0.8f, 0.5f };
+                m_mapSystem->m_lightColor0 = { 1.0f, 0.95f, 0.9f, 1.0f };
+                m_mapSystem->m_lightDir1 = { -0.5f, -0.3f, -0.7f };
+                m_mapSystem->m_lightColor1 = { 0.4f, 0.4f, 0.5f, 1.0f };
+                m_mapSystem->m_ambientColor = { 0.25f, 0.25f, 0.3f, 1.0f };
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Preset: Blood Moon"))
+            {
+                m_mapSystem->m_lightDir0 = { 0.2f, -0.6f, 0.4f };
+                m_mapSystem->m_lightColor0 = { 0.8f, 0.2f, 0.1f, 1.0f };
+                m_mapSystem->m_lightDir1 = { -0.5f, -0.3f, -0.7f };
+                m_mapSystem->m_lightColor1 = { 0.1f, 0.05f, 0.15f, 1.0f };
+                m_mapSystem->m_ambientColor = { 0.1f, 0.02f, 0.02f, 1.0f };
+            }
+        }
+
+
 
         ImGui::Text("Total Enemies: %d", totalEnemies);
         ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "  Normal: %d", normalCount);
@@ -4862,8 +4923,14 @@ void Game::UpdateTitle()
     if (GetAsyncKeyState(VK_SPACE) & 0x8000)
     {
         ResetGame();
-        m_gameState = GameState::PLAYING;
-        
+
+        // ロード画面の初期化
+        m_loadingTimer = 0.0f;
+        m_loadingPhase = 0;
+        m_loadingBarTarget = 0.0f;
+        m_loadingBarCurrent = 0.0f;
+
+        m_gameState = GameState::LOADING;
     }
 
     // Lキーでランキング画面
@@ -4876,10 +4943,59 @@ void Game::UpdateTitle()
 }
 
 
+void Game::UpdateLoading()
+{
+    float dt = 1.0f / 60.0f;
+    m_loadingTimer += dt;
 
-// ========================================
-// より正確なデルタタイム版（推奨）
-// ========================================
+    // === フェーズ進行（時間でメッセージとバーの目標値を切り替え） ===
+    if (m_loadingTimer < 0.5f)
+    {
+        m_loadingPhase = 0;       // "INITIALIZING SYSTEMS..."
+        m_loadingBarTarget = 0.1f;
+    }
+    else if (m_loadingTimer < 1.2f)
+    {
+        m_loadingPhase = 1;       // "LOADING ARSENAL..."
+        m_loadingBarTarget = 0.3f;
+    }
+    else if (m_loadingTimer < 1.8f)
+    {
+        m_loadingPhase = 2;       // "SPAWNING ENTITIES..."
+        m_loadingBarTarget = 0.55f;
+    }
+    else if (m_loadingTimer < 2.5f)
+    {
+        m_loadingPhase = 3;       // "CALIBRATING GOTHIC FREQUENCIES..."
+        m_loadingBarTarget = 0.78f;
+    }
+    else if (m_loadingTimer < 3.0f)
+    {
+        m_loadingPhase = 4;       // "READY"
+        m_loadingBarTarget = 1.0f;
+    }
+
+    // === バーのスムーズ補間 ===
+    float lerpSpeed = 3.0f * dt;
+    m_loadingBarCurrent += (m_loadingBarTarget - m_loadingBarCurrent) * lerpSpeed;
+
+    // ぴったり目標に近づいたらスナップ
+    if (fabsf(m_loadingBarCurrent - m_loadingBarTarget) < 0.001f)
+        m_loadingBarCurrent = m_loadingBarTarget;
+
+    // === 完了 → PLAYINGへ遷移 ===
+    if (m_loadingTimer >= m_loadingDuration)
+    {
+        m_loadingBarCurrent = 1.0f;
+
+        // フェードイン開始
+        m_fadeAlpha = 1.0f;
+        m_fadingIn = true;
+        m_fadeActive = true;
+
+        m_gameState = GameState::PLAYING;
+    }
+}
 
 
 void Game::DrawWeapon()
@@ -5150,6 +5266,11 @@ void Game::Render()
     case GameState::TITLE:
         RenderTitle();
         break;
+
+    case GameState::LOADING:
+        RenderLoading();
+        break;
+
     case GameState::PLAYING:
         RenderPlaying();
         break;
@@ -5232,11 +5353,11 @@ void Game::RenderPlaying()
         else
         {
             cameraPosition = DirectX::XMVectorSet(
-                playerPos.x + shakeOffset.x,
-                playerPos.y + shakeOffset.y,
-                playerPos.z + shakeOffset.z,
-                0.0f
-            );
+               playerPos.x + shakeOffset.x,
+               playerPos.y + shakeOffset.y,
+               playerPos.z + shakeOffset.z,
+               0.0f
+               );
 
             cameraTarget = DirectX::XMVectorSet(
                 playerPos.x + sinf(playerRot.y) * cosf(playerRot.x),
@@ -5718,6 +5839,12 @@ void Game::RenderPlaying()
 
     //  スピードライン
     RenderSpeedLines();
+
+    //  ダッシュオーバーレイ
+    RenderDashOverlay();
+
+    //  弾切れ警告
+    RenderReloadWarning();
 
     // デバッグ描画
     DrawHitboxes();
@@ -6720,6 +6847,15 @@ void Game::UpdatePlaying()
             m_gloryKillTargetEnemy->currentAnimation = "Death";
             m_gloryKillTargetEnemy->corpseTimer = 3.0f;
 
+            //  追加: MIDBOSSのビームエフェクトを停止
+            if ((m_gloryKillTargetEnemy->type == EnemyType::MIDBOSS ||
+                m_gloryKillTargetEnemy->type == EnemyType::BOSS) &&
+                m_beamHandle >= 0 && m_effekseerManager != nullptr)
+            {
+                m_effekseerManager->StopEffect(m_beamHandle);
+                m_beamHandle = -1;
+            }
+
             // スクリーンブラッド
             m_bloodSystem->OnGloryKill(m_gloryKillTargetEnemy->position);
             m_gpuParticles->EmitSplash(m_gloryKillTargetEnemy->position, XMFLOAT3(0.0f, 1.0f, 0.0f), 50, 10.0f);
@@ -6800,6 +6936,42 @@ void Game::UpdatePlaying()
     {
         m_cameraShakeTimer -= m_deltaTime;
         m_cameraShake *= 0.9f;
+    }
+
+    // === ダッシュ演出の更新 ===
+    {
+        // WASDのどれかが押されてるかチェック（移動中のみダッシュ）
+        bool isMoving = (GetAsyncKeyState('W') & 0x8000) ||
+            (GetAsyncKeyState('S') & 0x8000) ||
+            (GetAsyncKeyState('A') & 0x8000) ||
+            (GetAsyncKeyState('D') & 0x8000);
+
+        bool shiftHeld = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+        m_isSprinting = shiftHeld && isMoving;
+
+        if (m_isSprinting)
+        {
+            // FOVを広げる（既存のシステムを利用）
+            m_targetFOV = 85.0f;
+
+            // スピードラインを少し出す（既存のシステム）
+            m_speedLineAlpha = 0.25f;
+
+            // テクスチャオーバーレイをフェードイン
+            m_dashOverlayAlpha += deltaTime * 4.0f;
+            if (m_dashOverlayAlpha > 0.35f) m_dashOverlayAlpha = 0.35f;
+        }
+        else
+        {
+            // ダッシュしてない時はFOVを戻す
+            // ※ 他のシステム（盾チャージ等）でFOVを変えてなければ
+            if (m_targetFOV == 85.0f)
+                m_targetFOV = 70.0f;
+
+            // オーバーレイをフェードアウト
+            m_dashOverlayAlpha -= deltaTime * 6.0f;
+            if (m_dashOverlayAlpha < 0.0f) m_dashOverlayAlpha = 0.0f;
+        }
     }
 
     if (m_currentFOV < m_targetFOV)
@@ -7665,6 +7837,31 @@ void Game::UpdatePlaying()
         m_lastMouseState = currentMouseState;
     
 }
+
+    // === 弾切れ警告の更新 ===
+    {
+
+        bool outOfAmmo = (m_weaponSystem->GetCurrentAmmo() == 0) &&
+            !m_weaponSystem->IsReloading();
+
+        if (outOfAmmo)
+        {
+            // 警告フェードイン
+            m_reloadWarningTimer += deltaTime;
+            m_reloadWarningAlpha += deltaTime * 5.0f;
+            if (m_reloadWarningAlpha > 1.0f) m_reloadWarningAlpha = 1.0f;
+        }
+        else
+        {
+            // 警告フェードアウト
+            m_reloadWarningAlpha -= deltaTime * 8.0f;
+            if (m_reloadWarningAlpha < 0.0f)
+            {
+                m_reloadWarningAlpha = 0.0f;
+                m_reloadWarningTimer = 0.0f;
+            }
+        }
+    }
 
     // Rキーでリロード開始
     if (IsFirstKeyPress('R') &&
@@ -9800,6 +9997,168 @@ void Game::RenderSpeedLines()
     batch->End();
 }
 
+void Game::RenderDashOverlay()
+{
+    // テクスチャがないorアルファ0なら描画しない
+    if (!m_dashSpeedlineSRV || m_dashOverlayAlpha <= 0.01f) return;
+
+    m_spriteBatch->Begin(
+        DirectX::SpriteSortMode_Deferred,
+        m_states->NonPremultiplied()
+    );
+
+    RECT destRect = { 0, 0, (LONG)m_outputWidth, (LONG)m_outputHeight };
+
+    // 回転させてバリエーションを出す（毎フレーム微妙に回転）
+    float rotation = m_accumulatedAnimTime * 0.3f;
+
+    // 中央を原点にして回転
+    DirectX::XMFLOAT2 origin(960.0f, 540.0f);  // テクスチャの中心（1920x1080の半分）
+
+    DirectX::XMVECTORF32 tintColor = { {
+        0.9f, 0.9f, 1.0f,          // わずかに青白い（スピード感）
+        m_dashOverlayAlpha          // フェードイン/アウト
+    } };
+
+    m_spriteBatch->Draw(
+        m_dashSpeedlineSRV.Get(),
+        destRect,
+        nullptr,         // ソース矩形（全体）
+        tintColor,
+        rotation,        // 回転（ラジアン）
+        origin           // 回転の中心
+    );
+
+    m_spriteBatch->End();
+}
+
+void Game::RenderReloadWarning()
+{
+    // === リロード中の進捗バーも表示 ===
+    bool isReloading = m_weaponSystem->IsReloading();
+    bool showWarning = (m_reloadWarningAlpha > 0.01f) || isReloading;
+
+    if (!showWarning) return;
+
+    float W = (float)m_outputWidth;
+    float H = (float)m_outputHeight;
+
+    m_spriteBatch->Begin(
+        DirectX::SpriteSortMode_Deferred,
+        m_states->NonPremultiplied()
+    );
+
+    // =============================================
+    // (A) "RELOAD" 警告テキスト（弾切れ時）
+    // =============================================
+    if (m_reloadWarningAlpha > 0.01f && !isReloading)
+    {
+        // 脈動（パルス）: sinで明滅
+        float pulse = 0.5f + sinf(m_reloadWarningTimer * 6.0f) * 0.5f;
+        float alpha = m_reloadWarningAlpha * (0.5f + pulse * 0.5f);
+
+        // スケール弾み（登場時にバウンス）
+        float scaleT = m_reloadWarningTimer;
+        float scale = 1.0f;
+        if (scaleT < 0.3f)
+        {
+            float t = scaleT / 0.3f;
+            scale = 1.0f + sinf(t * 3.14159f) * 0.3f;  // 登場時に1.3倍→1.0倍
+        }
+
+        // --- メインテキスト ---
+        const wchar_t* text = L"[  R E L O A D  ]";
+
+        DirectX::XMVECTOR textSize = m_fontLarge->MeasureString(text);
+        float textW = DirectX::XMVectorGetX(textSize) * scale;
+        float textH = DirectX::XMVectorGetY(textSize) * scale;
+        float textX = (W - textW) * 0.5f;
+        float textY = H * 0.58f;
+
+        // グロー（影として2回描画）
+        DirectX::XMVECTORF32 glowColor = { 0.3f, 0.0f, 0.0f, alpha * 0.6f };
+        for (int dx = -2; dx <= 2; dx += 4)
+        {
+            for (int dy = -2; dy <= 2; dy += 4)
+            {
+                m_fontLarge->DrawString(m_spriteBatch.get(), text,
+                    DirectX::XMFLOAT2(textX + dx, textY + dy),
+                    glowColor, 0.0f,
+                    DirectX::XMFLOAT2(0, 0),
+                    scale);
+            }
+        }
+
+        // メインテキスト（赤）
+        DirectX::XMVECTORF32 mainColor = { 0.95f, 0.15f, 0.1f, alpha };
+        m_fontLarge->DrawString(m_spriteBatch.get(), text,
+            DirectX::XMFLOAT2(textX, textY),
+            mainColor, 0.0f,
+            DirectX::XMFLOAT2(0, 0),
+            scale);
+
+        // --- サブテキスト ---
+        const wchar_t* subText = L"Press  R";
+
+        DirectX::XMVECTOR subSize = m_font->MeasureString(subText);
+        float subW = DirectX::XMVectorGetX(subSize);
+        float subX = (W - subW) * 0.5f;
+        float subY = textY + textH + 8.0f;
+
+        float subPulse = 0.3f + pulse * 0.7f;
+        DirectX::XMVECTORF32 subColor = { 0.7f, 0.7f, 0.7f, alpha * subPulse };
+        m_font->DrawString(m_spriteBatch.get(), subText,
+            DirectX::XMFLOAT2(subX, subY), subColor);
+    }
+
+    // =============================================
+    // (B) リロード進捗バー（リロード中）
+    // =============================================
+    if (isReloading && m_whitePixel)
+    {
+        float progress = m_reloadAnimProgress;  // 0?1
+
+        float barW = W * 0.25f;
+        float barH = 4.0f;
+        float barX = (W - barW) * 0.5f;
+        float barY = H * 0.62f;
+
+        // 背景（暗い）
+        RECT bgRect = {
+            (LONG)barX, (LONG)barY,
+            (LONG)(barX + barW), (LONG)(barY + barH)
+        };
+        DirectX::XMVECTORF32 bgColor = { 0.15f, 0.15f, 0.15f, 0.8f };
+        m_spriteBatch->Draw(m_whitePixel.Get(), bgRect, bgColor);
+
+        // 進捗（白→赤のグラデーション）
+        float fillW = barW * progress;
+        RECT fillRect = {
+            (LONG)barX, (LONG)barY,
+            (LONG)(barX + fillW), (LONG)(barY + barH)
+        };
+        // 完了に近づくほど白くなる
+        float r = 1.0f;
+        float g = 0.3f + progress * 0.7f;
+        float b = 0.3f + progress * 0.7f;
+        DirectX::XMVECTORF32 fillColor = { r, g, b, 0.9f };
+        m_spriteBatch->Draw(m_whitePixel.Get(), fillRect, fillColor);
+
+        // テキスト "RELOADING..."
+        const wchar_t* reloadText = L"RELOADING...";
+        DirectX::XMVECTOR rSize = m_font->MeasureString(reloadText);
+        float rW = DirectX::XMVectorGetX(rSize);
+        float rX = (W - rW) * 0.5f;
+        float rY = barY - 24.0f;
+
+        DirectX::XMVECTORF32 reloadColor = { 0.8f, 0.8f, 0.8f, 0.9f };
+        m_font->DrawString(m_spriteBatch.get(), reloadText,
+            DirectX::XMFLOAT2(rX, rY), reloadColor);
+    }
+
+    m_spriteBatch->End();
+}
+
 void Game::RenderGloryKillFlash()
 {
     return;
@@ -9913,6 +10272,137 @@ void Game::RenderTitle()
 
     // === フェード描画 ===
     RenderFade();
+}
+
+void Game::RenderLoading()
+{
+    // === 画面クリア（真っ黒） ===
+    float black[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    m_d3dContext->ClearRenderTargetView(m_renderTargetView.Get(), black);
+
+    float W = (float)m_outputWidth;
+    float H = (float)m_outputHeight;
+
+    m_spriteBatch->Begin(
+        DirectX::SpriteSortMode_Deferred,
+        m_states->NonPremultiplied()
+    );
+
+    // =========================================
+    // ロードメッセージ
+    // =========================================
+    const wchar_t* messages[] = {
+        L"INITIALIZING SYSTEMS...",
+        L"LOADING ARSENAL...",
+        L"SPAWNING ENTITIES...",
+        L"CALIBRATING GOTHIC FREQUENCIES...",
+        L"READY"
+    };
+
+    const wchar_t* msg = messages[m_loadingPhase];
+
+    // メッセージの色（最終フェーズだけ赤く）
+    DirectX::XMVECTORF32 msgColor;
+    if (m_loadingPhase == 4)
+        msgColor = { 0.9f, 0.15f, 0.1f, 1.0f };   // 赤（READY）
+    else
+        msgColor = { 0.6f, 0.6f, 0.6f, 1.0f };     // グレー
+
+    // 中央下あたりに表示
+    DirectX::XMVECTOR msgSize = m_font->MeasureString(msg);
+    float msgW = DirectX::XMVectorGetX(msgSize);
+    float msgX = (W - msgW) * 0.5f;
+    float msgY = H * 0.58f;
+
+    m_font->DrawString(m_spriteBatch.get(), msg,
+        DirectX::XMFLOAT2(msgX, msgY), msgColor);
+
+    // =========================================
+    // プログレスバー
+    // =========================================
+    if (m_whitePixel)
+    {
+        float barW = W * 0.5f;       // バーの最大幅（画面幅の50%）
+        float barH = 6.0f;            // バーの高さ
+        float barX = (W - barW) * 0.5f;
+        float barY = H * 0.65f;
+
+        // --- 背景（暗いグレー） ---
+        RECT bgRect = {
+            (LONG)barX,
+            (LONG)barY,
+            (LONG)(barX + barW),
+            (LONG)(barY + barH)
+        };
+        DirectX::XMVECTORF32 bgColor = { 0.15f, 0.15f, 0.15f, 1.0f };
+        m_spriteBatch->Draw(m_whitePixel.Get(), bgRect, bgColor);
+
+        // --- 進捗バー（赤） ---
+        float fillW = barW * m_loadingBarCurrent;
+        RECT fillRect = {
+            (LONG)barX,
+            (LONG)barY,
+            (LONG)(barX + fillW),
+            (LONG)(barY + barH)
+        };
+
+        // パルス効果（微妙に明滅）
+        float pulse = 0.7f + sinf(m_loadingTimer * 4.0f) * 0.3f;
+        DirectX::XMVECTORF32 barColor = { 0.8f * pulse, 0.1f * pulse, 0.05f * pulse, 1.0f };
+        m_spriteBatch->Draw(m_whitePixel.Get(), fillRect, barColor);
+
+        // --- パーセント表示 ---
+        int percent = (int)(m_loadingBarCurrent * 100.0f);
+        wchar_t percentText[16];
+        swprintf_s(percentText, L"%d%%", percent);
+
+        DirectX::XMVECTOR pSize = m_font->MeasureString(percentText);
+        float pW = DirectX::XMVectorGetX(pSize);
+        float pX = (W - pW) * 0.5f;
+        float pY = barY + barH + 10.0f;
+
+        DirectX::XMVECTORF32 percentColor = { 0.5f, 0.5f, 0.5f, 0.8f };
+        m_font->DrawString(m_spriteBatch.get(), percentText,
+            DirectX::XMFLOAT2(pX, pY), percentColor);
+    }
+
+    // =========================================
+    // タイトルロゴ（画面上部）
+    // =========================================
+    if (m_fontLarge)
+    {
+        const wchar_t* title = L"GOTHIC SWARM";
+        DirectX::XMVECTOR titleSize = m_fontLarge->MeasureString(title);
+        float titleW = DirectX::XMVectorGetX(titleSize);
+        float titleX = (W - titleW) * 0.5f;
+        float titleY = H * 0.3f;
+
+        // じわっとフェードイン
+        float titleAlpha = (m_loadingTimer < 0.8f) ? (m_loadingTimer / 0.8f) : 1.0f;
+        DirectX::XMVECTORF32 titleColor = { 0.9f, 0.1f, 0.05f, titleAlpha };
+
+        m_fontLarge->DrawString(m_spriteBatch.get(), title,
+            DirectX::XMFLOAT2(titleX, titleY), titleColor);
+    }
+
+    // =========================================
+    //  点滅するドット演出（...のアニメーション）
+    // =========================================
+    if (m_loadingPhase < 4)
+    {
+        // 0.5秒ごとにドットが増える（1?3個）
+        int dots = ((int)(m_loadingTimer * 2.0f) % 3) + 1;
+        wchar_t dotText[8] = L"";
+        for (int i = 0; i < dots; i++)
+            wcscat_s(dotText, L".");
+
+        float dotX = msgX + msgW + 2.0f;
+        DirectX::XMVECTORF32 dotColor = { 0.4f, 0.4f, 0.4f, 0.6f };
+        m_font->DrawString(m_spriteBatch.get(), dotText,
+            DirectX::XMFLOAT2(dotX, msgY), dotColor);
+    }
+
+    m_spriteBatch->End();
 }
 
 void Game::RenderGameOver()
