@@ -33,7 +33,7 @@ void UISystem::DrawAll(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* ba
     // ŠeUI—v‘f‚ð•`‰æ
     //DrawHealthBar(batch, player->GetHealth());
     DrawCrosshair(batch);
-    DrawWaveNumber(batch, waveManager->GetCurrentWave());
+    //DrawWaveNumber(batch, waveManager->GetCurrentWave());
     /*DrawPoints(batch, player->GetPoints());*/
     DrawAmmo(batch, weaponSystem->GetCurrentAmmo(),
         weaponSystem->GetReserveAmmo(),

@@ -1944,6 +1944,7 @@ void Model::DrawInstanced_Custom(
 	// 定数バッファ
 	context->VSSetConstantBuffers(0, 1, m_frameCB.GetAddressOf());
 	context->VSSetConstantBuffers(2, 1, m_lightCB.GetAddressOf());
+	context->PSSetConstantBuffers(2, 1, m_lightCB.GetAddressOf());  // PSにも同じLightCBをセット
 
 	// StructuredBuffer → t1 にセット
 	context->VSSetShaderResources(1, 1, m_boneSRV.GetAddressOf());
@@ -1953,12 +1954,22 @@ void Model::DrawInstanced_Custom(
 		context->PSSetShaderResources(0, 1, m_diffuseTexture.GetAddressOf());
 	context->PSSetSamplers(0, 1, m_customSampler.GetAddressOf());
 
-	// Light定数バッファ
+	//  View行列からカメラのワールド位置を取り出す
+    // View行列の逆行列 = カメラのワールド変換行列
+    // その4行目(r[3]) = カメラの位置
+	DirectX::XMMATRIX invView = DirectX::XMMatrixInverse(nullptr, view);
+	DirectX::XMFLOAT3 camPos;
+	camPos.x = DirectX::XMVectorGetX(invView.r[3]);
+	camPos.y = DirectX::XMVectorGetY(invView.r[3]);
+	camPos.z = DirectX::XMVectorGetZ(invView.r[3]);
+
 	LightCB lightData;
 	lightData.AmbientColor = DirectX::XMFLOAT4(0.55f, 0.50f, 0.45f, 1.0f);
-	lightData.DiffuseColor = DirectX::XMFLOAT4(1, 1, 1, 1); // 個別色はインスタンスデータで
+	lightData.DiffuseColor = DirectX::XMFLOAT4(1, 1, 1, 1);
 	lightData.LightDirection = DirectX::XMFLOAT3(0.0f, -1.0f, 0.0f);
 	lightData.Padding = 0.0f;
+	lightData.CameraPos = camPos;
+	lightData.Padding2 = 0.0f;
 	context->UpdateSubresource(m_lightCB.Get(), 0, nullptr, &lightData, 0, 0);
 
 	// ---  描画 ---

@@ -548,6 +548,33 @@ private:
     void RenderDashOverlay();
     void RenderReloadWarning();
 
+    // === ウェーブバナー ===
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_waveBannerNormalSRV;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_waveBannerBossSRV;
+    int   m_lastWaveNumber = 0;
+    float m_waveBannerTimer = 0.0f;
+    float m_waveBannerDuration = 2.5f;
+    int   m_waveBannerNumber = 0;
+    bool  m_waveBannerIsBoss = false;
+
+    void RenderWaveBanner();
+
+    // === スコアHUD ===
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreBackdropSRV;
+    float m_scoreDisplayValue = 0.0f;    // 表示中の数字（スムーズに追従）
+    float m_scoreFlashTimer = 0.0f;      // 加算時の赤フラッシュ
+    float m_scoreShakeTimer = 0.0f;      // 加算時の揺れ
+    int   m_lastDisplayedScore = 0;      // 前フレームのスコア（変化検出）
+
+    void RenderScoreHUD();
+
+    // === 爪痕ダメージエフェクト ===
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_clawDamageSRV;
+    float m_clawTimer = 0.0f;         // 演出タイマー（0で非表示）
+    float m_clawDuration = 0.6f;      // 演出の長さ
+
+    void RenderClawDamage();
+
     bool m_chargeHasTarget = false;          // ロックオン対象がいるか
     int m_chargeTargetEnemyID = -1;          // ロックオン対象の敵ID
 

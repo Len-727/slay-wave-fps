@@ -1414,6 +1414,11 @@ void Game::CreateRenderResources()
         {
             ////OutputDebugStringA("Failed to load Death Animation");
         }
+        //  スタンアニメーション
+        if (!m_enemyModel->LoadAnimation("Assets/Models/Normal/Normal_Stun.fbx", "Stun"))
+        {
+
+        }
     }
 
     //  ===================================
@@ -1447,6 +1452,10 @@ void Game::CreateRenderResources()
         {
             //OutputDebugStringA("Failed to load Runner Death animation\n");
         }
+
+        if (!m_runnerModel->LoadAnimation("Assets/Models/Runner/Runner_Stun.fbx", "Stun"))
+        {
+        }
     }
 
     //  =========================
@@ -1475,6 +1484,11 @@ void Game::CreateRenderResources()
         {
             //OutputDebugStringA("Failed to load Tank Death animation\n");
         }
+        if (m_tankModel->LoadAnimation("Assets/Models/Tank/Tank_Stun.fbx", "Stun"))
+        {
+
+        }
+
 
     // ====================================================================
     // MIDBOSS モデル読み込み
@@ -1499,6 +1513,7 @@ void Game::CreateRenderResources()
 
             if (!m_midBossModel->LoadAnimation("Assets/Models/MidBoss/midboss_death.fbx", "Death"))
                 OutputDebugStringA("[ANIM] MIDBOSS Death FAILED\n");
+            if (!m_midBossModel->LoadAnimation("Assets/Models/MidBoss/midBoss_stun.fbx", "Stun")) {}
         }
     
     }
@@ -1515,6 +1530,7 @@ void Game::CreateRenderResources()
         m_bossModel->LoadAnimation("Assets/Models/Boss/boss_attack_roundingup.fbx", "AttackSlash");
         m_bossModel->LoadAnimation("Assets/Models/Boss/boss_Idle.fbx", "Idle");
         m_bossModel->LoadAnimation("Assets/Models/Boss/boss_death.fbx", "Death");
+        m_bossModel->LoadAnimation("Assets/Models/Boss/boss_stun.fbx", "Stun");
     }
 
     // === 盾モデル読み込み ===
@@ -1567,6 +1583,12 @@ void Game::CreateRenderResources()
             OutputDebugStringA("[Game] Dash speedline texture loaded!\n");
     }
 
+    DirectX::CreateWICTextureFromFile(m_d3dDevice.Get(), L"Assets/Texture/HUD/wave_banner_normal.png", nullptr, m_waveBannerNormalSRV.ReleaseAndGetAddressOf());
+    DirectX::CreateWICTextureFromFile(m_d3dDevice.Get(), L"Assets/Texture/HUD/wave_banner_boss.png", nullptr, m_waveBannerBossSRV.ReleaseAndGetAddressOf());
+
+    DirectX::CreateWICTextureFromFile(m_d3dDevice.Get(), L"Assets/Texture/HUD/score_blood_backdrop.png", nullptr, m_scoreBackdropSRV.ReleaseAndGetAddressOf());
+
+    DirectX::CreateWICTextureFromFile(m_d3dDevice.Get(), L"Assets/Texture/HUD/claw_damage.png", nullptr, m_clawDamageSRV.ReleaseAndGetAddressOf());
     //  === MapSystem   初期化 ===
     m_mapSystem = std::make_unique<MapSystem>();
     if (!m_mapSystem->Initialize(m_d3dContext.Get(), m_d3dDevice.Get()))
@@ -2427,6 +2449,32 @@ void Game::DrawDebugUI()
         // =============================================
         if (ImGui::CollapsingHeader("Boss AI Debug"))
         {
+            if (ImGui::CollapsingHeader("Boss Attack Timing"))
+            {
+                ImGui::Text("--- Melee ---");
+                ImGui::SliderFloat("Melee Hit Time", &m_enemySystem->m_bossMeleeHitTime, 0.1f, 5.0f);
+                ImGui::SliderFloat("Melee Duration", &m_enemySystem->m_bossMeleeDuration, 0.5f, 5.0f);
+
+                ImGui::Text("--- Jump Slam ---");
+                ImGui::SliderFloat("Jump Windup", &m_enemySystem->m_bossJumpWindupTime, 0.1f, 2.0f);
+                ImGui::SliderFloat("Jump Air Time", &m_enemySystem->m_bossJumpAirTime, 0.2f, 2.0f);
+                ImGui::SliderFloat("Jump Height", &m_enemySystem->m_bossJumpHeight, 2.0f, 20.0f);
+                ImGui::SliderFloat("Slam Recovery", &m_enemySystem->m_bossSlamRecoveryTime, 0.1f, 3.0f);
+
+                ImGui::Text("--- Slash ---");
+                ImGui::SliderFloat("Slash Windup", &m_enemySystem->m_bossSlashWindupTime, 0.1f, 2.0f);
+                ImGui::SliderFloat("Slash Fire", &m_enemySystem->m_bossSlashFireTime, 0.05f, 1.0f);
+                ImGui::SliderFloat("Slash Recovery", &m_enemySystem->m_bossSlashRecoveryTime, 0.1f, 3.0f);
+
+                ImGui::Text("--- Beam ---");
+                ImGui::SliderFloat("Roar Windup", &m_enemySystem->m_bossRoarWindupTime, 0.1f, 5.0f);
+                ImGui::SliderFloat("Roar Fire", &m_enemySystem->m_bossRoarFireTime, 1.0f, 10.0f);
+                ImGui::SliderFloat("Roar Recovery", &m_enemySystem->m_bossRoarRecoveryTime, 0.5f, 5.0f);
+
+                ImGui::Text("--- General ---");
+                ImGui::SliderFloat("Attack Cooldown", &m_enemySystem->m_bossAttackCooldown, 0.5f, 10.0f);
+            }
+
             // フェーズ名変換用
             auto phaseName = [](BossAttackPhase p) -> const char* {
                 switch (p) {
@@ -2496,10 +2544,17 @@ void Game::DrawDebugUI()
                 ImGui::ProgressBar(stunPercent, ImVec2(200, 14), "");
                 if (enemy.isStaggered)
                     ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "  *** STAGGERED ***");
+                {
+                    // モデルからアニメの実際の長さを取得
+                    float actualDuration = 0.0f;
+                    if (enemy.type == EnemyType::BOSS && m_bossModel)
+                        actualDuration = m_bossModel->GetAnimationDuration(enemy.currentAnimation);
+                    else if (enemy.type == EnemyType::MIDBOSS && m_midBossModel)
+                        actualDuration = m_midBossModel->GetAnimationDuration(enemy.currentAnimation);
 
-                // アニメーション情報
-                ImGui::Text("  Animation: %s (t=%.2f)", enemy.currentAnimation.c_str(), enemy.animationTime);
-
+                    ImGui::Text("  Animation: %s (t=%.2f / %.2f)",
+                        enemy.currentAnimation.c_str(), enemy.animationTime, actualDuration);
+                }
                 // ビーム情報（MIDBOSSのみ）
                 if (enemy.type == EnemyType::MIDBOSS)
                 {
@@ -2511,10 +2566,12 @@ void Game::DrawDebugUI()
                 // =============================================
                 // 攻撃タイムライン可視化
                 // =============================================
-                if (enemy.bossPhase != BossAttackPhase::IDLE)
+                // ★ 近接攻撃のタイムライン（IDLE中にAttack/AttackSlash）
+                if (enemy.bossPhase == BossAttackPhase::IDLE &&
+                    (enemy.currentAnimation == "Attack" || enemy.currentAnimation == "AttackSlash"))
                 {
                     ImGui::Spacing();
-                    ImGui::Text("  --- Attack Timeline ---");
+                    ImGui::Text("  --- Melee Attack Timeline ---");
 
                     struct PhaseInfo {
                         const char* name;
@@ -2523,164 +2580,86 @@ void Game::DrawDebugUI()
                         bool isDamagePhase;
                     };
 
-                    std::vector<PhaseInfo> phases;
-                    float currentOffset = 0.0f;
-                    bool isInTimeline = false;
+                    float hitTime = m_enemySystem->m_bossMeleeHitTime;
+                    float totalDuration = m_enemySystem->m_bossMeleeDuration;
+                    float hitDuration = 0.05f;
+                    float recovery = totalDuration - hitTime - hitDuration;
+                    if (recovery < 0.01f) recovery = 0.01f;
 
-                    // ジャンプ攻撃
-                    if (enemy.bossPhase == BossAttackPhase::JUMP_WINDUP ||
-                        enemy.bossPhase == BossAttackPhase::JUMP_AIR ||
-                        enemy.bossPhase == BossAttackPhase::JUMP_SLAM ||
-                        enemy.bossPhase == BossAttackPhase::SLAM_RECOVERY)
+                    std::vector<PhaseInfo> phases = {
+                        {"WINDUP",   hitTime,     ImVec4(0.4f, 0.4f, 0.4f, 1), false},
+                        {"HIT!",     hitDuration, ImVec4(1.0f, 0.0f, 0.0f, 1), true },
+                        {"RECOVERY", recovery,    ImVec4(0.2f, 0.8f, 0.2f, 1), false},
+                    };
+
+                    float currentOffset = enemy.animationTime;
+                    float total = 0;
+                    for (auto& p : phases) total += p.duration;
+
+                    float barWidth = 280.0f;
+                    float barHeight = 20.0f;
+                    ImVec2 barStart = ImGui::GetCursorScreenPos();
+                    barStart.x += 20.0f;
+                    ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+                    float xOffset = 0;
+                    for (auto& p : phases)
                     {
-                        phases = {
-                            {"WINDUP",   0.5f,  ImVec4(0.4f, 0.4f, 0.4f, 1), false},
-                            {"AIR",      0.6f,  ImVec4(1.0f, 0.7f, 0.0f, 1), false},
-                            {"SLAM!",    0.1f,  ImVec4(1.0f, 0.0f, 0.0f, 1), true },
-                            {"RECOVERY", 1.5f,  ImVec4(0.2f, 0.8f, 0.2f, 1), false},
-                        };
-                        if (enemy.bossPhase == BossAttackPhase::JUMP_WINDUP)
-                            currentOffset = enemy.bossPhaseTimer;
-                        else if (enemy.bossPhase == BossAttackPhase::JUMP_AIR)
-                            currentOffset = 0.5f + enemy.bossPhaseTimer;
-                        else if (enemy.bossPhase == BossAttackPhase::JUMP_SLAM)
-                            currentOffset = 1.1f + enemy.bossPhaseTimer;
-                        else if (enemy.bossPhase == BossAttackPhase::SLAM_RECOVERY)
-                            currentOffset = 1.2f + enemy.bossPhaseTimer;
-                        isInTimeline = true;
-                    }
-
-                    // 斬撃攻撃
-                    if (enemy.bossPhase == BossAttackPhase::SLASH_WINDUP ||
-                        enemy.bossPhase == BossAttackPhase::SLASH_FIRE ||
-                        enemy.bossPhase == BossAttackPhase::SLASH_RECOVERY)
-                    {
-                        phases = {
-                            {"WINDUP",   0.8f,  ImVec4(0.4f, 0.4f, 0.4f, 1), false},
-                            {"FIRE!",    0.1f,  ImVec4(1.0f, 0.0f, 0.0f, 1), true },
-                            {"RECOVERY", 1.0f,  ImVec4(0.2f, 0.8f, 0.2f, 1), false},
-                        };
-                        if (enemy.bossPhase == BossAttackPhase::SLASH_WINDUP)
-                            currentOffset = enemy.bossPhaseTimer;
-                        else if (enemy.bossPhase == BossAttackPhase::SLASH_FIRE)
-                            currentOffset = 0.8f + enemy.bossPhaseTimer;
-                        else if (enemy.bossPhase == BossAttackPhase::SLASH_RECOVERY)
-                            currentOffset = 0.9f + enemy.bossPhaseTimer;
-                        isInTimeline = true;
-                    }
-
-                    // 咆哮ビーム
-                    if (enemy.bossPhase == BossAttackPhase::ROAR_WINDUP ||
-                        enemy.bossPhase == BossAttackPhase::ROAR_FIRE ||
-                        enemy.bossPhase == BossAttackPhase::ROAR_RECOVERY)
-                    {
-                        float arrivalTime = 2.0f;  // ビーム到達時間（FIRE内）
-                        float fireTotal = 5.0f;    // FIRE全体の長さ
-                        phases = {
-                            {"CHARGE",  2.5f,                    ImVec4(0.6f, 0.3f, 0.8f, 1), false},
-                            {"TRAVEL",  arrivalTime,             ImVec4(0.8f, 0.5f, 0.0f, 1), false},
-                            {"HIT!",    fireTotal - arrivalTime, ImVec4(1.0f, 0.0f, 0.0f, 1), true },
-                            {"RECOVER", 2.0f,                    ImVec4(0.2f, 0.8f, 0.2f, 1), false},
-                        };
-                        if (enemy.bossPhase == BossAttackPhase::ROAR_WINDUP)
-                            currentOffset = enemy.bossPhaseTimer;
-                        else if (enemy.bossPhase == BossAttackPhase::ROAR_FIRE)
-                            currentOffset = 2.5f + enemy.bossPhaseTimer;
-                        else if (enemy.bossPhase == BossAttackPhase::ROAR_RECOVERY)
-                            currentOffset = 2.5f + fireTotal + enemy.bossPhaseTimer;
-                        isInTimeline = true;
-                    }
-
-                    // タイムラインバー描画
-                    if (isInTimeline && !phases.empty())
-                    {
-                        float totalDuration = 0;
-                        for (auto& p : phases) totalDuration += p.duration;
-
-                        float barWidth = 280.0f;
-                        float barHeight = 20.0f;
-                        ImVec2 barStart = ImGui::GetCursorScreenPos();
-                        barStart.x += 20.0f;
-                        ImDrawList* drawList = ImGui::GetWindowDrawList();
-
-                        float xOffset = 0;
-                        for (auto& p : phases)
+                        float w = (p.duration / total) * barWidth;
+                        ImU32 col = ImGui::ColorConvertFloat4ToU32(p.color);
+                        if (p.isDamagePhase)
                         {
-                            float w = (p.duration / totalDuration) * barWidth;
-                            ImU32 col = ImGui::ColorConvertFloat4ToU32(p.color);
+                            float blink = sinf((float)ImGui::GetTime() * 10.0f) * 0.3f + 0.7f;
+                            ImVec4 bc = p.color; bc.w = blink;
+                            col = ImGui::ColorConvertFloat4ToU32(bc);
+                        }
+                        drawList->AddRectFilled(
+                            ImVec2(barStart.x + xOffset, barStart.y),
+                            ImVec2(barStart.x + xOffset + w, barStart.y + barHeight), col);
+                        if (w > 30)
+                            drawList->AddText(ImVec2(barStart.x + xOffset + 2, barStart.y + 3),
+                                IM_COL32(255, 255, 255, 220), p.name);
+                        xOffset += w;
+                    }
 
+                    drawList->AddRect(barStart,
+                        ImVec2(barStart.x + barWidth, barStart.y + barHeight),
+                        IM_COL32(200, 200, 200, 180));
+
+                    float markerX = barStart.x + (currentOffset / total) * barWidth;
+                    markerX = (std::min)(markerX, barStart.x + barWidth);
+                    markerX = (std::max)(markerX, barStart.x);
+                    drawList->AddLine(
+                        ImVec2(markerX, barStart.y - 2),
+                        ImVec2(markerX, barStart.y + barHeight + 2),
+                        IM_COL32(255, 255, 255, 255), 2.0f);
+                    drawList->AddTriangleFilled(
+                        ImVec2(markerX - 5, barStart.y - 6),
+                        ImVec2(markerX + 5, barStart.y - 6),
+                        ImVec2(markerX, barStart.y - 1),
+                        IM_COL32(255, 255, 0, 255));
+
+                    ImGui::Dummy(ImVec2(barWidth + 30, barHeight + 10));
+                    ImGui::Text("    Time: %.2f / %.2f sec", currentOffset, total);
+
+                    float elapsed = 0;
+                    for (auto& p : phases)
+                    {
+                        if (currentOffset >= elapsed && currentOffset < elapsed + p.duration)
+                        {
                             if (p.isDamagePhase)
-                            {
-                                float blink = sinf((float)ImGui::GetTime() * 10.0f) * 0.3f + 0.7f;
-                                ImVec4 blinkColor = p.color;
-                                blinkColor.w = blink;
-                                col = ImGui::ColorConvertFloat4ToU32(blinkColor);
-                            }
-
-                            drawList->AddRectFilled(
-                                ImVec2(barStart.x + xOffset, barStart.y),
-                                ImVec2(barStart.x + xOffset + w, barStart.y + barHeight),
-                                col);
-
-                            if (w > 30)
-                            {
-                                drawList->AddText(
-                                    ImVec2(barStart.x + xOffset + 2, barStart.y + 3),
-                                    IM_COL32(255, 255, 255, 220), p.name);
-                            }
-
-                            xOffset += w;
+                                ImGui::TextColored(ImVec4(1, 0, 0, 1), "    >>> DAMAGE ACTIVE! <<< Parry NOW!");
+                            else
+                                ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1), "    [%s] No damage yet", p.name);
+                            break;
                         }
-
-                        drawList->AddRect(
-                            barStart,
-                            ImVec2(barStart.x + barWidth, barStart.y + barHeight),
-                            IM_COL32(200, 200, 200, 180));
-
-                        float markerX = barStart.x + (currentOffset / totalDuration) * barWidth;
-                        markerX = (std::min)(markerX, barStart.x + barWidth);
-                        markerX = (std::max)(markerX, barStart.x);
-
-                        drawList->AddLine(
-                            ImVec2(markerX, barStart.y - 2),
-                            ImVec2(markerX, barStart.y + barHeight + 2),
-                            IM_COL32(255, 255, 255, 255), 2.0f);
-
-                        drawList->AddTriangleFilled(
-                            ImVec2(markerX - 5, barStart.y - 6),
-                            ImVec2(markerX + 5, barStart.y - 6),
-                            ImVec2(markerX, barStart.y - 1),
-                            IM_COL32(255, 255, 0, 255));
-
-                        ImGui::Dummy(ImVec2(barWidth + 30, barHeight + 10));
-
-                        ImGui::Text("    Time: %.2f / %.2f sec", currentOffset, totalDuration);
-
-                        float elapsed = 0;
-                        for (auto& p : phases)
-                        {
-                            if (currentOffset >= elapsed && currentOffset < elapsed + p.duration)
-                            {
-                                if (p.isDamagePhase)
-                                {
-                                    ImGui::TextColored(ImVec4(1, 0, 0, 1),
-                                        "    >>> DAMAGE ACTIVE! <<< Parry NOW!");
-                                }
-                                else
-                                {
-                                    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1),
-                                        "    [%s] No damage yet", p.name);
-                                }
-                                break;
-                            }
-                            elapsed += p.duration;
-                        }
-
-                        ImGui::TextColored(
-                            enemy.attackJustLanded ? ImVec4(1, 0, 0, 1) : ImVec4(0.4f, 0.4f, 0.4f, 1),
-                            "    attackJustLanded: %s",
-                            enemy.attackJustLanded ? "TRUE (HIT FRAME!)" : "false");
+                        elapsed += p.duration;
                     }
+
+                    ImGui::TextColored(
+                        enemy.attackJustLanded ? ImVec4(1, 0, 0, 1) : ImVec4(0.4f, 0.4f, 0.4f, 1),
+                        "    attackJustLanded: %s",
+                        enemy.attackJustLanded ? "TRUE (HIT FRAME!)" : "false");
                 }
 
 
@@ -3551,9 +3530,18 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
 
                     if (enemy.isStaggered)
                     {
-                        float flash = sinf(enemy.staggerFlashTimer);
-                        flash = (flash + 1.0f) * 0.5f;
-                        instance.color = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
+                        //  リムライト用: Color.a にスタガー情報を仕込む
+                         // a > 1.5 → PSでスタガーと判定
+                         // frac(a) → パルスアニメーションの位相
+                        float phase = fmodf(enemy.staggerFlashTimer * 1.5f, 1.0f);  // 0.0?1.0 を繰り返す
+                        float rimAlpha = 2.0f + phase;  // 2.0?3.0 の範囲（>1.5でスタガー検出
+                        // 色は通常色を維持（紫のリムライトはシェーダーが足す）
+                        instance.color = DirectX::XMFLOAT4(
+                            enemy.color.x,
+                            enemy.color.y,
+                            enemy.color.z,
+                            rimAlpha
+                        );
                     }
                     else
                     {
@@ -3659,15 +3647,17 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
         //  === よろめき状態なら点滅させる   ===
         if (enemy.isStaggered)
         {
-            float flash = sinf(enemy.staggerFlashTimer);    //  -1.0 - 1.0
-            flash = (flash + 1.0f) * 0.5f;  //  0.0 - 1.0に変換
-
-            //  オレンジ色に光る
+            //  リムライト用: Color.a にスタガー情報を仕込む
+             // a > 1.5 → PSでスタガーと判定
+             // frac(a) → パルスアニメーションの位相
+            float phase = fmodf(enemy.staggerFlashTimer * 1.5f, 1.0f);  // 0.0?1.0 を繰り返す
+            float rimAlpha = 2.0f + phase;  // 2.0?3.0 の範囲（>1.5でスタガー検出
+            // 色は通常色を維持（紫のリムライトはシェーダーが足す）
             instance.color = DirectX::XMFLOAT4(
-                1.0f,                    // R: 赤 MAX
-                0.5f + flash * 0.5f,     // G: 0.5?1.0 で点滅
-                0.0f,                    // B: 青 0
-                1.0f
+            enemy.color.x,
+            enemy.color.y,
+            enemy.color.z,
+            rimAlpha
             );
         }
         else
@@ -3825,9 +3815,8 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                     DirectX::XMFLOAT4 finalColor = enemy.color;
                     if (enemy.isStaggered)
                     {
-                        float flash = sinf(enemy.staggerFlashTimer);
-                        flash = (flash + 1.0f) * 0.5f;
-                        finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
+                        float phase = fmodf(enemy.staggerFlashTimer * 1.5f, 1.0f);
+                        finalColor.w = 2.0f + phase;
                     }
                     m_instColors.push_back(DirectX::XMLoadFloat4(&finalColor));
                     m_instAnims.push_back(enemy.currentAnimation);
@@ -3874,9 +3863,8 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 DirectX::XMFLOAT4 finalColor = enemy.color;
                 if (enemy.isStaggered)
                 {
-                    float flash = sinf(enemy.staggerFlashTimer);
-                    flash = (flash + 1.0f) * 0.5f;
-                    finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
+                    float phase = fmodf(enemy.staggerFlashTimer * 1.5f, 1.0f);
+                    finalColor.w = 2.0f + phase;
                 }
                 m_instColors.push_back(DirectX::XMLoadFloat4(&finalColor));
                 m_instAnims.push_back(enemy.currentAnimation);
@@ -3934,9 +3922,8 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 DirectX::XMFLOAT4 finalColor = enemy.color;
                 if (enemy.isStaggered)
                 {
-                    float flash = sinf(enemy.staggerFlashTimer);
-                    flash = (flash + 1.0f) * 0.5f;
-                    finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
+                    float phase = fmodf(enemy.staggerFlashTimer * 1.5f, 1.0f);
+                    finalColor.w = 2.0f + phase;
                 }
                 m_instColors.push_back(DirectX::XMLoadFloat4(&finalColor));
                 m_instAnims.push_back(enemy.currentAnimation);
@@ -3985,9 +3972,8 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 DirectX::XMFLOAT4 finalColor = enemy.color;
                 if (enemy.isStaggered)
                 {
-                    float flash = sinf(enemy.staggerFlashTimer);
-                    flash = (flash + 1.0f) * 0.5f;
-                    finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
+                    float phase = fmodf(enemy.staggerFlashTimer * 1.5f, 1.0f);
+                    finalColor.w = 2.0f + phase;
                 }
                 m_instColors.push_back(DirectX::XMLoadFloat4(&finalColor));
                 m_instAnims.push_back(enemy.currentAnimation);
@@ -4045,9 +4031,8 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 DirectX::XMFLOAT4 finalColor = enemy.color;
                 if (enemy.isStaggered)
                 {
-                    float flash = sinf(enemy.staggerFlashTimer);
-                    flash = (flash + 1.0f) * 0.5f;
-                    finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
+                    float phase = fmodf(enemy.staggerFlashTimer * 1.5f, 1.0f);
+                    finalColor.w = 2.0f + phase;
                 }
                 m_instColors.push_back(DirectX::XMLoadFloat4(&finalColor));
                 m_instAnims.push_back(enemy.currentAnimation);
@@ -4097,9 +4082,8 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 DirectX::XMFLOAT4 finalColor = enemy.color;
                 if (enemy.isStaggered)
                 {
-                    float flash = sinf(enemy.staggerFlashTimer);
-                    flash = (flash + 1.0f) * 0.5f;
-                    finalColor = DirectX::XMFLOAT4(1.0f, 0.5f + flash * 0.5f, 0.0f, 1.0f);
+                    float phase = fmodf(enemy.staggerFlashTimer * 1.5f, 1.0f);
+                    finalColor.w = 2.0f + phase;
                 }
                 m_instColors.push_back(DirectX::XMLoadFloat4(&finalColor));
                 m_instAnims.push_back(enemy.currentAnimation);
@@ -4448,14 +4432,16 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
         if (!enemy.isAlive || enemy.isDying || enemy.isExploded)
             continue;
 
-        if (enemy.currentAnimation == "Attack" && !enemy.attackJustLanded)
+        if ((enemy.currentAnimation == "Attack" || enemy.currentAnimation == "AttackSlash") && !enemy.attackJustLanded)
         {
             float hitTime;
             switch (enemy.type)
             {
-            case EnemyType::RUNNER: hitTime = m_enemySystem->m_runnerAttackHitTime; break;
-            case EnemyType::TANK:   hitTime = m_enemySystem->m_tankAttackHitTime;   break;
-            default:                hitTime = m_enemySystem->m_normalAttackHitTime;  break;
+            case EnemyType::RUNNER:  hitTime = m_enemySystem->m_runnerAttackHitTime; break;
+            case EnemyType::TANK:    hitTime = m_enemySystem->m_tankAttackHitTime;   break;
+            case EnemyType::MIDBOSS:
+            case EnemyType::BOSS:    hitTime = m_enemySystem->m_bossMeleeHitTime;    break;
+            default:                 hitTime = m_enemySystem->m_normalAttackHitTime;  break;
             }
 
             float timeToHit = hitTime - enemy.animationTime;
@@ -4983,17 +4969,27 @@ void Game::UpdateLoading()
     if (fabsf(m_loadingBarCurrent - m_loadingBarTarget) < 0.001f)
         m_loadingBarCurrent = m_loadingBarTarget;
 
-    // === 完了 → PLAYINGへ遷移 ===
-    if (m_loadingTimer >= m_loadingDuration)
+    // === READY後、Enterキーで遷移 ===
+    if (m_loadingPhase == 4)
     {
         m_loadingBarCurrent = 1.0f;
 
-        // フェードイン開始
-        m_fadeAlpha = 1.0f;
-        m_fadingIn = true;
-        m_fadeActive = true;
-
-        m_gameState = GameState::PLAYING;
+        static bool enterPressed = false;
+        if (GetAsyncKeyState(VK_RETURN) & 0x8000)
+        {
+            if (!enterPressed)
+            {
+                m_fadeAlpha = 1.0f;
+                m_fadingIn = true;
+                m_fadeActive = true;
+                m_gameState = GameState::PLAYING;
+                enterPressed = true;
+            }
+        }
+        else
+        {
+            enterPressed = false;
+        }
     }
 }
 
@@ -5414,6 +5410,8 @@ void Game::RenderPlaying()
         //  深度テストと深度書き込みを有効化
         m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 
+
+
         //DrawBillboard();
         DrawWeapon();
         DrawShield();
@@ -5552,6 +5550,8 @@ void Game::RenderPlaying()
         // UI描画（オフスクリーンへ）
         DrawUI();
         DrawScorePopups();
+        RenderWaveBanner();
+        RenderScoreHUD();
 
         //  最終画面にブラーを適用して描画
         ID3D11RenderTargetView* finalRTV = m_renderTargetView.Get();
@@ -5831,17 +5831,22 @@ void Game::RenderPlaying()
         // UI描画
         DrawUI();
         DrawScorePopups();
+        RenderWaveBanner();
+        RenderScoreHUD();
+
     }
 
 
     //  瀕死日ネット
     RenderLowHealthVignette();
 
+    RenderClawDamage();
+
     //  スピードライン
     RenderSpeedLines();
 
     //  ダッシュオーバーレイ
-    RenderDashOverlay();
+    //RenderDashOverlay();
 
     //  弾切れ警告
     RenderReloadWarning();
@@ -6955,7 +6960,7 @@ void Game::UpdatePlaying()
             m_targetFOV = 85.0f;
 
             // スピードラインを少し出す（既存のシステム）
-            m_speedLineAlpha = 0.25f;
+            m_speedLineAlpha = 0.5f;
 
             // テクスチャオーバーレイをフェードイン
             m_dashOverlayAlpha += deltaTime * 4.0f;
@@ -6979,7 +6984,7 @@ void Game::UpdatePlaying()
     else if (m_currentFOV > m_targetFOV)
         m_currentFOV = max(m_targetFOV, m_currentFOV - deltaTime * 240.0f);
 
-    if (m_shieldState != ShieldState::Charging)
+    if (m_shieldState != ShieldState::Charging && !m_isSprinting)
         m_speedLineAlpha = max(0.0f, m_speedLineAlpha - deltaTime * 5.0f);
 
     float deltatime = (1.0f / 60.0f) * m_timeScale;
@@ -7051,6 +7056,46 @@ void Game::UpdatePlaying()
     {
         float floorY = m_mapSystem->GetFloorHeight(newPosition.x, newPosition.z);
         newPosition.y = floorY + 1.8f;  // 1.8 = 目の高さ
+    }
+
+    // === 敵との押し戻し ===
+    {
+        float moveDx = newPosition.x - oldPosition.x;
+        float moveDz = newPosition.z - oldPosition.z;
+        bool isMoving = (moveDx * moveDx + moveDz * moveDz) > 0.0001f;
+
+        if (isMoving)
+        {
+            const float pushRadius = 0.8f;  // プレイヤー+敵の接触距離
+            const float pushStrength = 0.15f; // 押し戻しの強さ（大きいほど硬い壁に近い）
+
+            for (const auto& enemy : m_enemySystem->GetEnemies())
+            {
+                if (!enemy.isAlive || enemy.isDying) continue;
+
+                float ex = enemy.position.x - newPosition.x;
+                float ez = enemy.position.z - newPosition.z;
+                float dist = sqrtf(ex * ex + ez * ez);
+
+                // 敵の体の大きさを考慮
+                float enemyRadius = GetEnemyConfig(enemy.type).bodyWidth * 0.5f;
+                float minDist = playerRadius + enemyRadius;
+
+                if (dist < minDist && dist > 0.01f)
+                {
+                    // 押し戻し方向（敵→プレイヤー）
+                    float nx = -ex / dist;
+                    float nz = -ez / dist;
+
+                    // めり込み量
+                    float overlap = minDist - dist;
+
+                    // プレイヤーを押し戻す（100%ブロックではなく、一部すり抜け可能）
+                    newPosition.x += nx * overlap * pushStrength;
+                    newPosition.z += nz * overlap * pushStrength;
+                }
+            }
+        }
     }
 
     m_player->SetPosition(newPosition);
@@ -7998,7 +8043,8 @@ void Game::UpdatePlaying()
         //  ========================================
         //  アニメーション更新
         //  ========================================
-        if (m_enemyModel && m_enemyModel->HasAnimation(enemy.currentAnimation))
+        if (enemy.type != EnemyType::BOSS && enemy.type != EnemyType::MIDBOSS &&
+            m_enemyModel && m_enemyModel->HasAnimation(enemy.currentAnimation))
         {
             float duration = m_enemyModel->GetAnimationDuration(enemy.currentAnimation);
             // ↑ ここで duration が定義される
@@ -8040,6 +8086,8 @@ void Game::UpdatePlaying()
                 else if (enemy.currentAnimation == "Walk")   animSpeed = m_enemySystem->m_animSpeed_Walk[typeIdx];
                 else if (enemy.currentAnimation == "Run")    animSpeed = m_enemySystem->m_animSpeed_Run[typeIdx];
                 else if (enemy.currentAnimation == "Attack") animSpeed = 0.0f;
+                else if (enemy.currentAnimation == "AttackJump") animSpeed = 0.0f;
+                else if (enemy.currentAnimation == "AttackSlash") animSpeed = 0.0f;
                 else                                         animSpeed = 0.1f;
 
                 enemy.animationTime += deltaTime * animSpeed;
@@ -8095,6 +8143,84 @@ void Game::UpdatePlaying()
     //  ウェーブ管理
     m_waveManager->Update(1.0f / 60.0f, m_player->GetPosition(), m_enemySystem.get());
 
+    // === ウェーブバナー検出 ===
+    {
+        int currentWave = m_waveManager->GetCurrentWave();
+        if (currentWave != m_lastWaveNumber)
+        {
+            m_lastWaveNumber = currentWave;
+            m_waveBannerTimer = m_waveBannerDuration;
+            m_waveBannerNumber = currentWave;
+            m_waveBannerIsBoss = (currentWave % 2 == 0) || (currentWave % 3 == 0);
+        }
+        if (m_waveBannerTimer > 0.0f)
+            m_waveBannerTimer -= 1.0f / 60.0f;
+    }
+
+    // === スコアHUD更新 ===
+    {
+        float dt = 1.0f / 60.0f;
+        int realScore = m_player->GetPoints();
+
+        // スコアが増えたら演出発火
+        if (realScore > m_lastDisplayedScore)
+        {
+            int diff = realScore - m_lastDisplayedScore;
+            m_scoreFlashTimer = 0.4f;
+            m_scoreShakeTimer = 0.2f;
+        }
+        m_lastDisplayedScore = realScore;
+
+        // 表示値をスムーズに追従（スロットマシン風に回る）
+        float diff = (float)realScore - m_scoreDisplayValue;
+        if (fabsf(diff) < 1.0f)
+            m_scoreDisplayValue = (float)realScore;
+        else
+            m_scoreDisplayValue += diff * 8.0f * dt;
+
+        if (m_scoreFlashTimer > 0.0f) m_scoreFlashTimer -= dt;
+        if (m_scoreShakeTimer > 0.0f) m_scoreShakeTimer -= dt;
+    }
+
+    // === 爪痕エフェクト検出（背後からの攻撃のみ） ===
+    {
+        static int lastHP = 100;
+        int curHP = m_player->GetHealth();
+        if (curHP < lastHP && curHP > 0)
+        {
+            // プレイヤーの前方ベクトル
+            float playerYaw = m_player->GetRotation().y;
+            float forwardX = sinf(playerYaw);
+            float forwardZ = cosf(playerYaw);
+            DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+
+            // 一番近い生きてる敵を探す
+            float closestDist = 999.0f;
+            bool isBehind = false;
+            for (const auto& enemy : m_enemySystem->GetEnemies())
+            {
+                if (!enemy.isAlive || enemy.isDying) continue;
+                float dx = enemy.position.x - playerPos.x;
+                float dz = enemy.position.z - playerPos.z;
+                float dist = sqrtf(dx * dx + dz * dz);
+                if (dist < closestDist && dist < 10.0f)
+                {
+                    closestDist = dist;
+                    // 内積: 正=前方、負=背後
+                    float dot = forwardX * dx + forwardZ * dz;
+                    isBehind = (dot < 0.0f);
+                }
+            }
+
+            if (isBehind)
+                m_clawTimer = m_clawDuration;
+        }
+        lastHP = curHP;
+
+        if (m_clawTimer > 0.0f)
+            m_clawTimer -= 1.0f / 60.0f;
+    }
+
     //  全敵のY座標を床の高さに合わせる
     if (m_mapSystem)
     {
@@ -8102,6 +8228,12 @@ void Game::UpdatePlaying()
         {
             if (enemy.isAlive)
             {
+                //  ボスのジャンプ中はY座標を上書きしない
+                if ((enemy.type == EnemyType::BOSS || enemy.type == EnemyType::MIDBOSS) &&
+                    (enemy.bossPhase == BossAttackPhase::JUMP_AIR ||
+                        enemy.bossPhase == BossAttackPhase::JUMP_SLAM))
+                    continue;
+
                 enemy.position.y = m_mapSystem->GetFloorHeight(
                     enemy.position.x, enemy.position.z);
             }
@@ -8464,9 +8596,45 @@ void Game::UpdatePlaying()
                 }
                 else
                 {
+                    // TANK / MIDBOSS / BOSS へのダメージ
                     enemy.health -= 80;
-                    m_statDamageDealt += 80;  //  与ダメ記録
-                    enemy.stunValue = enemy.maxStunValue;
+                    m_statDamageDealt += 80;
+
+                    // 死ななくても血を出す
+                    DirectX::XMFLOAT3 hitDir = {
+                        enemy.position.x - blastCenter.x,
+                        0.5f,  // やや上向き
+                        enemy.position.z - blastCenter.z
+                    };
+                    m_gpuParticles->EmitSplash(enemy.position, hitDir, 40, 7.0f);
+                    m_gpuParticles->EmitMist(enemy.position, 100, 2.5f);
+                    m_gpuParticles->Emit(enemy.position, 30, 4.0f);
+
+                    //  タンクだけ確定よろめき
+                    if (enemy.type == EnemyType::TANK)
+                    {
+                        enemy.isStaggered = true;
+                        enemy.staggerFlashTimer = 0.0f;
+                        enemy.staggerTimer = 0.0f;
+                        enemy.stunValue = 0.0f;
+                        enemy.currentAnimation = "Stun";
+                        enemy.animationTime = 0.0f;
+                    }
+                    else
+                    {
+                        // MIDBOSS/BOSS はスタン蓄積のみ
+                        enemy.stunValue += 60.0f;
+                        if (enemy.stunValue >= enemy.maxStunValue)
+                        {
+                            enemy.isStaggered = true;
+                            enemy.staggerFlashTimer = 0.0f;
+                            enemy.staggerTimer = 0.0f;
+                            enemy.stunValue = 0.0f;
+                            enemy.currentAnimation = "Stun";
+                            enemy.animationTime = 0.0f;
+                        }
+                    }
+
                     if (enemy.health <= 0)
                     {
                         enemy.health = 0;
@@ -8475,13 +8643,15 @@ void Game::UpdatePlaying()
                         enemy.isRagdoll = true;
                         enemy.corpseTimer = 3.0f;
                         RemoveEnemyPhysicsBody(enemy.id);
-                        // スクリーンブラッド
                         m_bloodSystem->OnMeleeKill(enemy.position);
-                        m_gpuParticles->EmitSplash(enemy.position, XMFLOAT3(enemy.position.x - m_player->GetPosition().x, enemy.position.y - m_player->GetPosition().y, enemy.position.z - m_player->GetPosition().z), 45, 8.0f);
+                        m_gpuParticles->EmitSplash(enemy.position,
+                            XMFLOAT3(enemy.position.x - m_player->GetPosition().x,
+                                enemy.position.y - m_player->GetPosition().y,
+                                enemy.position.z - m_player->GetPosition().z), 45, 8.0f);
                         m_gpuParticles->EmitMist(enemy.position, 120, 2.5f);
                         m_gpuParticles->Emit(enemy.position, 70, 6.0f);
-                        m_statKills++;       //  総キル
-                        m_statMeleeKills++;  //  近接キル
+                        m_statKills++;
+                        m_statMeleeKills++;
 
                         int waveBonus = m_waveManager->OnEnemyKilled();
                         m_player->AddPoints(150 + waveBonus);
@@ -8508,7 +8678,11 @@ void Game::UpdatePlaying()
                 m_slowMoTimer = 0.02f + killCount * 0.02f;
 
                 m_weaponSystem->SetCurrentAmmo(m_weaponSystem->GetMaxAmmo());
-                m_weaponSystem->SetReserveAmmo(m_weaponSystem->GetReserveAmmo() + killCount * 10);
+                int curReserve = m_weaponSystem->GetReserveAmmo();
+                int maxReserve = m_weaponSystem->GetWeaponData(m_weaponSystem->GetCurrentWeapon()).reserveAmmo;
+                int newReserve = curReserve + killCount * 10;
+                if (newReserve > maxReserve) newReserve = maxReserve;
+                m_weaponSystem->SetReserveAmmo(newReserve);
             }
 
             //  FOVを戻す
@@ -8808,7 +8982,10 @@ void Game::UpdatePlaying()
                         {
                             enemy.isStaggered = true;
                             enemy.staggerFlashTimer = 0.0f;
+                            enemy.staggerTimer = 0.0f;
                             enemy.stunValue = 0.0f;
+                            enemy.currentAnimation = "Stun";
+                            enemy.animationTime = 0.0f;
                         }
 
                         m_cameraShake = 0.2f;
@@ -9026,7 +9203,10 @@ void Game::UpdatePlaying()
                         {
                             enemy.isStaggered = true;
                             enemy.staggerFlashTimer = 0.0f;
+                            enemy.staggerTimer = 0.0f;
                             enemy.stunValue = 0.0f;
+                            enemy.currentAnimation = "Stun";
+                            enemy.animationTime = 0.0f;
                         }
 
                         // パリィ成功でビーム中断！
@@ -9126,6 +9306,9 @@ void Game::UpdatePlaying()
                 {
                     enemy.isStaggered = true;
                     enemy.staggerFlashTimer = 0.0f;
+                    enemy.staggerTimer = 0.0f;
+                    enemy.currentAnimation = "Stun";
+                    enemy.animationTime = 0.0f;
 
                    /* char buf[128];
                     sprintf_s(buf, "[PARRY] SUCCESS! Enemy ID:%d STAGGERED instantly!\n", enemy.id);*/
@@ -9145,7 +9328,10 @@ void Game::UpdatePlaying()
                     {
                         enemy.isStaggered = true;
                         enemy.staggerFlashTimer = 0.0f;
+                        enemy.staggerTimer = 0.0f;
                         enemy.stunValue = 0.0f;
+                        enemy.currentAnimation = "Stun";
+                        enemy.animationTime = 0.0f;
 
                         /*sprintf_s(buf, "[PARRY] STUN BREAK! Enemy ID:%d is now STAGGERED!\n", enemy.id);*/
                         //OutputDebugStringA(buf);
@@ -9321,7 +9507,10 @@ void Game::UpdatePlaying()
                             {
                                 enemy.isStaggered = true;
                                 enemy.staggerFlashTimer = 0.0f;
+                                enemy.staggerTimer = 0.0f;
                                 enemy.stunValue = 0.0f;
+                                enemy.currentAnimation = "Stun";
+                                enemy.animationTime = 0.0f;
                                 //OutputDebugStringA("[PROJECTILE] PARRY -> BOSS STAGGERED!\n");
                             }
                             break;
@@ -9446,11 +9635,18 @@ void Game::ResetGame()
     m_nameInputActive = false;
     m_nameLength = 0;
     m_nameKeyWasDown = false;
+    m_lastWaveNumber = 0;
+    m_waveBannerTimer = 0.0f;
     m_pickupSpawnTimer = 0.0f;   // 
+    m_clawTimer = 0.0f;
     m_scorePopups.clear();
     m_player->SetPosition(DirectX::XMFLOAT3(0.0f, 1.8f, -0.5f));  // コンストラクタと同じ初期位置
     m_player->SetRotation(DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f));   // 向きも正面にリセット
-    m_player->GetPointsRef() = 500;  // 初期ポイント
+    m_player->GetPointsRef() = 0;  // 初期ポイント
+    m_scoreDisplayValue = 0.0f;  // 初期ポイントに合わせる
+    m_scoreFlashTimer = 0.0f;
+    m_scoreShakeTimer = 0.0f;
+    m_lastDisplayedScore = 0;
 
     // === 敵を全消去 ===
     for (auto& enemy : m_enemySystem->GetEnemies())
@@ -10010,23 +10206,15 @@ void Game::RenderDashOverlay()
     RECT destRect = { 0, 0, (LONG)m_outputWidth, (LONG)m_outputHeight };
 
     // 回転させてバリエーションを出す（毎フレーム微妙に回転）
-    float rotation = m_accumulatedAnimTime * 0.3f;
-
-    // 中央を原点にして回転
-    DirectX::XMFLOAT2 origin(960.0f, 540.0f);  // テクスチャの中心（1920x1080の半分）
-
     DirectX::XMVECTORF32 tintColor = { {
-        0.9f, 0.9f, 1.0f,          // わずかに青白い（スピード感）
-        m_dashOverlayAlpha          // フェードイン/アウト
+        0.9f, 0.9f, 1.0f,
+        m_dashOverlayAlpha
     } };
 
     m_spriteBatch->Draw(
         m_dashSpeedlineSRV.Get(),
         destRect,
-        nullptr,         // ソース矩形（全体）
-        tintColor,
-        rotation,        // 回転（ラジアン）
-        origin           // 回転の中心
+        tintColor
     );
 
     m_spriteBatch->End();
@@ -10049,7 +10237,7 @@ void Game::RenderReloadWarning()
     );
 
     // =============================================
-    // (A) "RELOAD" 警告テキスト（弾切れ時）
+    // "RELOAD" 警告テキスト（弾切れ時）
     // =============================================
     if (m_reloadWarningAlpha > 0.01f && !isReloading)
     {
@@ -10112,7 +10300,7 @@ void Game::RenderReloadWarning()
     }
 
     // =============================================
-    // (B) リロード進捗バー（リロード中）
+    //  リロード進捗バー（リロード中）
     // =============================================
     if (isReloading && m_whitePixel)
     {
@@ -10158,6 +10346,239 @@ void Game::RenderReloadWarning()
 
     m_spriteBatch->End();
 }
+
+void Game::RenderWaveBanner()
+{
+    if (m_waveBannerTimer <= 0.0f) return;
+
+    float W = (float)m_outputWidth;
+    float H = (float)m_outputHeight;
+    float t = m_waveBannerTimer / m_waveBannerDuration;  // 1→0
+
+    // フェードイン/アウト
+    float alpha = 1.0f;
+    if (t > 0.85f) alpha = (1.0f - t) / 0.15f;      // 登場
+    else if (t < 0.2f) alpha = t / 0.2f;              // 消滅
+
+    // スライドイン（右から中央へ）
+    float slideOffset = 0.0f;
+    float slideT = 1.0f - t;
+    if (slideT < 0.12f)
+        slideOffset = (1.0f - slideT / 0.12f) * 300.0f;
+
+    m_spriteBatch->Begin(
+        DirectX::SpriteSortMode_Deferred,
+        m_states->NonPremultiplied()
+    );
+
+    // === バナー画像 ===
+    auto& bannerSRV = m_waveBannerIsBoss ? m_waveBannerBossSRV : m_waveBannerNormalSRV;
+    if (bannerSRV)
+    {
+        float bannerH = H * 0.12f;
+        float bannerY = (H - bannerH) * 0.5f;
+        RECT destRect = {
+            (LONG)(0 + slideOffset * 0.3f),
+            (LONG)bannerY,
+            (LONG)(W + slideOffset * 0.3f),
+            (LONG)(bannerY + bannerH)
+        };
+        DirectX::XMVECTORF32 bannerColor = { 1.0f, 1.0f, 1.0f, alpha };
+        m_spriteBatch->Draw(bannerSRV.Get(), destRect, bannerColor);
+    }
+
+    // === ウェーブ番号（大きくスライドイン） ===
+    if (m_fontLarge)
+    {
+        wchar_t numText[16];
+        swprintf_s(numText, L"%d", m_waveBannerNumber);
+
+        DirectX::XMVECTOR numSize = m_fontLarge->MeasureString(numText);
+        float numW = DirectX::XMVectorGetX(numSize);
+        float numX = (W - numW) * 0.5f + slideOffset + W * 0.16f;
+        float numY = H * 0.5f - DirectX::XMVectorGetY(numSize) * 0.49f;
+
+        // グロー
+        DirectX::XMVECTORF32 glowColor = m_waveBannerIsBoss
+            ? DirectX::XMVECTORF32{ 0.4f, 0.02f, 0.0f, alpha * 0.6f }
+        : DirectX::XMVECTORF32{ 0.4f, 0.35f, 0.0f, alpha * 0.6f };
+        for (int dx = -3; dx <= 3; dx += 3)
+            for (int dy = -3; dy <= 3; dy += 3)
+                m_fontLarge->DrawString(m_spriteBatch.get(), numText,
+                    DirectX::XMFLOAT2(numX + dx, numY + dy), glowColor);
+
+        // メイン
+        DirectX::XMVECTORF32 numColor = m_waveBannerIsBoss
+            ? DirectX::XMVECTORF32{ 1.0f, 0.2f, 0.1f, alpha }
+        : DirectX::XMVECTORF32{ 1.0f, 0.85f, 0.2f, alpha };
+        m_fontLarge->DrawString(m_spriteBatch.get(), numText,
+            DirectX::XMFLOAT2(numX, numY), numColor);
+    }
+
+    m_spriteBatch->End();
+}
+
+
+void Game::RenderScoreHUD()
+{
+    float W = (float)m_outputWidth;
+    float H = (float)m_outputHeight;
+
+    m_spriteBatch->Begin(
+        DirectX::SpriteSortMode_Deferred,
+        m_states->NonPremultiplied()
+    );
+
+    // === 血しぶき背景 ===
+    if (m_scoreBackdropSRV)
+    {
+        float bgW = W * 0.22f;
+        float bgH = H * 0.07f;
+        float bgX = 10.0f;
+        float bgY = 10.0f;
+
+        // 加算時にちょっと揺れる
+        float shakeX = 0.0f, shakeY = 0.0f;
+        if (m_scoreShakeTimer > 0.0f)
+        {
+            float intensity = m_scoreShakeTimer / 0.2f;
+            shakeX = sinf(m_scoreShakeTimer * 80.0f) * 3.0f * intensity;
+            shakeY = cosf(m_scoreShakeTimer * 60.0f) * 2.0f * intensity;
+        }
+
+        RECT bgRect = {
+            (LONG)(bgX + shakeX),
+            (LONG)(bgY + shakeY),
+            (LONG)(bgX + bgW + shakeX),
+            (LONG)(bgY + bgH + shakeY)
+        };
+
+        // 加算時に少し明るくなる
+        float flashBright = 1.0f;
+        if (m_scoreFlashTimer > 0.0f)
+            flashBright = 1.0f + (m_scoreFlashTimer / 0.4f) * 0.8f;
+
+        DirectX::XMVECTORF32 bgColor = {
+            flashBright, flashBright, flashBright, 0.9f
+        };
+        m_spriteBatch->Draw(m_scoreBackdropSRV.Get(), bgRect, bgColor);
+
+        // === スコア数字 ===
+        if (m_fontLarge)
+        {
+            wchar_t scoreText[32];
+            swprintf_s(scoreText, L"%d", (int)m_scoreDisplayValue);
+
+            DirectX::XMVECTOR textSize = m_fontLarge->MeasureString(scoreText);
+            float textH = DirectX::XMVectorGetY(textSize);
+            float textX = bgX + 15.0f + shakeX;
+            float textY = bgY + (bgH - textH) * 0.5f + shakeY;
+
+            // グロー（赤い影）
+            DirectX::XMVECTORF32 glowColor = { 0.5f, 0.02f, 0.0f, 0.6f };
+            for (int dx = -2; dx <= 2; dx += 4)
+                for (int dy = -2; dy <= 2; dy += 4)
+                    m_fontLarge->DrawString(m_spriteBatch.get(), scoreText,
+                        DirectX::XMFLOAT2(textX + dx, textY + dy), glowColor);
+
+            // メイン（加算時は赤→白に光る）
+            float flash = (m_scoreFlashTimer > 0.0f) ? m_scoreFlashTimer / 0.4f : 0.0f;
+            DirectX::XMVECTORF32 mainColor = {
+                0.95f,
+                0.85f + flash * 0.15f,
+                0.8f + flash * 0.2f,
+                1.0f
+            };
+            m_fontLarge->DrawString(m_spriteBatch.get(), scoreText,
+                DirectX::XMFLOAT2(textX, textY), mainColor);
+        }
+
+        // === "PTS" ラベル（小さく右に） ===
+        if (m_font)
+        {
+            wchar_t scoreText[32];
+            swprintf_s(scoreText, L"%d", (int)m_scoreDisplayValue);
+            DirectX::XMVECTOR scoreSize = m_fontLarge->MeasureString(scoreText);
+            float scoreW = DirectX::XMVectorGetX(scoreSize);
+
+            float ptsX = bgX + 15.0f + scoreW + 8.0f + shakeX;
+            float ptsY = bgY + bgH * 0.5f - 5.0f + shakeY;
+
+            DirectX::XMVECTORF32 ptsColor = { 0.6f, 0.15f, 0.1f, 0.8f };
+            m_font->DrawString(m_spriteBatch.get(), L"PTS",
+                DirectX::XMFLOAT2(ptsX, ptsY), ptsColor);
+        }
+    }
+
+    m_spriteBatch->End();
+}
+
+void Game::RenderClawDamage()
+{
+    if (m_clawTimer <= 0.0f || !m_clawDamageSRV) return;
+
+    float W = (float)m_outputWidth;
+    float H = (float)m_outputHeight;
+    float t = m_clawTimer / m_clawDuration;  // 1→0
+
+    // スラッシュアニメーション: 右上から右下へスライド
+    // t=1(開始): 画面外の上 → t=0.5: 画面中央 → t=0: 画面下でフェードアウト
+    float slideProgress = 1.0f - t;  // 0→1
+
+    // テクスチャサイズ
+    float clawW = W * 0.5f;
+    float clawH = H * 1.2f;
+
+    // X位置: 画面右寄り
+    float clawX = (W - clawW) * 0.5f;
+
+    // Y位置: 上から下へスライド（高速で引っかく感じ）
+    float startY = -clawH * 0.8f;   // 画面上の外
+    float endY = H * 0.1f;          // 画面中央付近
+    float clawY;
+
+    if (slideProgress < 0.15f)
+    {
+        // 最初の15%: 高速スラッシュ（上→中央）
+        float p = slideProgress / 0.15f;
+        p = p * p * (3.0f - 2.0f * p);  // スムーズステップ
+        clawY = startY + (endY - startY) * p;
+    }
+    else
+    {
+        // 残り: 中央に留まってフェードアウト
+        clawY = endY;
+    }
+
+    // アルファ: 一気に出て、じわっと消える
+    float alpha;
+    if (slideProgress < 0.15f)
+        alpha = slideProgress / 0.15f;          // フェードイン
+    else if (slideProgress < 0.4f)
+        alpha = 1.0f;                            // フル表示
+    else
+        alpha = 1.0f - (slideProgress - 0.4f) / 0.6f;  // フェードアウト
+
+    alpha = max(0.0f, min(1.0f, alpha));
+
+    m_spriteBatch->Begin(
+        DirectX::SpriteSortMode_Deferred,
+        m_states->NonPremultiplied()
+    );
+
+    RECT destRect = {
+        (LONG)clawX,
+        (LONG)clawY,
+        (LONG)(clawX + clawW),
+        (LONG)(clawY + clawH)
+    };
+
+    DirectX::XMVECTORF32 color = { 1.0f, 1.0f, 1.0f, alpha * 0.9f };
+    m_spriteBatch->Draw(m_clawDamageSRV.Get(), destRect, color);
+
+    m_spriteBatch->End();
+}
+
 
 void Game::RenderGloryKillFlash()
 {
@@ -10400,6 +10821,27 @@ void Game::RenderLoading()
         DirectX::XMVECTORF32 dotColor = { 0.4f, 0.4f, 0.4f, 0.6f };
         m_font->DrawString(m_spriteBatch.get(), dotText,
             DirectX::XMFLOAT2(dotX, msgY), dotColor);
+    }
+
+    // =========================================
+    // "Press Enter" 表示（READY後）
+    // =========================================
+    if (m_loadingPhase == 4)
+    {
+        const wchar_t* pressText = L"- - Press Enter - -";
+
+        // 点滅
+        float blink = (sinf(m_loadingTimer * 4.0f) + 1.0f) * 0.5f;
+        float alpha = 0.4f + blink * 0.6f;
+
+        DirectX::XMVECTOR peSize = m_font->MeasureString(pressText);
+        float peW = DirectX::XMVectorGetX(peSize);
+        float peX = (W - peW) * 0.5f;
+        float peY = H * 0.75f;
+
+        DirectX::XMVECTORF32 peColor = { 0.8f, 0.8f, 0.8f, alpha };
+        m_font->DrawString(m_spriteBatch.get(), pressText,
+            DirectX::XMFLOAT2(peX, peY), peColor);
     }
 
     m_spriteBatch->End();
@@ -11482,19 +11924,15 @@ void Game::PerformMeleeAttack()
             //  即死させる
             hitEnemy->health = 0;
 
-            //  弾薬を50%回復
+            //  弾薬を50%回復（上限あり）
             WeaponType currentWeapon = m_weaponSystem->GetCurrentWeapon();
             WeaponData weaponData = m_weaponSystem->GetWeaponData(currentWeapon);
 
             int currentAmmo = m_weaponSystem->GetReserveAmmo();
-            int maxReserve = weaponData.maxAmmo;
-
-            int ammoReward = (int)(maxReserve * 0.5f);  //  50%回復
+            int maxReserve = weaponData.reserveAmmo;
+            int ammoReward = (int)(maxReserve * 0.5f);  // 50%回復
             int newAmmo = currentAmmo + ammoReward;
-
-            //  最大値を超えないように
-            if (newAmmo > maxReserve)
-                newAmmo = maxReserve;
+            if (newAmmo > maxReserve) newAmmo = maxReserve;  // 上限
 
             m_weaponSystem->SetReserveAmmo(newAmmo);
 
@@ -11535,10 +11973,12 @@ void Game::PerformMeleeAttack()
             hitEnemy->health -= (int)normalMeleeDamage;
             m_statDamageDealt += (int)normalMeleeDamage;  //  与ダメ記録
 
-            // 弾補充
+            // 弾補充（上限あり）
             int currentAmmo = m_weaponSystem->GetReserveAmmo();
-            m_weaponSystem->SetReserveAmmo(currentAmmo + m_meleeAmmoRefill);
-
+            WeaponData wd = m_weaponSystem->GetWeaponData(m_weaponSystem->GetCurrentWeapon());
+            int newAmmo = currentAmmo + m_meleeAmmoRefill;
+            if (newAmmo > wd.reserveAmmo) newAmmo = wd.reserveAmmo;
+            m_weaponSystem->SetReserveAmmo(newAmmo);
             /*char buffer[128];
             sprintf_s(buffer, "[MELEE] Normal hit! Damage:%.0f HP:%d->%d\n",
                 normalMeleeDamage, oldHealth, hitEnemy->health);*/

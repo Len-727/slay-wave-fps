@@ -115,6 +115,8 @@ struct EnemyTypeConfig
 
 	// 色
 	DirectX::XMFLOAT4 color;
+
+	float staggerDuration;	//	スタン持続時間
 };
 
 
@@ -133,6 +135,7 @@ inline EnemyTypeConfig GetEnemyConfig(EnemyType type)
 		config.health = 100;
 		config.speedMultiplier = 1.0f;
 		config.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);  // 赤
+		config.staggerDuration = 2.5f;
 		break;
 
 	case EnemyType::RUNNER:
@@ -143,6 +146,7 @@ inline EnemyTypeConfig GetEnemyConfig(EnemyType type)
 		config.health = 50;
 		config.speedMultiplier = 2.0f;
 		config.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);  // 明るい赤
+		config.staggerDuration = 2.0f;
 		break;
 
 	case EnemyType::TANK:
@@ -153,6 +157,7 @@ inline EnemyTypeConfig GetEnemyConfig(EnemyType type)
 		config.health = 300;
 		config.speedMultiplier = 0.5f;
 		config.color = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);  // 青
+		config.staggerDuration = 4.0f;
 		break;
 
 	case EnemyType::MIDBOSS:
@@ -163,6 +168,7 @@ inline EnemyTypeConfig GetEnemyConfig(EnemyType type)
 		config.health = 5000;
 		config.speedMultiplier = 0.4f; // ゆっくり
 		config.color = DirectX::XMFLOAT4(1.0f, 0.3f, 0.3f, 1.0f);
+		config.staggerDuration = 5.0f;
 		break;
 
 	case EnemyType::BOSS:
@@ -173,6 +179,7 @@ inline EnemyTypeConfig GetEnemyConfig(EnemyType type)
 		config.health = 15000;
 		config.speedMultiplier = 0.3f;  // 遅いけど硬い
 		config.color = DirectX::XMFLOAT4(0.8f, 0.1f, 0.1f, 1.0f);
+		config.staggerDuration = 6.0f;
 		break;
 	}
 
@@ -238,6 +245,9 @@ struct Enemy {
 	float stunValue = 0.0f;	//	現在のスタン蓄積値
 	float maxStunValue = 100.0f;	//	スタン値がこれに達するとスタが～
 
+	float staggerTimer = 0.0f;	//	スタン経過時間
+	float staggerDuration = 3.0f;	//	スタン継続時間
+
 	// === ボスAI用 ===
 	BossAttackPhase bossPhase = BossAttackPhase::IDLE;
 	float bossPhaseTimer = 0.0f;        // 現在フェーズの経過時間
@@ -245,6 +255,7 @@ struct Enemy {
 	int   bossAttackCount = 0;          // 攻撃回数（パターン切替用）
 	float bossJumpHeight = 0.0f;        // ジャンプ中のY位置
 	DirectX::XMFLOAT3 bossTargetPos = { 0,0,0 }; // 攻撃時のターゲット位置
+	DirectX::XMFLOAT3 bossJumpStartPos = { 0,0,0 };	//	ジャンプ開始位置
 	bool bossBeamParriable = false;
 
 	Enemy()
@@ -276,6 +287,8 @@ struct Enemy {
 		, bossAttackCount(0)
 		, bossJumpHeight(0.0f)
 		, bossTargetPos{ 0, 0, 0 }
+		, staggerTimer(0.0f)
+		, staggerDuration(3.0f)
 	{
 
 	}

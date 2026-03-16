@@ -76,7 +76,7 @@ void Player::UpdateMovement()
 
     //  シフトでダッシュ（1.8倍速）
     if (GetAsyncKeyState(VK_SHIFT) & 0x8000)
-        moveSpeed = 0.18f;
+        moveSpeed = 0.13f;
 
     // W - 前進
     if (GetAsyncKeyState('W') & 0x8000)
@@ -222,7 +222,7 @@ void Player::Draw(
 // TakeDamage - ダメージを受ける
 bool Player::TakeDamage(int damage)
 {
-    return false;
+    //return false;
 
 
     // 無敵時間中はダメージなし

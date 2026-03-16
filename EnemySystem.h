@@ -76,6 +76,21 @@ public:
     float m_animSpeed_Attack[5] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.00f };
     float m_animSpeed_Death[5] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
 
+    // === ボス攻撃タイミング（ImGui調整用） ===
+    float m_bossJumpWindupTime = 0.5f;       // ジャンプ溜め
+    float m_bossJumpAirTime = 0.6f;          // ジャンプ滞空
+    float m_bossSlamRecoveryTime = 1.5f;     // 着地硬直
+    float m_bossSlashWindupTime = 0.8f;      // 斬撃溜め
+    float m_bossSlashFireTime = 0.2f;        // 斬撃発射
+    float m_bossSlashRecoveryTime = 1.0f;    // 斬撃後硬直
+    float m_bossRoarWindupTime = 1.0f;       // ビーム溜め
+    float m_bossRoarFireTime = 5.0f;         // ビーム発射
+    float m_bossRoarRecoveryTime = 2.0f;     // ビーム後硬直
+    float m_bossAttackCooldown = 3.0f;       // 攻撃間クールダウン
+    float m_bossMeleeHitTime = 0.5f;         // 近接の殴る瞬間
+    float m_bossMeleeDuration = 3.17f;        // 近接モーション全体
+    float m_bossJumpHeight = 8.0f;           // ジャンプの高さ
+
 
     //  ウェーブ難易度スケーリング
     float m_waveHpMult = 1.0f;  // HP倍率

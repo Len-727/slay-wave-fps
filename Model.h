@@ -213,6 +213,8 @@ private:
 		DirectX::XMFLOAT4 DiffuseColor;
 		DirectX::XMFLOAT3 LightDirection;
 		float Padding;
+		DirectX::XMFLOAT3 CameraPos;
+		float Padding2;
 	};
 
 	std::unique_ptr<DirectX::CommonStates> m_states;

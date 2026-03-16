@@ -13,10 +13,12 @@ cbuffer LightBuffer : register(b2)
     float4 DiffuseColor;
     float3 LightDirection;
     float Padding;
+    float3 CameraPos; //カメラのワールド位置（リムライト計算用）
+    float Padding2; // 16バイト境界に揃えるパディング
 };
 
 // === StructuredBuffer: 全インスタンスのボーン行列 ===
-// t0 はピクセルシェーダーのテクスチャと被るので t1 を使う
+// t0 はピクセルシェーダーのテクスチャに割るので t1 を使う
 StructuredBuffer<matrix> BoneBuffer : register(t1);
 
 // === 頂点入力（モデルの頂点データ）===
@@ -30,16 +32,18 @@ struct VSInput
 
     // --- インスタンスデータ（敵1体ごとに違う）---
     matrix World : INST_WORLD; // ワールド行列
-    float4 Color : INST_COLOR; // 色
+    float4 Color : INST_COLOR; // 色（.a にスタガーフラグを仕込む）
     uint BoneOffset : INST_BONEOFFSET; // StructuredBuffer内のオフセット
 };
 
+// ★変更: WorldPos を追加（PSでリムライト計算に使う）
 struct VSOutput
 {
-    float4 Position : SV_POSITION;
-    float3 Normal : NORMAL;
-    float2 TexCoord : TEXCOORD0;
-    float4 Color : COLOR0;
+    float4 Position : SV_POSITION; // スクリーン座標
+    float3 Normal : NORMAL; // ワールド法線
+    float2 TexCoord : TEXCOORD0; // UV座標
+    float4 Color : COLOR0; // ライティング済みの色
+    float3 WorldPos : TEXCOORD1; // ワールド座標（リムライト用）
 };
 
 VSOutput main(VSInput input)
@@ -78,6 +82,9 @@ VSOutput main(VSInput input)
     float4 viewPos = mul(worldPos, View);
     output.Position = mul(viewPos, Projection);
 
+    //  ワールド座標をPSに渡す
+    output.WorldPos = worldPos.xyz;
+
     // --- ライティング ---
     float3 worldNormal = normalize(mul(skinnedNorm.xyz, (float3x3) input.World));
     output.Normal = worldNormal;
@@ -85,6 +92,8 @@ VSOutput main(VSInput input)
     float NdotL = dot(worldNormal, -LightDirection);
     float wrap = NdotL * 0.5f + 0.5f;
     float3 lit = AmbientColor.rgb + wrap * 0.5f;
+
+    // Color.a はそのまま渡す（スタガーフラグとして使う）
     output.Color = float4(lit * input.Color.rgb, input.Color.a);
 
     output.TexCoord = input.TexCoord;
