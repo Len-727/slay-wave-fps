@@ -1992,3 +1992,178 @@ void Model::DrawInstanced_Custom(
 	ID3D11ShaderResourceView* nullSRV = nullptr;
 	context->VSSetShaderResources(1, 1, &nullSRV);
 }
+
+// ============================================
+//  バインドポーズの頂点座標を取得
+//  ボーンオフセット行列の逆行列を適用して
+//  モデル空間の座標に復元する
+// ============================================
+std::vector<ModelVertex> Model::GetBindPoseVertices(int meshIndex)
+{
+	if (meshIndex < 0 || meshIndex >= (int)m_meshes.size())
+		return {};
+
+	const Mesh& mesh = m_meshes[meshIndex];
+	std::vector<ModelVertex> result = mesh.vertices;
+
+	if (m_bones.empty() || m_animations.empty()) return result;
+
+	// Idle の最初のフレームでボーン変換を計算
+	std::string animName = "Idle";
+	if (m_animations.find(animName) == m_animations.end())
+		animName = m_animations.begin()->first;
+
+	std::vector<DirectX::XMMATRIX> boneTransforms;
+	CalculateBoneTransforms(animName, 0.0f, boneTransforms);
+	if (boneTransforms.empty()) return result;
+
+	for (auto& vertex : result)
+	{
+		float totalWeight = 0.0f;
+		for (int s = 0; s < 4; s++)
+			totalWeight += vertex.boneWeights[s];
+		if (totalWeight < 0.001f) continue;
+
+		DirectX::XMVECTOR pos = DirectX::XMVectorSet(
+			vertex.position.x, vertex.position.y, vertex.position.z, 1.0f);
+		DirectX::XMVECTOR norm = DirectX::XMVectorSet(
+			vertex.normal.x, vertex.normal.y, vertex.normal.z, 0.0f);
+
+		DirectX::XMVECTOR newPos = DirectX::XMVectorZero();
+		DirectX::XMVECTOR newNorm = DirectX::XMVectorZero();
+
+		// 全ボーンをウェイトでブレンド（GPUの描画と同じ計算）
+		for (int s = 0; s < 4; s++)
+		{
+			float w = vertex.boneWeights[s];
+			if (w <= 0.0f) continue;
+
+			uint32_t boneIdx = vertex.boneIndices[s];
+			if (boneIdx >= boneTransforms.size()) continue;
+
+			DirectX::XMVECTOR tPos =
+				DirectX::XMVector3Transform(pos, boneTransforms[boneIdx]);
+			DirectX::XMVECTOR tNorm =
+				DirectX::XMVector3TransformNormal(norm, boneTransforms[boneIdx]);
+
+			newPos = DirectX::XMVectorAdd(newPos,
+				DirectX::XMVectorScale(tPos, w));
+			newNorm = DirectX::XMVectorAdd(newNorm,
+				DirectX::XMVectorScale(tNorm, w));
+		}
+
+		DirectX::XMStoreFloat3(&vertex.position, newPos);
+		newNorm = DirectX::XMVector3Normalize(newNorm);
+		DirectX::XMStoreFloat3(&vertex.normal, newNorm);
+	}
+
+	// デバッグ
+	float minX = 99999, maxX = -99999;
+	float minY = 99999, maxY = -99999;
+	float minZ = 99999, maxZ = -99999;
+	for (const auto& v : result)
+	{
+		if (v.position.x < minX) minX = v.position.x;
+		if (v.position.x > maxX) maxX = v.position.x;
+		if (v.position.y < minY) minY = v.position.y;
+		if (v.position.y > maxY) maxY = v.position.y;
+		if (v.position.z < minZ) minZ = v.position.z;
+		if (v.position.z > maxZ) maxZ = v.position.z;
+	}
+	char buf[512];
+	sprintf_s(buf,
+		"[GetBindPoseVertices] mesh=%d (full blend):\n"
+		"  X: %.2f ~ %.2f (width=%.2f)\n"
+		"  Y: %.2f ~ %.2f (height=%.2f)\n"
+		"  Z: %.2f ~ %.2f (depth=%.2f)\n",
+		meshIndex,
+		minX, maxX, maxX - minX,
+		minY, maxY, maxY - minY,
+		minZ, maxZ, maxZ - minZ);
+	OutputDebugStringA(buf);
+
+	return result;
+}
+
+// ============================================
+//  アニメーションポーズ適用済みの頂点を取得
+//  切断時に「その瞬間のポーズ」で切るために使う
+// ============================================
+std::vector<ModelVertex> Model::GetAnimatedVertices(
+	int meshIndex,
+	const std::string& animName,
+	float animTime)
+{
+	if (meshIndex < 0 || meshIndex >= (int)m_meshes.size())
+		return {};
+
+	const Mesh& mesh = m_meshes[meshIndex];
+	std::vector<ModelVertex> result = mesh.vertices;
+
+	if (m_bones.empty() || m_animations.empty())
+		return result;
+
+	// 指定アニメーションを探す
+	std::string anim = animName;
+	if (m_animations.find(anim) == m_animations.end())
+	{
+		if (!m_animations.empty())
+			anim = m_animations.begin()->first;
+		else
+			return result;
+	}
+
+	const AnimationClip& clip = m_animations[anim];
+
+	// --- GPU描画と同じパスでボーン行列を計算 ---
+	// UpdateNodeTransforms を使う（globalInverseTransform 込み）
+	std::vector<DirectX::XMMATRIX> boneTransforms(m_bones.size(),
+		DirectX::XMMatrixIdentity());
+
+	UpdateNodeTransforms(m_rootNodeIndex, clip, animTime,
+		DirectX::XMMatrixIdentity(), boneTransforms);
+
+	if (boneTransforms.empty()) return result;
+
+	// 各頂点にボーン変換を適用（GPUのスキニングと同じ計算）
+	for (auto& vertex : result)
+	{
+		float totalWeight = 0.0f;
+		for (int s = 0; s < 4; s++)
+			totalWeight += vertex.boneWeights[s];
+		if (totalWeight < 0.001f) continue;
+
+		DirectX::XMVECTOR pos = DirectX::XMVectorSet(
+			vertex.position.x, vertex.position.y, vertex.position.z, 1.0f);
+		DirectX::XMVECTOR norm = DirectX::XMVectorSet(
+			vertex.normal.x, vertex.normal.y, vertex.normal.z, 0.0f);
+
+		DirectX::XMVECTOR newPos = DirectX::XMVectorZero();
+		DirectX::XMVECTOR newNorm = DirectX::XMVectorZero();
+
+		for (int s = 0; s < 4; s++)
+		{
+			float w = vertex.boneWeights[s];
+			if (w <= 0.0f) continue;
+
+			uint32_t boneIdx = vertex.boneIndices[s];
+			if (boneIdx >= boneTransforms.size()) continue;
+
+			DirectX::XMVECTOR tPos =
+				DirectX::XMVector3Transform(pos, boneTransforms[boneIdx]);
+			DirectX::XMVECTOR tNorm =
+				DirectX::XMVector3TransformNormal(norm, boneTransforms[boneIdx]);
+
+			newPos = DirectX::XMVectorAdd(newPos,
+				DirectX::XMVectorScale(tPos, w));
+			newNorm = DirectX::XMVectorAdd(newNorm,
+				DirectX::XMVectorScale(tNorm, w));
+		}
+
+		DirectX::XMStoreFloat3(&vertex.position, newPos);
+		newNorm = DirectX::XMVector3Normalize(newNorm);
+		DirectX::XMStoreFloat3(&vertex.normal, newNorm);
+	}
+
+	return result;
+}

@@ -58,6 +58,8 @@
 #include "StunRing.h"
 #include "TargetMarker.h"
 #include "NavGrid.h"
+#include "MeshSlicer.h"
+
 
 class Game
 {
@@ -151,6 +153,15 @@ private:
     std::unique_ptr<TargetMarker> m_targetMarker;
     int m_guardLockTargetID = -1;
     DirectX::XMFLOAT3 m_guardLockTargetPos = { 0, 0, 0 };
+
+    // 切断ピース描画用（起動時に1回だけ作成）
+    std::unique_ptr<DirectX::BasicEffect> m_sliceEffectTex;
+    std::unique_ptr<DirectX::BasicEffect> m_sliceEffectNoTex;
+    ComPtr<ID3D11InputLayout> m_sliceInputLayoutTex;
+    ComPtr<ID3D11InputLayout> m_sliceInputLayoutNoTex;
+    ComPtr<ID3D11RasterizerState> m_sliceNoCullRS;
+
+    void InitSliceRendering();
 
 
     // === ゲームループの内部処理 ===
@@ -832,6 +843,39 @@ private:
     bool m_debugDrawNavGrid = false;
 
 
+    //  メッシュ切断テスト用
+    struct SlicedPiece
+    {
+        Microsoft::WRL::ComPtr<ID3D11Buffer> vertexBuffer;
+        Microsoft::WRL::ComPtr<ID3D11Buffer> indexBuffer;
+        UINT indexCount = 0;
+        DirectX::XMFLOAT3 position = { 0, 0, 0 };
+        DirectX::XMFLOAT3 velocity = { 0, 0, 0 };
+        DirectX::XMFLOAT3 rotation = { 0, 0, 0 };
+        DirectX::XMFLOAT3 angularVel = { 0, 0, 0 };  // 回転速度
+        float lifetime = 5.0f;
+        bool active = false;
+        ID3D11ShaderResourceView* texture = nullptr;
+    };
+    std::vector<SlicedPiece> m_slicedPieces;
+
+    // 切断結果からGPUバッファを作成
+    SlicedPiece CreateSlicedPiece(
+        const std::vector<SliceVertex>& vertices,
+        const std::vector<uint32_t>& indices,
+        DirectX::XMFLOAT3 position,
+        DirectX::XMFLOAT3 velocity);
+
+    // 切断テスト（キー入力で実行）
+    void ExecuteSliceTest();
+
+    // 敵を盾で切断する
+    void SliceEnemyWithShield(Enemy& enemy, DirectX::XMFLOAT3 shieldDir);
+
+    // 切断ピースの更新と描画
+    void UpdateSlicedPieces(float deltaTime);
+    void DrawSlicedPieces(DirectX::XMMATRIX view, DirectX::XMMATRIX proj);
+
     // === 肉片物理 ===
     struct Gib
     {
@@ -863,6 +907,7 @@ private:
     bool CheckMeshCollision(DirectX::XMFLOAT3 position, float radius);
     float GetMeshFloorHeight(float x, float z, float defaultY = 0.0f);
     void BuildNavGrid();
+    void TestMeshSlice();  // メッシュ切断テスト
     void DrawNavGridDebug(DirectX::XMMATRIX view, DirectX::XMMATRIX proj);
     void UpdateEnemyPhysicsBody(Enemy& enemy);
     void RemoveEnemyPhysicsBody(int enemyID);

@@ -93,6 +93,12 @@ public:
 
 	size_t GetMeshCount() const { return m_meshes.size(); }
 
+	// メッシュデータへのアクセス（切断システム用）
+	const std::vector<Mesh>& GetMeshes() const { return m_meshes; }
+
+	// テクスチャの取得
+	ID3D11ShaderResourceView* GetTexture() const { return m_diffuseTexture.Get(); }
+
 	//	FBXファイルからアニメーションを読み込む
 	bool LoadAnimation(const std::string& filename, const std::string& animationName);
 
@@ -162,6 +168,16 @@ public:
 		const std::vector<std::string>& animNames,
 		const std::vector<float>& animTimes
 	);
+
+	// バインドポーズの頂点座標を取得（切断システム用）
+	// アニメーションの最初のフレームを使って頂点を展開する
+	std::vector<ModelVertex> GetBindPoseVertices(int meshIndex);
+
+	// アニメーションポーズ適用済みの頂点を取得（切断用）
+	std::vector<ModelVertex> GetAnimatedVertices(
+		int meshIndex,
+		const std::string& animName,
+		float animTime);
 
 private:
 

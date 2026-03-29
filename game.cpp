@@ -751,6 +751,619 @@ void Game::BuildNavGrid()
     OutputDebugStringA(buf);
 }
 
+void Game::TestMeshSlice()
+{
+    // === テスト用の箱メッシュ（2x2x2の立方体） ===
+    std::vector<SliceVertex> vertices = {
+        // 前面 (Z+)
+        {{ -1, -1,  1 }, { 0, 0, 1 }, { 0, 1 }},
+        {{  1, -1,  1 }, { 0, 0, 1 }, { 1, 1 }},
+        {{  1,  1,  1 }, { 0, 0, 1 }, { 1, 0 }},
+        {{ -1,  1,  1 }, { 0, 0, 1 }, { 0, 0 }},
+        // 後面 (Z-)
+        {{  1, -1, -1 }, { 0, 0,-1 }, { 0, 1 }},
+        {{ -1, -1, -1 }, { 0, 0,-1 }, { 1, 1 }},
+        {{ -1,  1, -1 }, { 0, 0,-1 }, { 1, 0 }},
+        {{  1,  1, -1 }, { 0, 0,-1 }, { 0, 0 }},
+        // 上面 (Y+)
+        {{ -1,  1,  1 }, { 0, 1, 0 }, { 0, 1 }},
+        {{  1,  1,  1 }, { 0, 1, 0 }, { 1, 1 }},
+        {{  1,  1, -1 }, { 0, 1, 0 }, { 1, 0 }},
+        {{ -1,  1, -1 }, { 0, 1, 0 }, { 0, 0 }},
+        // 下面 (Y-)
+        {{ -1, -1, -1 }, { 0,-1, 0 }, { 0, 1 }},
+        {{  1, -1, -1 }, { 0,-1, 0 }, { 1, 1 }},
+        {{  1, -1,  1 }, { 0,-1, 0 }, { 1, 0 }},
+        {{ -1, -1,  1 }, { 0,-1, 0 }, { 0, 0 }},
+        // 右面 (X+)
+        {{  1, -1,  1 }, { 1, 0, 0 }, { 0, 1 }},
+        {{  1, -1, -1 }, { 1, 0, 0 }, { 1, 1 }},
+        {{  1,  1, -1 }, { 1, 0, 0 }, { 1, 0 }},
+        {{  1,  1,  1 }, { 1, 0, 0 }, { 0, 0 }},
+        // 左面 (X-)
+        {{ -1, -1, -1 }, {-1, 0, 0 }, { 0, 1 }},
+        {{ -1, -1,  1 }, {-1, 0, 0 }, { 1, 1 }},
+        {{ -1,  1,  1 }, {-1, 0, 0 }, { 1, 0 }},
+        {{ -1,  1, -1 }, {-1, 0, 0 }, { 0, 0 }},
+    };
+
+    std::vector<uint32_t> indices = {
+         0, 1, 2,  0, 2, 3,   // 前面
+         4, 5, 6,  4, 6, 7,   // 後面
+         8, 9,10,  8,10,11,   // 上面
+        12,13,14, 12,14,15,   // 下面
+        16,17,18, 16,18,19,   // 右面
+        20,21,22, 20,22,23,   // 左面
+    };
+
+    // === Y=0の水平面で切断 ===
+    DirectX::XMFLOAT3 planePoint = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 planeNormal = { 0.0f, 1.0f, 0.0f };  // 上向き
+
+    OutputDebugStringA("[TEST] Slicing cube at Y=0...\n");
+
+    SliceResult result = MeshSlicer::Slice(vertices, indices, planePoint, planeNormal);
+
+    if (result.success)
+    {
+        char buf[512];
+        sprintf_s(buf,
+            "[TEST] Slice SUCCESS!\n"
+            "  Upper: %zu vertices, %zu triangles\n"
+            "  Lower: %zu vertices, %zu triangles\n"
+            "  Cross points: %zu\n",
+            result.upperVertices.size(),
+            result.upperIndices.size() / 3,
+            result.lowerVertices.size(),
+            result.lowerIndices.size() / 3,
+            result.crossPoints.size());
+        OutputDebugStringA(buf);
+    }
+    else
+    {
+        OutputDebugStringA("[TEST] Slice FAILED - no split occurred\n");
+    }
+}
+
+// ============================================
+//  切断結果からGPUバッファを作成
+// ============================================
+Game::SlicedPiece Game::CreateSlicedPiece(
+    const std::vector<SliceVertex>& vertices,
+    const std::vector<uint32_t>& indices,
+    DirectX::XMFLOAT3 position,
+    DirectX::XMFLOAT3 velocity)
+{
+    SlicedPiece piece;
+    piece.active = false;
+
+    if (vertices.empty() || indices.empty()) return piece;
+
+    // DirectXTKのVertexPositionNormalTextureに変換
+    std::vector<DirectX::VertexPositionNormalTexture> dxVertices;
+    dxVertices.reserve(vertices.size());
+    for (const auto& v : vertices)
+    {
+        DirectX::VertexPositionNormalTexture dxv;
+        dxv.position = v.position;
+        dxv.normal = v.normal;
+        dxv.textureCoordinate = v.uv;
+        dxVertices.push_back(dxv);
+    }
+
+    // 頂点バッファ作成
+    D3D11_BUFFER_DESC vbDesc = {};
+    vbDesc.ByteWidth = (UINT)(dxVertices.size() * sizeof(DirectX::VertexPositionNormalTexture));
+    vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    vbDesc.Usage = D3D11_USAGE_DEFAULT;
+    D3D11_SUBRESOURCE_DATA vbData = {};
+    vbData.pSysMem = dxVertices.data();
+
+    HRESULT hr = m_d3dDevice->CreateBuffer(&vbDesc, &vbData,
+        piece.vertexBuffer.ReleaseAndGetAddressOf());
+    if (FAILED(hr)) return piece;
+
+    // インデックスバッファ作成
+    D3D11_BUFFER_DESC ibDesc = {};
+    ibDesc.ByteWidth = (UINT)(indices.size() * sizeof(uint32_t));
+    ibDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+    ibDesc.Usage = D3D11_USAGE_DEFAULT;
+    D3D11_SUBRESOURCE_DATA ibData = {};
+    ibData.pSysMem = indices.data();
+
+    hr = m_d3dDevice->CreateBuffer(&ibDesc, &ibData,
+        piece.indexBuffer.ReleaseAndGetAddressOf());
+    if (FAILED(hr)) return piece;
+
+    piece.indexCount = (UINT)indices.size();
+    piece.position = position;
+    piece.velocity = velocity;
+    piece.rotation = { 0, 0, 0 };
+
+    // ランダムな回転速度
+    piece.angularVel = {
+        ((float)rand() / RAND_MAX - 0.5f) * 5.0f,
+        ((float)rand() / RAND_MAX - 0.5f) * 5.0f,
+        ((float)rand() / RAND_MAX - 0.5f) * 5.0f
+    };
+
+    piece.lifetime = 5.0f;
+    piece.active = true;
+
+    return piece;
+}
+
+// ============================================
+//  切断テスト実行（プレイヤーの前のキューブを切る）
+// ============================================
+void Game::ExecuteSliceTest()
+{
+    // プレイヤーの前方3mにキューブを配置
+    DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+    DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
+    float fx = sinf(playerRot.y);
+    float fz = cosf(playerRot.y);
+
+    float cubeX = playerPos.x + fx * 3.0f;
+    float cubeY = playerPos.y - 0.9f;  // 体の中心あたり
+    float cubeZ = playerPos.z + fz * 3.0f;
+
+    // テスト用キューブの頂点データ
+    std::vector<SliceVertex> vertices = {
+        {{ -1, -1,  1 }, { 0, 0, 1 }, { 0, 1 }},
+        {{  1, -1,  1 }, { 0, 0, 1 }, { 1, 1 }},
+        {{  1,  1,  1 }, { 0, 0, 1 }, { 1, 0 }},
+        {{ -1,  1,  1 }, { 0, 0, 1 }, { 0, 0 }},
+        {{  1, -1, -1 }, { 0, 0,-1 }, { 0, 1 }},
+        {{ -1, -1, -1 }, { 0, 0,-1 }, { 1, 1 }},
+        {{ -1,  1, -1 }, { 0, 0,-1 }, { 1, 0 }},
+        {{  1,  1, -1 }, { 0, 0,-1 }, { 0, 0 }},
+        {{ -1,  1,  1 }, { 0, 1, 0 }, { 0, 1 }},
+        {{  1,  1,  1 }, { 0, 1, 0 }, { 1, 1 }},
+        {{  1,  1, -1 }, { 0, 1, 0 }, { 1, 0 }},
+        {{ -1,  1, -1 }, { 0, 1, 0 }, { 0, 0 }},
+        {{ -1, -1, -1 }, { 0,-1, 0 }, { 0, 1 }},
+        {{  1, -1, -1 }, { 0,-1, 0 }, { 1, 1 }},
+        {{  1, -1,  1 }, { 0,-1, 0 }, { 1, 0 }},
+        {{ -1, -1,  1 }, { 0,-1, 0 }, { 0, 0 }},
+        {{  1, -1,  1 }, { 1, 0, 0 }, { 0, 1 }},
+        {{  1, -1, -1 }, { 1, 0, 0 }, { 1, 1 }},
+        {{  1,  1, -1 }, { 1, 0, 0 }, { 1, 0 }},
+        {{  1,  1,  1 }, { 1, 0, 0 }, { 0, 0 }},
+        {{ -1, -1, -1 }, {-1, 0, 0 }, { 0, 1 }},
+        {{ -1, -1,  1 }, {-1, 0, 0 }, { 1, 1 }},
+        {{ -1,  1,  1 }, {-1, 0, 0 }, { 1, 0 }},
+        {{ -1,  1, -1 }, {-1, 0, 0 }, { 0, 0 }},
+    };
+
+    std::vector<uint32_t> indices = {
+         0, 1, 2,  0, 2, 3,
+         4, 5, 6,  4, 6, 7,
+         8, 9,10,  8,10,11,
+        12,13,14, 12,14,15,
+        16,17,18, 16,18,19,
+        20,21,22, 20,22,23,
+    };
+
+    // 水平面で切断（Y=0 = キューブの真ん中）
+    DirectX::XMFLOAT3 planePoint = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 planeNormal = { 0.0f, 1.0f, 0.0f };
+
+    SliceResult result = MeshSlicer::Slice(vertices, indices, planePoint, planeNormal);
+
+    if (result.success)
+    {
+        // 上半分: 上に吹っ飛ぶ
+        SlicedPiece upper = CreateSlicedPiece(
+            result.upperVertices, result.upperIndices,
+            { cubeX, cubeY + 0.5f, cubeZ },
+            { 0.0f, 4.0f, 0.0f });
+        if (upper.active) m_slicedPieces.push_back(std::move(upper));
+
+        // 下半分: 少し横に落ちる
+        SlicedPiece lower = CreateSlicedPiece(
+            result.lowerVertices, result.lowerIndices,
+            { cubeX, cubeY - 0.5f, cubeZ },
+            { 1.0f, -1.0f, 0.0f });
+        if (lower.active) m_slicedPieces.push_back(std::move(lower));
+
+        OutputDebugStringA("[SLICE] Cube sliced! 2 pieces created.\n");
+    }
+}
+
+// ============================================
+//  敵を盾の軌道で切断する
+//  enemy:     切断される敵
+//  shieldDir: 盾の飛行方向（切断面の算出に使う）
+// ============================================
+void Game::SliceEnemyWithShield(Enemy& enemy, DirectX::XMFLOAT3 shieldDir)
+{
+    // --- 敵タイプに対応するモデルを選択 ---
+    Model* enemyModel = nullptr;
+    switch (enemy.type)
+    {
+    case EnemyType::NORMAL: enemyModel = m_enemyModel.get(); break;
+    case EnemyType::RUNNER: enemyModel = m_runnerModel.get(); break;
+    case EnemyType::TANK:   enemyModel = m_tankModel.get(); break;
+    default: return;  // BOSS/MIDBOSSは切断しない
+    }
+    if (!enemyModel || enemyModel->GetMeshes().empty()) return;
+
+    // --- モデルの全メッシュから頂点を収集 ---
+    std::vector<SliceVertex> allVertices;
+    std::vector<uint32_t> allIndices;
+
+    // モデルのスケール（描画時と同じ 0.01f）
+    const float modelScale = 0.01f;
+
+    for (int mi = 0; mi < (int)enemyModel->GetMeshes().size(); mi++)
+    {
+        const auto& mesh = enemyModel->GetMeshes()[mi];
+        uint32_t baseVertex = (uint32_t)allVertices.size();
+
+        // まず生の頂点のY範囲をチェック
+        float rawMinY = 99999.0f, rawMaxY = -99999.0f;
+        for (const auto& mv : mesh.vertices)
+        {
+            float y = mv.position.y * modelScale;
+            if (y < rawMinY) rawMinY = y;
+            if (y > rawMaxY) rawMaxY = y;
+        }
+        float rawHeight = rawMaxY - rawMinY;
+
+        // Y範囲が十分（0.1m以上）なら生の頂点を使う
+        // 小さすぎる（ボーン空間に圧縮されてる）ならGetBindPoseVerticesを使う
+        bool needBoneTransform = (rawHeight < 0.1f);
+
+        if (needBoneTransform)
+        {
+            OutputDebugStringA("[SLICE] Using GetBindPoseVertices (raw verts compressed)\n");
+            std::vector<ModelVertex> bindVerts = enemyModel->GetBindPoseVertices(mi);
+            for (const auto& mv : bindVerts)
+            {
+                SliceVertex sv;
+                sv.position.x = mv.position.x * modelScale;
+                sv.position.y = mv.position.y * modelScale;
+                sv.position.z = mv.position.z * modelScale;
+                sv.normal = mv.normal;
+                sv.uv = mv.texCoord;
+                allVertices.push_back(sv);
+            }
+        }
+        else
+        {
+            OutputDebugStringA("[SLICE] Using animated vertices\n");
+
+            std::vector<ModelVertex> animVerts =
+                enemyModel->GetAnimatedVertices(mi, enemy.currentAnimation, enemy.animationTime);
+
+            for (const auto& mv : animVerts)
+            {
+                SliceVertex sv;
+                sv.position.x = mv.position.x * modelScale;
+                sv.position.y = mv.position.y * modelScale;
+                sv.position.z = mv.position.z * modelScale;
+                sv.normal = mv.normal;
+                sv.uv = mv.texCoord;
+                allVertices.push_back(sv);
+            }
+        }
+
+        for (const auto& idx : mesh.indices)
+        {
+            allIndices.push_back(baseVertex + idx);
+        }
+    }
+
+    if (allVertices.empty()) return;
+
+    // =======================================
+    // === 徹底デバッグ ===
+    // =======================================
+    {
+        float vMinX = 99999, vMaxX = -99999;
+        float vMinY = 99999, vMaxY = -99999;
+        float vMinZ = 99999, vMaxZ = -99999;
+        float uvMinX = 99999, uvMaxX = -99999;
+        float uvMinY = 99999, uvMaxY = -99999;
+        int zeroUV = 0;
+        for (const auto& v : allVertices)
+        {
+            if (v.position.x < vMinX) vMinX = v.position.x;
+            if (v.position.x > vMaxX) vMaxX = v.position.x;
+            if (v.position.y < vMinY) vMinY = v.position.y;
+            if (v.position.y > vMaxY) vMaxY = v.position.y;
+            if (v.position.z < vMinZ) vMinZ = v.position.z;
+            if (v.position.z > vMaxZ) vMaxZ = v.position.z;
+            if (v.uv.x < uvMinX) uvMinX = v.uv.x;
+            if (v.uv.x > uvMaxX) uvMaxX = v.uv.x;
+            if (v.uv.y < uvMinY) uvMinY = v.uv.y;
+            if (v.uv.y > uvMaxY) uvMaxY = v.uv.y;
+            if (v.uv.x == 0.0f && v.uv.y == 0.0f) zeroUV++;
+        }
+
+        char dbg[1024];
+        sprintf_s(dbg,
+            "[SLICE FULL DEBUG] ===========================\n"
+            "  Enemy: type=%d id=%d anim='%s' time=%.3f\n"
+            "  Vertices: %zu\n"
+            "  XYZ: (%.3f~%.3f, %.3f~%.3f, %.3f~%.3f)\n"
+            "  UV range: U(%.3f~%.3f) V(%.3f~%.3f)\n"
+            "  Zero UV: %d / %zu\n"
+            "  Texture: %s\n",
+            (int)enemy.type, enemy.id,
+            enemy.currentAnimation.c_str(), enemy.animationTime,
+            allVertices.size(),
+            vMinX, vMaxX, vMinY, vMaxY, vMinZ, vMaxZ,
+            uvMinX, uvMaxX, uvMinY, uvMaxY,
+            zeroUV, allVertices.size(),
+            enemyModel->GetTexture() ? "YES" : "NO");
+        OutputDebugStringA(dbg);
+    }
+
+    // --- 切断面の計算 ---
+    EnemyTypeConfig config = GetEnemyConfig(enemy.type);
+
+    // 盾が敵のどの高さに当たったかで切断位置を決定
+    //    盾のY - 敵の足元Y = 敵の体のどこに当たったか
+    // 盾→敵のレイキャストで正確な衝突点を取得
+    float hitRelativeY = config.bodyHeight * 0.4f;  // デフォルト（腰）
+
+    btVector3 rayFrom(m_thrownShieldPos.x, m_thrownShieldPos.y, m_thrownShieldPos.z);
+    btVector3 rayTo(enemy.position.x,
+        enemy.position.y + config.bodyHeight * 0.5f,
+        enemy.position.z);
+
+    // 敵のカプセルだけに当てるコールバック
+    struct EnemyRayCallback : public btCollisionWorld::ClosestRayResultCallback
+    {
+        int targetID;
+        EnemyRayCallback(const btVector3& from, const btVector3& to, int id)
+            : ClosestRayResultCallback(from, to), targetID(id) {
+        }
+
+        btScalar addSingleResult(btCollisionWorld::LocalRayResult& result,
+            bool normalInWorldSpace) override
+        {
+            void* ptr = result.m_collisionObject->getUserPointer();
+            if (!ptr) return 1.0f;  // マップメッシュはスキップ
+            int id = (int)(intptr_t)ptr - 1;
+            if (id != targetID) return 1.0f;  // 他の敵もスキップ
+            return ClosestRayResultCallback::addSingleResult(result, normalInWorldSpace);
+        }
+    };
+
+    if (m_dynamicsWorld)
+    {
+        EnemyRayCallback callback(rayFrom, rayTo, enemy.id);
+        m_dynamicsWorld->rayTest(rayFrom, rayTo, callback);
+
+        if (callback.hasHit())
+        {
+            // 衝突点のY座標から敵のローカル高さを計算
+            hitRelativeY = callback.m_hitPointWorld.getY() - enemy.position.y;
+        }
+    }
+
+    // === モデルの実際のY範囲を取得 ===
+    float modelMinY = 99999.0f, modelMaxY = -99999.0f;
+    for (const auto& v : allVertices)
+    {
+        if (v.position.y < modelMinY) modelMinY = v.position.y;
+        if (v.position.y > modelMaxY) modelMaxY = v.position.y;
+    }
+    float modelHeight = modelMaxY - modelMinY;
+
+    // hitRelativeYをモデルのY範囲にマッピング
+    // hitRelativeY は 敵のbodyHeight(config) の範囲 → モデルのY範囲に変換
+    float hitRatio = hitRelativeY / config.bodyHeight;  // 0.0?1.0（体の下?上）
+    hitRatio = max(0.2f, min(0.8f, hitRatio));           // 20%?80%にクランプ
+    float sliceHeight = modelMinY + modelHeight * hitRatio;
+
+    // === デバッグ ===
+    {
+        char dbg[512];
+        sprintf_s(dbg,
+            "[SLICE DEBUG] Type=%d, verts=%zu, tris=%zu\n"
+            "  Model Y range: %.4f ~ %.4f (height=%.4f)\n"
+            "  hitRelativeY=%.4f, hitRatio=%.2f, sliceHeight=%.4f\n",
+            (int)enemy.type, allVertices.size(), allIndices.size() / 3,
+            modelMinY, modelMaxY, modelHeight,
+            hitRelativeY, hitRatio, sliceHeight);
+        OutputDebugStringA(dbg);
+    }
+
+    // 盾の飛行方向から切断面の傾きを計算
+    //    盾のY成分が大きいほど斜めに切れる
+    DirectX::XMFLOAT3 sliceNormal;
+    sliceNormal.x = -shieldDir.z * 0.3f;  // 盾のXZ方向で少し傾ける
+    sliceNormal.y = 1.0f;                   // 基本は水平
+    sliceNormal.z = shieldDir.x * 0.3f;
+
+    // 法線を正規化
+    float nLen = sqrtf(sliceNormal.x * sliceNormal.x +
+        sliceNormal.y * sliceNormal.y +
+        sliceNormal.z * sliceNormal.z);
+    sliceNormal.x /= nLen;
+    sliceNormal.y /= nLen;
+    sliceNormal.z /= nLen;
+
+    DirectX::XMFLOAT3 planePoint = { 0.0f, sliceHeight, 0.0f };
+
+    // --- 切断実行 ---
+    SliceResult result = MeshSlicer::Slice(allVertices, allIndices, planePoint, sliceNormal);
+
+    if (!result.success)
+    {
+        OutputDebugStringA("[SLICE] Failed - model could not be split\n");
+        return;
+    }
+
+    // --- 敵の位置に2パーツを生成 ---
+    float centerY = enemy.position.y + config.bodyHeight * 0.5f;
+
+    // テクスチャを取得
+    ID3D11ShaderResourceView* tex = enemyModel->GetTexture();
+
+    // 上パーツ
+    DirectX::XMFLOAT3 upperVel = {
+        sliceNormal.x * 3.0f + shieldDir.x * 2.0f,
+        3.0f + sliceNormal.y * 2.0f,
+        sliceNormal.z * 3.0f + shieldDir.z * 2.0f
+    };
+    SlicedPiece upper = CreateSlicedPiece(
+        result.upperVertices, result.upperIndices,
+        { enemy.position.x, centerY, enemy.position.z },
+        upperVel);
+    if (upper.active)
+    {
+        upper.texture = tex;
+        m_slicedPieces.push_back(std::move(upper));
+    }
+
+    // 下パーツ
+    DirectX::XMFLOAT3 lowerVel = {
+        -sliceNormal.x * 2.0f,
+        -1.0f,
+        -sliceNormal.z * 2.0f
+    };
+    SlicedPiece lower = CreateSlicedPiece(
+        result.lowerVertices, result.lowerIndices,
+        { enemy.position.x, centerY, enemy.position.z },
+        lowerVel);
+    if (lower.active)
+    {
+        lower.texture = tex;
+        m_slicedPieces.push_back(std::move(lower));
+    }
+
+    // --- 元の敵を非表示 ---
+    enemy.isExploded = true;
+
+    // --- 血エフェクト ---
+    DirectX::XMFLOAT3 hitPos = { enemy.position.x, centerY, enemy.position.z };
+    m_gpuParticles->EmitSplash(hitPos, shieldDir, 60, 8.0f);
+    m_gpuParticles->EmitMist(hitPos, 200, 4.0f);
+    m_gpuParticles->Emit(hitPos, 100, 6.0f);
+    m_bloodSystem->OnEnemyKilled(enemy.position, m_player->GetPosition());
+
+    char buf[256];
+    sprintf_s(buf, "[SLICE] Enemy ID:%d sliced! upper=%zu lower=%zu tris\n",
+        enemy.id,
+        result.upperIndices.size() / 3,
+        result.lowerIndices.size() / 3);
+    OutputDebugStringA(buf);
+}
+
+// ============================================
+//  切断ピースの更新（物理演算）
+// ============================================
+void Game::UpdateSlicedPieces(float deltaTime)
+{
+    float gravity = -9.8f;
+
+    for (auto& piece : m_slicedPieces)
+    {
+        if (!piece.active) continue;
+
+        // 重力
+        piece.velocity.y += gravity * deltaTime;
+
+        // 位置更新
+        piece.position.x += piece.velocity.x * deltaTime;
+        piece.position.y += piece.velocity.y * deltaTime;
+        piece.position.z += piece.velocity.z * deltaTime;
+
+        // 回転更新
+        piece.rotation.x += piece.angularVel.x * deltaTime;
+        piece.rotation.y += piece.angularVel.y * deltaTime;
+        piece.rotation.z += piece.angularVel.z * deltaTime;
+
+        // 床で止まる
+        float floorY = GetMeshFloorHeight(piece.position.x, piece.position.z,
+            piece.position.y);
+        if (piece.position.y < floorY)
+        {
+            piece.position.y = floorY;
+            piece.velocity.y = 0.0f;
+            piece.velocity.x *= 0.9f;
+            piece.velocity.z *= 0.9f;
+            piece.angularVel.x *= 0.95f;
+            piece.angularVel.y *= 0.95f;
+            piece.angularVel.z *= 0.95f;
+        }
+
+        // 寿命
+        piece.lifetime -= deltaTime;
+        if (piece.lifetime <= 0.0f)
+            piece.active = false;
+    }
+
+    // 死んだピースを削除
+    m_slicedPieces.erase(
+        std::remove_if(m_slicedPieces.begin(), m_slicedPieces.end(),
+            [](const SlicedPiece& p) { return !p.active; }),
+        m_slicedPieces.end());
+}
+
+// ============================================
+//  切断ピースの描画
+// ============================================
+void Game::DrawSlicedPieces(DirectX::XMMATRIX view, DirectX::XMMATRIX proj)
+{
+    if (m_slicedPieces.empty()) return;
+    if (!m_sliceEffectTex) return;
+
+    m_d3dContext->RSSetState(m_sliceNoCullRS.Get());
+
+    UINT stride = sizeof(DirectX::VertexPositionNormalTexture);
+    UINT offset = 0;
+
+    for (const auto& piece : m_slicedPieces)
+    {
+        if (!piece.active) continue;
+
+        DirectX::XMMATRIX world =
+            DirectX::XMMatrixRotationX(piece.rotation.x) *
+            DirectX::XMMatrixRotationY(piece.rotation.y) *
+            DirectX::XMMatrixRotationZ(piece.rotation.z) *
+            DirectX::XMMatrixTranslation(
+                piece.position.x, piece.position.y, piece.position.z);
+
+        float alpha = (piece.lifetime < 1.0f) ? piece.lifetime : 1.0f;
+
+        if (piece.texture)
+        {
+            m_sliceEffectTex->SetTexture(piece.texture);
+            m_sliceEffectTex->SetDiffuseColor(DirectX::XMVectorSet(1, 1, 1, alpha));
+            m_sliceEffectTex->SetWorld(world);
+            m_sliceEffectTex->SetView(view);
+            m_sliceEffectTex->SetProjection(proj);
+            m_sliceEffectTex->Apply(m_d3dContext.Get());
+            m_d3dContext->IASetInputLayout(m_sliceInputLayoutTex.Get());
+        }
+        else
+        {
+            m_sliceEffectNoTex->SetDiffuseColor(DirectX::XMVectorSet(0.8f, 0.2f, 0.2f, alpha));
+            m_sliceEffectNoTex->SetWorld(world);
+            m_sliceEffectNoTex->SetView(view);
+            m_sliceEffectNoTex->SetProjection(proj);
+            m_sliceEffectNoTex->Apply(m_d3dContext.Get());
+            m_d3dContext->IASetInputLayout(m_sliceInputLayoutNoTex.Get());
+        }
+
+        ID3D11Buffer* vb = piece.vertexBuffer.Get();
+        m_d3dContext->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
+        m_d3dContext->IASetIndexBuffer(piece.indexBuffer.Get(),
+            DXGI_FORMAT_R32_UINT, 0);
+        m_d3dContext->IASetPrimitiveTopology(
+            D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        m_d3dContext->DrawIndexed(piece.indexCount, 0, 0);
+    }
+
+    m_d3dContext->RSSetState(nullptr);
+}
+
 // ============================================
 //  NavGrid デバッグ描画
 //  壁マスを赤い半透明の箱で表示
@@ -1916,6 +2529,8 @@ void Game::CreateRenderResources()
             // === ナビゲーショングリッド構築 ===
             BuildNavGrid();
 
+            TestMeshSlice();
+
             //  既存プリミティブも描画する（床・壁を残す）
             m_mapSystem->SetDrawPrimitives(false);
             m_mapSystem->SetMapTransform(
@@ -2068,10 +2683,59 @@ void Game::CreateRenderResources()
         m_effekseerManager, u"Assets/Effects/Parry.efkefc");
 
 
+    InitSliceRendering();
+
     //  === Imgui   ===
     InitImGui();
 
     
+}
+
+void Game::InitSliceRendering()
+{
+    // テクスチャ有り Effect
+    m_sliceEffectTex = std::make_unique<DirectX::BasicEffect>(m_d3dDevice.Get());
+    m_sliceEffectTex->SetLightingEnabled(true);
+    m_sliceEffectTex->SetLightEnabled(0, true);
+    m_sliceEffectTex->SetLightDirection(0, DirectX::XMVectorSet(0, -1, 0.3f, 0));
+    m_sliceEffectTex->SetLightDiffuseColor(0, DirectX::XMVectorSet(1, 0.9f, 0.8f, 1));
+    m_sliceEffectTex->SetAmbientLightColor(DirectX::XMVectorSet(0.4f, 0.4f, 0.4f, 1));
+    m_sliceEffectTex->SetTextureEnabled(true);
+
+    // テクスチャ無し Effect
+    m_sliceEffectNoTex = std::make_unique<DirectX::BasicEffect>(m_d3dDevice.Get());
+    m_sliceEffectNoTex->SetLightingEnabled(true);
+    m_sliceEffectNoTex->SetLightEnabled(0, true);
+    m_sliceEffectNoTex->SetLightDirection(0, DirectX::XMVectorSet(0, -1, 0.3f, 0));
+    m_sliceEffectNoTex->SetLightDiffuseColor(0, DirectX::XMVectorSet(1, 0.9f, 0.8f, 1));
+    m_sliceEffectNoTex->SetAmbientLightColor(DirectX::XMVectorSet(0.4f, 0.4f, 0.4f, 1));
+    m_sliceEffectNoTex->SetTextureEnabled(false);
+
+    // InputLayout（テクスチャ有り）
+    void const* shaderByteCode;
+    size_t byteCodeLength;
+    m_sliceEffectTex->GetVertexShaderBytecode(&shaderByteCode, &byteCodeLength);
+    m_d3dDevice->CreateInputLayout(
+        DirectX::VertexPositionNormalTexture::InputElements,
+        DirectX::VertexPositionNormalTexture::InputElementCount,
+        shaderByteCode, byteCodeLength,
+        m_sliceInputLayoutTex.ReleaseAndGetAddressOf());
+
+    // InputLayout（テクスチャ無し）
+    m_sliceEffectNoTex->GetVertexShaderBytecode(&shaderByteCode, &byteCodeLength);
+    m_d3dDevice->CreateInputLayout(
+        DirectX::VertexPositionNormalTexture::InputElements,
+        DirectX::VertexPositionNormalTexture::InputElementCount,
+        shaderByteCode, byteCodeLength,
+        m_sliceInputLayoutNoTex.ReleaseAndGetAddressOf());
+
+    // 両面描画ラスタライザ
+    D3D11_RASTERIZER_DESC rsDesc = {};
+    rsDesc.FillMode = D3D11_FILL_SOLID;
+    rsDesc.CullMode = D3D11_CULL_NONE;
+    rsDesc.FrontCounterClockwise = FALSE;
+    rsDesc.DepthClipEnable = TRUE;
+    m_d3dDevice->CreateRasterizerState(&rsDesc, m_sliceNoCullRS.ReleaseAndGetAddressOf());
 }
 
 void Game::DrawDebugUI()
@@ -5833,6 +6497,7 @@ void Game::RenderPlaying()
         }
 
         DrawNavGridDebug(viewMatrix, projectionMatrix);
+        DrawSlicedPieces(viewMatrix, projectionMatrix);
 
         //  地面の苔を描画
            /* if (m_furRenderer && m_furReady)
@@ -6111,6 +6776,7 @@ void Game::RenderPlaying()
         }
 
         DrawNavGridDebug(viewMatrix, projectionMatrix);
+        DrawSlicedPieces(viewMatrix, projectionMatrix);
 
         ////  地面の苔を描画
         //    if (m_furRenderer && m_furReady)
@@ -7006,6 +7672,12 @@ void Game::UpdatePlaying()
     else
     {
         f1Pressed = false;
+    }
+
+    // F3キーで切断テスト
+    if (GetAsyncKeyState(VK_F3) & 1)
+    {
+        ExecuteSliceTest();
     }
 
     float deltaTime = m_deltaTime * m_timeScale;
@@ -9397,11 +10069,14 @@ void Game::UpdatePlaying()
                     {
                         enemy.health = 0;
                         enemy.isDying = true;
-                        enemy.isAlive = false;
-                        enemy.isRagdoll = true;
                         enemy.corpseTimer = 3.0f;
-                        RemoveEnemyPhysicsBody(enemy.id);
 
+                        // === メッシュ切断 ===
+                        SliceEnemyWithShield(enemy, m_thrownShieldDir);
+
+                        // 切断後に物理ボディ削除＆isAlive=false
+                        enemy.isAlive = false;
+                        RemoveEnemyPhysicsBody(enemy.id);
                         int waveBonus = m_waveManager->OnEnemyKilled();
                         if (waveBonus > 0) SpawnScorePopup(waveBonus, ScorePopupType::WAVE_BONUS);
                         m_player->AddPoints(100 + waveBonus);
@@ -9490,6 +10165,9 @@ void Game::UpdatePlaying()
     }
 
     m_gpuParticles->Update(deltaTime);
+
+    UpdateSlicedPieces(deltaTime);
+
     //  回復アイテム更新
     UpdateHealthPickups(deltaTime);
     UpdateScorePopups(deltaTime);

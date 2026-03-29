@@ -257,6 +257,7 @@
     <ClInclude Include="imgui-master\imstb_truetype.h" />
     <ClInclude Include="InstanceData.h" />
     <ClInclude Include="MapSystem.h" />
+    <ClInclude Include="MeshSlicer.h" />
     <ClInclude Include="Model.h" />
     <ClInclude Include="NavGrid.h" />
     <ClInclude Include="ParticleSystem.h" />
@@ -345,6 +346,7 @@
     <ClCompile Include="imgui-master\imgui_widgets.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MapSystem.cpp" />
+    <ClCompile Include="MeshSlicer.cpp" />
     <ClCompile Include="Model.cpp" />
     <ClCompile Include="NavGrid.cpp" />
     <ClCompile Include="ParticleSystem.cpp" />
