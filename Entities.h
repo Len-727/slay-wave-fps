@@ -117,6 +117,7 @@ struct EnemyTypeConfig
 	DirectX::XMFLOAT4 color;
 
 	float staggerDuration;	//	スタン持続時間
+
 };
 
 
@@ -248,6 +249,8 @@ struct Enemy {
 	float staggerTimer = 0.0f;	//	スタン経過時間
 	float staggerDuration = 3.0f;	//	スタン継続時間
 
+	bool hasBeenHPStaggered = false;
+
 	// === ボスAI用 ===
 	BossAttackPhase bossPhase = BossAttackPhase::IDLE;
 	float bossPhaseTimer = 0.0f;        // 現在フェーズの経過時間
@@ -257,6 +260,14 @@ struct Enemy {
 	DirectX::XMFLOAT3 bossTargetPos = { 0,0,0 }; // 攻撃時のターゲット位置
 	DirectX::XMFLOAT3 bossJumpStartPos = { 0,0,0 };	//	ジャンプ開始位置
 	bool bossBeamParriable = false;
+	// === パス追従用 ===
+	std::vector<DirectX::XMFLOAT3> aiPath;  // 経路のウェイポイント配列
+	int aiPathIndex = 0;                      // 今どのウェイポイントに向かってるか
+	float aiPathTimer = 0.0f;                 // 経路再計算タイマー
+
+	bool aiControlled = false;
+
+
 
 	Enemy()
 		: position(0, 0, 0)
@@ -289,6 +300,7 @@ struct Enemy {
 		, bossTargetPos{ 0, 0, 0 }
 		, staggerTimer(0.0f)
 		, staggerDuration(3.0f)
+		, hasBeenHPStaggered(false)
 	{
 
 	}

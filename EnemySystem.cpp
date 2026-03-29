@@ -45,7 +45,6 @@ void EnemySystem::Update(float deltaTime, DirectX::XMFLOAT3 playerPos)
 			// 地面についたら消す
 			if (enemy.position.y <= 0.0f)
 			{
-				enemy.position.y = 0.0f;
 				enemy.isAlive = false;
 			}
 
@@ -56,11 +55,12 @@ void EnemySystem::Update(float deltaTime, DirectX::XMFLOAT3 playerPos)
 		float hpRatio = (float)enemy.health / (float)enemy.maxHealth;
 
 		// HP30%以下 → 新規スタガー発動
-		if (hpRatio <= 0.3f && enemy.health > 0 && !enemy.isStaggered)
+		if (hpRatio <= 0.3f && enemy.health > 0 && !enemy.isStaggered && !enemy.hasBeenHPStaggered)
 		{
 			enemy.isStaggered = true;
 			enemy.staggerTimer = 0.0f;
 			enemy.staggerFlashTimer = 0.0f;
+			enemy.hasBeenHPStaggered = true;
 
 			// スタンアニメーションに切り替え
 			enemy.currentAnimation = "Stun";
@@ -91,9 +91,8 @@ void EnemySystem::Update(float deltaTime, DirectX::XMFLOAT3 playerPos)
 				enemy.isStaggered = false;
 				enemy.staggerTimer = 0.0f;
 				enemy.staggerFlashTimer = 0.0f;
-				enemy.stunValue = 0.0f;
+				enemy.stunValue = -1.0f;   //  -1 で再蓄積スタートを遅らせる
 
-				// 通常行動に復帰
 				enemy.currentAnimation = "Idle";
 				enemy.animationTime = 0.0f;
 			}
@@ -124,6 +123,9 @@ void EnemySystem::Update(float deltaTime, DirectX::XMFLOAT3 playerPos)
 void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float deltaTime)
 {
 	if (enemy.isDying)
+		return;
+
+	if (enemy.aiControlled)
 		return;
 
 		// == = MIDBOSS / BOSS は専用AIで処理 == =
@@ -181,10 +183,6 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 	//	【例】position.x = 5, velocity.x = 2 deltaTime = 0.5 → 新position.x = 6
 	enemy.position.x += enemy.velocity.x * deltaTime;
 	enemy.position.z += enemy.velocity.z * deltaTime;
-
-	//	地面の高さを維持
-	//	【理由】敵が宙に浮いたり、地面に埋まったりしないように
-	enemy.position.y = 0.0f;	//	常に1.0の高さ
 
 	//	マップの境界チェック(簡易)
 	//	【範囲】X座標が -50 - 50　の範囲
@@ -451,7 +449,6 @@ void EnemySystem::SpawnEnemy(DirectX::XMFLOAT3 playerPos)
 		float distance = 10.0f + (float)rand() / RAND_MAX * 10.0f;
 
 		enemy.position.x = playerPos.x + cosf(angle) * distance;
-		enemy.position.y = 0.0f;
 		enemy.position.z = playerPos.z + sinf(angle) * distance;
 
 		//  クランプ
@@ -501,7 +498,6 @@ void EnemySystem::SpawnMidBoss(DirectX::XMFLOAT3 playerPos)
 	float distance = 15.0f + (float)rand() / RAND_MAX * 5.0f;
 
 	enemy.position.x = playerPos.x + cosf(angle) * distance;
-	enemy.position.y = 0.0f;
 	enemy.position.z = playerPos.z + sinf(angle) * distance;
 
 	//  クランプ
@@ -548,7 +544,6 @@ void EnemySystem::SpawnBoss(DirectX::XMFLOAT3 playerPos)
 	float distance = 18.0f + (float)rand() / RAND_MAX * 5.0f;
 
 	enemy.position.x = playerPos.x + cosf(angle) * distance;
-	enemy.position.y = 0.0f;
 	enemy.position.z = playerPos.z + sinf(angle) * distance;
 
 	//  クランプ
@@ -977,8 +972,6 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 			enemy.bossPhaseTimer = 0.0f;
 			enemy.bossTargetPos = playerPos;  // ジャンプ先を更新 enemy.bossJumpStartPos = enemy.position;
 			enemy.bossJumpStartPos = enemy.position;
-			enemy.bossJumpStartPos.y = 0.0f;
-			enemy.position.y = 0.0f;
 
 			//OutputDebugStringA("[BOSS AI] -> JUMP_AIR\n");
 		}
@@ -993,7 +986,7 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 
 		//  放物線（sin で山なり）
 		enemy.bossJumpHeight = sinf(progress * 3.14159f) * m_bossJumpHeight;
-		enemy.position.y = enemy.bossJumpHeight;
+		enemy.position.y = enemy.bossJumpStartPos.y + enemy.bossJumpHeight;
 
 		//  水平移動: 開始位置→ターゲットを直線補間
 		//    progressが0→1で、ちょうどターゲットに到達する
@@ -1012,8 +1005,8 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 		{
 			enemy.bossPhase = BossAttackPhase::JUMP_SLAM;
 			enemy.bossPhaseTimer = 0.0f;
-			enemy.position.y = 0.0f;
 			enemy.bossJumpHeight = 0.0f;
+			enemy.position.y = enemy.bossJumpStartPos.y;
 			enemy.attackJustLanded = true;
 		}
 		break;
@@ -1021,8 +1014,6 @@ void EnemySystem::UpdateBossAI(Enemy& enemy, DirectX::XMFLOAT3 playerPos, float 
 
 	case BossAttackPhase::JUMP_SLAM:
 	{
-		// 着地した瞬間 → 0.1秒だけSLAM状態
-		enemy.position.y = 0.0f;
 
 		if (enemy.bossPhaseTimer >= 0.1f)
 		{
@@ -1233,7 +1224,6 @@ void EnemySystem::SpawnEnemyOfType(EnemyType type, DirectX::XMFLOAT3 playerPos)
 	float angle = (float)rand() / RAND_MAX * 2.0f * 3.14159f;
 	float distance = 5.0f;
 	enemy.position.x = playerPos.x + cosf(angle) * distance;
-	enemy.position.y = 0.0f;
 	enemy.position.z = playerPos.z + sinf(angle) * distance;
 
 	enemy.velocity = { 0.0f, 0.0f, 0.0f };

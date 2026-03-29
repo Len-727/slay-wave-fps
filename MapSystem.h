@@ -59,6 +59,12 @@ struct FloorZone
     bool  isSlopeZ;        // true=Z方向にスロープ
 };
 
+//  === メッシュコライダー用 : CPU側の三角形データ
+struct CollisionTriangle
+{
+    XMFLOAT3 v0, v1, v2;
+};
+
 
 class MapSystem
 {
@@ -97,6 +103,12 @@ public:
     void SetMapTransform(XMFLOAT3 pos, float rotY, float scale);
 
     const std::vector<MapObject>& GetObjects() const { return m_objects; }
+
+    //  メッシュコライダー用 : 全三角形を返す
+    const std::vector<CollisionTriangle>& GetCollisionTriangles() const
+    {
+        return m_collisionTriangles;
+    }
 
     float GetFloorHeight(float x, float z) const;
 
@@ -138,4 +150,7 @@ private:
 
 
     std::vector<FloorZone> m_floorZones;
+
+   
+    std::vector<CollisionTriangle> m_collisionTriangles;
 };

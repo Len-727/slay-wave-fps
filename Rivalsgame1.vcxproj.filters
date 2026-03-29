@@ -240,6 +240,15 @@
     <ClInclude Include="RankingSystem.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
+    <ClInclude Include="StunRing.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="TargetMarker.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="NavGrid.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -380,6 +389,15 @@
     <ClCompile Include="RankingSystem.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
+    <ClCompile Include="StunRing.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="TargetMarker.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
+    <ClCompile Include="NavGrid.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\Models\Y_Bot\Y_Bot.fbx">
@@ -439,12 +457,6 @@
     <FxCompile Include="FurVS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
-    <FxCompile Include="SkinnedVS.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="SkinnedPS.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
     <FxCompile Include="Assets\Shaders\BloodFluidCompositePS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
@@ -470,6 +482,21 @@
       <Filter>Assets\shader</Filter>
     </FxCompile>
     <FxCompile Include="Assets\Shaders\BloodParticleVS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\SkinnedPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\SkinnedVS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\StunRingPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\StunRingVS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\TargetMarkerPS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
   </ItemGroup>

@@ -231,6 +231,26 @@ bool MapSystem::LoadMapFBX(const std::string& fbxPath,
 			mat->Get(AI_MATKEY_COLOR_DIFFUSE, color);
 			m_materials[i].diffuseColor = { color.r, color.g, color.b, color.a };
 
+			// マップテクスチャを手動で読み込み
+			std::wstring fallbackFiles[] = {
+				textureDir + L"/Map1_1.png",
+				textureDir + L"/Map1_2.png",
+				textureDir + L"/Map1_3.png",
+				textureDir + L"/Map1_4.png"
+			};
+			for (const auto& fb : fallbackFiles)
+			{
+				HRESULT hr2 = CreateWICTextureFromFile(
+					m_device, fb.c_str(), nullptr,
+					m_materials[i].diffuseTexture.ReleaseAndGetAddressOf());
+				if (SUCCEEDED(hr2))
+				{
+					texLoaded = true;
+					OutputDebugStringA("  [MapSystem] Fallback texture loaded!\n");
+					break;  // 最初に見つかったものを使う
+				}
+			}
+
 			char db[256];
 			sprintf_s(db, "  Material[%d] '%s': テクスチャなし 色=(%.2f,%.2f,%.2f)\n",
 				i, m_materials[i].name.c_str(), color.r, color.g, color.b);
@@ -400,6 +420,60 @@ bool MapSystem::LoadMapFBX(const std::string& fbxPath,
 	}
 
 	processNode(scene->mRootNode, XMMatrixIdentity());
+
+	// === メッシュコライダー用：全三角形をCPU側に保存 ===
+	m_collisionTriangles.clear();
+
+	// マップ全体のワールド変換（位置・回転・スケール）
+	XMMATRIX mapWorld =
+		XMMatrixScaling(m_mapScale, m_mapScale, m_mapScale) *
+		XMMatrixRotationY(m_mapRotationY) *
+		XMMatrixTranslation(m_mapPosition.x, m_mapPosition.y, m_mapPosition.z);
+
+	for (unsigned int m = 0; m < scene->mNumMeshes; m++)
+	{
+		aiMesh* mesh = scene->mMeshes[m];
+
+		// このサブメッシュのノード変換を取得
+		XMMATRIX nodeT = XMLoadFloat4x4(&m_subMeshes[m].nodeTransform);
+
+		// 最終変換 = ノード変換 × マップワールド変換
+		XMMATRIX finalT = nodeT * mapWorld;
+
+		for (unsigned int f = 0; f < mesh->mNumFaces; f++)
+		{
+			aiFace& face = mesh->mFaces[f];
+			if (face.mNumIndices != 3) continue; // 三角形以外はスキップ
+
+			CollisionTriangle tri;
+
+			// 各頂点をワールド座標に変換
+			for (int i = 0; i < 3; i++)
+			{
+				unsigned int idx = face.mIndices[i];
+				XMVECTOR pos = XMVectorSet(
+					mesh->mVertices[idx].x,
+					mesh->mVertices[idx].y,
+					mesh->mVertices[idx].z,
+					1.0f);
+
+				// ノード変換 × マップ変換 を適用
+				pos = XMVector3Transform(pos, finalT);
+
+				XMFLOAT3* dest = (i == 0) ? &tri.v0 : (i == 1) ? &tri.v1 : &tri.v2;
+				XMStoreFloat3(dest, pos);
+			}
+
+			m_collisionTriangles.push_back(tri);
+		}
+	}
+
+	{
+		char db[256];
+		sprintf_s(db, "[MapSystem] Collision triangles collected: %zu\n",
+			m_collisionTriangles.size());
+		OutputDebugStringA(db);
+	}
 
 	m_mapLoaded = true;
 	OutputDebugStringA("MapSystem: FBXマップ読み込み成功！\n");

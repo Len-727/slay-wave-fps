@@ -60,6 +60,8 @@ public:
 
     // 流体モードON/OFF
     void SetFluidEnabled(bool enabled) { m_fluidEnabled = enabled; }
+    // 床の高さを設定（メッシュの地面に合わせる）
+    void SetFloorY(float y) { m_floorY = y; }
     bool IsFluidEnabled() const { return m_fluidEnabled; }
 
     int GetActiveCount() const { return m_activeCount; }
@@ -130,6 +132,7 @@ private:
     int   m_screenWidth = 1280;
     int   m_screenHeight = 960;
     bool  m_fluidEnabled = false;
+    float m_floorY = 0.02f;
 
     // --- 定数バッファ構造体(HLSL一致) ---
     struct alignas(16) UpdateCBData

@@ -548,7 +548,7 @@ void GPUParticleSystem::Update(float deltaTime)
             cb->DeltaTime = deltaTime;
             cb->Gravity = -6.0f;     // 強めの重力(血は重い)
             cb->Drag = 0.975f;     // 軽い空気抵抗
-            cb->FloorY = 0.02f;      // 床のちょっと上
+            cb->FloorY = m_floorY;
             cb->BounceFactor = 0.35f;       // 血はあまりバウンスしない
             cb->Time = m_totalTime;
             cb->Padding[0] = 0.0f;

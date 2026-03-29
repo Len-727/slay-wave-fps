@@ -911,7 +911,7 @@ void TitleScene::RenderToTexture(ID3D11DeviceContext* context)
 }
 
 // ========================================
-// ApplyBlur() - ブラーを適用（修正版）
+// ApplyBlur() - ブラーを適用
 // ========================================
 
 void TitleScene::ApplyBlur(
@@ -920,7 +920,7 @@ void TitleScene::ApplyBlur(
     ID3D11DepthStencilView* depthStencilView)
 {
     // ========================================
-    // 1) バックバッファに戻す（重要！）
+    // バックバッファに戻す（重要！）
     // ========================================
     context->OMSetRenderTargets(1, &backBufferRTV, depthStencilView);
 
@@ -934,16 +934,16 @@ void TitleScene::ApplyBlur(
     viewport.MaxDepth = 1.0f;
     context->RSSetViewports(1, &viewport);
 
-    // === 2) ポストプロセス用シェーダーを設定 ===
+    // === ポストプロセス用シェーダーを設定 ===
     context->VSSetShader(m_postProcessVS.Get(), nullptr, 0);
     context->PSSetShader(m_blurPS.Get(), nullptr, 0);
     context->IASetInputLayout(m_postProcessLayout.Get());
 
-    // === 3) レンダーテクスチャをシェーダーに渡す ===
+    // === レンダーテクスチャをシェーダーに渡す ===
     context->PSSetShaderResources(0, 1, m_renderTextureSRV.GetAddressOf());
     context->PSSetSamplers(0, 1, m_postProcessSampler.GetAddressOf());
 
-    // === 4) フルスクリーンクアッドを描画 ===
+    // === フルスクリーンクアッドを描画 ===
     UINT stride = sizeof(DirectX::XMFLOAT3) + sizeof(DirectX::XMFLOAT2);
     UINT offset = 0;
     context->IASetVertexBuffers(0, 1, m_fullscreenQuadVB.GetAddressOf(), &stride, &offset);
@@ -952,11 +952,11 @@ void TitleScene::ApplyBlur(
     // 描画（4頂点）
     context->Draw(4, 0);
 
-    // === 5) シェーダーリソースをクリア（重要！）===
+    // ===  シェーダーリソースをクリア===
     ID3D11ShaderResourceView* nullSRV = nullptr;
     context->PSSetShaderResources(0, 1, &nullSRV);
 
-    OutputDebugStringA("[BLUR] Applied successfully to back buffer\n");
+    //OutputDebugStringA("[BLUR] Applied successfully to back buffer\n");
 }
 
 void TitleScene::ApplyBlurTo(

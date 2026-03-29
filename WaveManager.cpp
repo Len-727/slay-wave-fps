@@ -8,7 +8,7 @@
 //	コンストラクタ
 //	【役割】ウェーブ1、敵10体、準備時間3秒でスタート
 WaveManager::WaveManager() :
-	m_currentWave(5),
+	m_currentWave(3),
 	m_enemiesKilledThisWave(0),
 	m_totalEnemiesThisWave(10),		//	Wave1は10体
 	m_betweenWaves(true),

@@ -55,6 +55,9 @@
 #include "BloodSystem.h"
 #include "GPUParticleSystem.h"
 #include "RankingSystem.h"
+#include "StunRing.h"
+#include "TargetMarker.h"
+#include "NavGrid.h"
 
 class Game
 {
@@ -140,9 +143,14 @@ private:
     //  --- テクスチャ   ---
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_armDiffuseTexture;
 
-
     //  === 影   ===
     std::unique_ptr<Shadow> m_shadow;
+
+    std::unique_ptr<StunRing> m_stunRing;
+
+    std::unique_ptr<TargetMarker> m_targetMarker;
+    int m_guardLockTargetID = -1;
+    DirectX::XMFLOAT3 m_guardLockTargetPos = { 0, 0, 0 };
 
 
     // === ゲームループの内部処理 ===
@@ -227,15 +235,15 @@ private:
     float m_weaponSwayY;
     float m_lastCameraRotX;
     float m_lastCameraRotY;
-    float m_weaponScale = 0.0056f;    // 武器スケール
+    float m_weaponScale = 0.2f;    // 武器スケール
     float m_weaponTiltX = -0.1f;     // X回転（上下）
-    float m_weaponRotX = 0.0f;   // X回転
-    float m_weaponRotY = 0.0f;   // Y回転
-    float m_weaponRotZ = 0.0f;   // Z回転
+    float m_weaponRotX = 1.47f;   // X回転
+    float m_weaponRotY = 1.57f;   // Y回転
+    float m_weaponRotZ = -0.1f;   // Z回転
 
-    float m_weaponOffsetRight = 0.44f;   // 右方向
-    float m_weaponOffsetUp = -0.63f;  // 上方向（マイナスで下）
-    float m_weaponOffsetForward = 0.29f;    // 前方向
+    float m_weaponOffsetRight = 0.1f;   // 右方向
+    float m_weaponOffsetUp = -0.09f;  // 上方向（マイナスで下）
+    float m_weaponOffsetForward = 0.16f;    // 前方向
 
     // 武器ボブ（武器だけ揺れる）
     float m_weaponBobTimer = 0.0f;
@@ -815,6 +823,15 @@ private:
     std::unique_ptr<btDiscreteDynamicsWorld> m_dynamicsWorld;
     std::map<int, btRigidBody*> m_enemyPhysicsBodies;
 
+    // === マップメッシュコライダー ===
+    btTriangleMesh* m_mapTriMesh = nullptr;   // 三角形データ
+    btBvhTriangleMeshShape* m_mapMeshShape = nullptr;  // コライダー形状
+    btRigidBody* m_mapMeshBody = nullptr;   // 剛体
+    // === ナビゲーショングリッド ===
+    NavGrid m_navGrid;
+    bool m_debugDrawNavGrid = false;
+
+
     // === 肉片物理 ===
     struct Gib
     {
@@ -842,6 +859,11 @@ private:
         float maxDistance
     );
     void AddEnemyPhysicsBody(Enemy& enemy);
+    // === メッシュコライダーとの衝突判定 ===
+    bool CheckMeshCollision(DirectX::XMFLOAT3 position, float radius);
+    float GetMeshFloorHeight(float x, float z, float defaultY = 0.0f);
+    void BuildNavGrid();
+    void DrawNavGridDebug(DirectX::XMMATRIX view, DirectX::XMMATRIX proj);
     void UpdateEnemyPhysicsBody(Enemy& enemy);
     void RemoveEnemyPhysicsBody(int enemyID);
 

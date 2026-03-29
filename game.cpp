@@ -155,6 +155,9 @@ void Game::Initialize(HWND window, int width, int height)
     CreateDevice();
     CreateResources();
 
+    //  === Bullet Physics 初期化  ===
+    InitPhysics();
+
     CreateRenderResources();  // 3D描画用の初期化
 
     m_states = std::make_unique<DirectX::CommonStates>(m_d3dDevice.Get());
@@ -235,8 +238,7 @@ void Game::Initialize(HWND window, int width, int height)
     m_gpuParticles->Initialize(m_d3dDevice.Get(), m_d3dContext.Get(), 4096,
         m_outputWidth, m_outputHeight);
 
-    //  === Bullet Physics 初期化  ===
-    InitPhysics();
+    
 
     // Initialize で初期化
     m_titleScene = std::make_unique<TitleScene>();
@@ -275,6 +277,17 @@ void Game::InitPhysics()
 
 void Game::CleanupPhysics()
 {
+    // マップメッシュコライダーの解放
+    if (m_mapMeshBody)
+    {
+        if (m_dynamicsWorld) m_dynamicsWorld->removeRigidBody(m_mapMeshBody);
+        delete m_mapMeshBody->getMotionState();
+        delete m_mapMeshBody;
+        m_mapMeshBody = nullptr;
+    }
+    if (m_mapMeshShape) { delete m_mapMeshShape; m_mapMeshShape = nullptr; }
+    if (m_mapTriMesh) { delete m_mapTriMesh;   m_mapTriMesh = nullptr; }
+
     // 全ての敵の物理ボディを削除
     for (auto& pair : m_enemyPhysicsBodies)
     {
@@ -351,15 +364,25 @@ Game::RaycastResult Game::RaycastPhysics(
         start.z + direction.z * maxDistance
     );
 
-    //  レイキャスト実行
-    btCollisionWorld::ClosestRayResultCallback rayCallback(
-        rayStart,
-        rayEnd
-    );
+    //  敵のカプセルだけに当たるようにする
+    struct EnemyOnlyRayCallback : public btCollisionWorld::ClosestRayResultCallback
+    {
+        EnemyOnlyRayCallback(const btVector3& from, const btVector3& to)
+            : ClosestRayResultCallback(from, to) {
+        }
 
-    //  全てのオブジェクトと衝突判定
-    rayCallback.m_collisionFilterMask = -1;
+        btScalar addSingleResult(btCollisionWorld::LocalRayResult& rayResult,
+            bool normalInWorldSpace) override
+        {
+            // userPointer が nullptr = マップメッシュ → スキップ
+            if (rayResult.m_collisionObject->getUserPointer() == nullptr)
+                return 1.0f;
 
+            return ClosestRayResultCallback::addSingleResult(rayResult, normalInWorldSpace);
+        }
+    };
+
+    EnemyOnlyRayCallback rayCallback(rayStart, rayEnd);
     m_dynamicsWorld->rayTest(rayStart, rayEnd, rayCallback);
 
     if (rayCallback.hasHit())
@@ -524,6 +547,252 @@ void Game::AddEnemyPhysicsBody(Enemy& enemy)
     sprintf_s(buffer, "[BULLET] Added body for enemy ID:%d at (%.2f, %.2f, %.2f)\n",
         enemy.id, enemy.position.x, enemy.position.y, enemy.position.z);
     ////OutputDebugStringA(buffer);
+}
+
+bool Game::CheckMeshCollision(DirectX::XMFLOAT3 position, float radius)
+{
+    // 物理ワールドかメッシュコライダーがなければスキップ
+    if (!m_dynamicsWorld || !m_mapMeshBody) return false;
+
+    // --- テスト用の球を作る（プレイヤーの体を模擬） ---
+    btSphereShape sphere(radius);
+
+    btCollisionObject testObj;
+    testObj.setCollisionShape(&sphere);
+
+    // 目の高さ(position.y)から体の中心に下げる（足元?目の中間）
+    btTransform t;
+    t.setIdentity();
+    t.setOrigin(btVector3(
+        position.x,
+        position.y - 0.9f,   // 目の高さ1.8mの半分 → 体の中心
+        position.z));
+    testObj.setWorldTransform(t);
+
+    // --- Bulletに「この球とマップメッシュ、重なってる？」と聞く ---
+    struct ContactCallback : public btCollisionWorld::ContactResultCallback
+    {
+        bool hit = false;
+
+        btScalar addSingleResult(
+            btManifoldPoint& cp,
+            const btCollisionObjectWrapper* colObj0Wrap,
+            int partId0, int index0,
+            const btCollisionObjectWrapper* colObj1Wrap,
+            int partId1, int index1) override
+        {
+            hit = true;   // 1つでも接触点があれば「当たり」
+            return 0;     // 0を返すと探索を早期終了
+        }
+    };
+
+    ContactCallback callback;
+    m_dynamicsWorld->contactPairTest(&testObj, m_mapMeshBody, callback);
+
+    return callback.hit;
+}
+
+// ============================================
+//  メッシュの床の高さをレイキャストで取得
+//  真上から真下にレイを飛ばし、メッシュに当たった点のYを返す
+// ============================================
+float Game::GetMeshFloorHeight(float x, float z, float defaultY)
+{
+    if (!m_dynamicsWorld || !m_mapMeshBody) return defaultY;
+
+    btVector3 rayFrom(x, 100.0f, z);
+    btVector3 rayTo(x, -100.0f, z);
+
+    // マップメッシュだけに当たるカスタムコールバック
+    // （敵のカプセル等を無視する）
+    struct MapOnlyRayCallback : public btCollisionWorld::ClosestRayResultCallback
+    {
+        btRigidBody* mapBody;  // マップメッシュの剛体
+
+        MapOnlyRayCallback(const btVector3& from, const btVector3& to, btRigidBody* map)
+            : ClosestRayResultCallback(from, to), mapBody(map) {
+        }
+
+        btScalar addSingleResult(btCollisionWorld::LocalRayResult& rayResult,
+            bool normalInWorldSpace) override
+        {
+            // マップメッシュ以外は無視
+            if (rayResult.m_collisionObject != mapBody)
+                return 1.0f;  // 1.0 = この結果を無視して続行
+
+            return ClosestRayResultCallback::addSingleResult(rayResult, normalInWorldSpace);
+        }
+    };
+
+    MapOnlyRayCallback rayCallback(rayFrom, rayTo, m_mapMeshBody);
+    m_dynamicsWorld->rayTest(rayFrom, rayTo, rayCallback);
+
+    if (rayCallback.hasHit())
+    {
+        return rayCallback.m_hitPointWorld.getY();
+    }
+
+    return defaultY;
+}
+
+// ============================================
+//  ナビゲーショングリッドを構築
+//  メッシュコライダーを使って歩ける/壁を判定
+// ============================================
+void Game::BuildNavGrid()
+{
+
+
+    // --- メッシュAABBからグリッド範囲を自動計算 ---
+    const auto& tris = m_mapSystem->GetCollisionTriangles();
+    if (tris.empty()) {
+        OutputDebugStringA("[NavGrid] No triangles, skipping.\n");
+        return;
+    }
+
+    float meshMinX = 999999, meshMaxX = -999999;
+    float meshMinY = 999999, meshMaxY = -999999;
+    float meshMinZ = 999999, meshMaxZ = -999999;
+
+    for (const auto& tri : tris)
+    {
+        auto check = [&](const DirectX::XMFLOAT3& v) {
+            if (v.x < meshMinX) meshMinX = v.x;
+            if (v.x > meshMaxX) meshMaxX = v.x;
+            if (v.y < meshMinY) meshMinY = v.y;
+            if (v.y > meshMaxY) meshMaxY = v.y;
+            if (v.z < meshMinZ) meshMinZ = v.z;
+            if (v.z > meshMaxZ) meshMaxZ = v.z;
+            };
+        check(tri.v0); check(tri.v1); check(tri.v2);
+    }
+
+    // 少しマージンを追加
+    float margin = 2.0f;
+    float mapMinX = meshMinX - margin;
+    float mapMaxX = meshMaxX + margin;
+    float mapMinZ = meshMinZ - margin;
+    float mapMaxZ = meshMaxZ + margin;
+    float cellSize = 1.0f;
+    float testRadius = 0.4f;
+
+    // 地面の高さ = AABBの下端から少し上（壁の胴体あたり）
+    float testY = meshMinY + 1.0f;
+
+    {
+        char buf[512];
+        sprintf_s(buf, "[NavGrid] Using mesh AABB: X(%.1f~%.1f) Z(%.1f~%.1f) testY=%.1f\n",
+            mapMinX, mapMaxX, mapMinZ, mapMaxZ, testY);
+        OutputDebugStringA(buf);
+    }
+
+    m_navGrid.Initialize(mapMinX, mapMaxX, mapMinZ, mapMaxZ,
+        cellSize, testRadius);
+    if (!m_mapMeshBody)
+    {
+        OutputDebugStringA("[NavGrid] WARNING: No mesh collider! Grid is all walkable.\n");
+        return;
+    }
+
+    
+    // --- 全マスを1つずつチェック ---
+    int blockedCount = 0;
+    int width = m_navGrid.GetWidth();
+    int height = m_navGrid.GetHeight();
+
+    float baseGroundY = GetMeshFloorHeight(0.0f, 0.0f, meshMinY);
+    float maxStepHeight = 1.5f;  // これ以上の段差は登れない
+
+    {
+        char buf[256];
+        sprintf_s(buf, "[NavGrid] Base ground Y: %.2f, max step: %.1f\n",
+            baseGroundY, maxStepHeight);
+        OutputDebugStringA(buf);
+    }
+
+    for (int gz = 0; gz < height; gz++)
+    {
+        for (int gx = 0; gx < width; gx++)
+        {
+            float wx = m_navGrid.GridToWorldX(gx);
+            float wz = m_navGrid.GridToWorldZ(gz);
+
+            bool blocked = false;
+
+            // 壁があるか
+            DirectX::XMFLOAT3 testPos = { wx, testY, wz };
+            if (CheckMeshCollision(testPos, testRadius))
+            {
+                blocked = true;
+            }
+
+            // 地面が高すぎないか（高低差判定）
+            if (!blocked)
+            {
+                float cellGroundY = GetMeshFloorHeight(wx, wz, baseGroundY);
+                if (cellGroundY > baseGroundY + maxStepHeight)
+                {
+                    blocked = true;  // 高い場所 → 登れない → 壁扱い
+                }
+            }
+
+            if (blocked)
+            {
+                m_navGrid.SetBlocked(gx, gz, true);
+                blockedCount++;
+            }
+        }
+    }
+
+    char buf[256];
+    sprintf_s(buf, "[NavGrid] Built: %d/%d cells blocked (%.1f%%)\n",
+        blockedCount, width * height,
+        100.0f * blockedCount / (width * height));
+    OutputDebugStringA(buf);
+}
+
+// ============================================
+//  NavGrid デバッグ描画
+//  壁マスを赤い半透明の箱で表示
+// ============================================
+void Game::DrawNavGridDebug(DirectX::XMMATRIX view, DirectX::XMMATRIX proj)
+{
+    if (!m_debugDrawNavGrid || !m_navGrid.IsReady()) return;
+
+    int width = m_navGrid.GetWidth();
+    int height = m_navGrid.GetHeight();
+    float cellSize = m_navGrid.GetCellSize();
+
+    // プレイヤーの近く（25m以内）だけ描画
+    DirectX::XMFLOAT3 pPos = m_player->GetPosition();
+    float drawRange = 25.0f;
+
+    for (int gz = 0; gz < height; gz++)
+    {
+        for (int gx = 0; gx < width; gx++)
+        {
+            if (!m_navGrid.IsBlocked(gx, gz)) continue;
+
+            float wx = m_navGrid.GridToWorldX(gx);
+            float wz = m_navGrid.GridToWorldZ(gz);
+
+            // 距離チェック
+            float dx = wx - pPos.x;
+            float dz = wz - pPos.z;
+            if (dx * dx + dz * dz > drawRange * drawRange) continue;
+
+            // そのマスの地面の高さを取得（壁の上を基準にする）
+            float cellY = GetMeshFloorHeight(wx, wz, pPos.y - 1.8f);
+
+            // 赤い柱を地面から3m上まで立てる（壁に埋まらない）
+            DirectX::XMMATRIX world =
+                DirectX::XMMatrixScaling(cellSize * 0.8f, 3.0f, cellSize * 0.8f) *
+                DirectX::XMMatrixTranslation(wx, cellY + 1.5f, wz);
+
+            m_cube->Draw(world, view, proj,
+                DirectX::XMVECTORF32{ 1.0f, 0.0f, 0.0f, 0.5f });
+        }
+    }
 }
 
 //  SpawnGibs: 肉片をBullet物理で生成 
@@ -1068,7 +1337,7 @@ void Game::CreateRenderResources()
     m_weaponModel = std::make_unique<Model>();
     if (!m_weaponModel->LoadFromFile(m_d3dDevice.Get(), "Assets/Models/Gun/SHOTGUN.fbx"))
     {
-        ////OutputDebugStringA("Failed to load SHOTGUN model\n");
+        OutputDebugStringA("Failed to load SHOTGUN model\n");
     }
     else
     {
@@ -1606,12 +1875,53 @@ void Game::CreateRenderResources()
             1.0f))
         {
             OutputDebugStringA("FBX Map loaded!\n");
+
+            // === FBXメッシュコライダー作成 ===
+            const auto& tris = m_mapSystem->GetCollisionTriangles();
+            if (!tris.empty())
+            {
+                //  btTriangleMesh に三角形を登録
+                m_mapTriMesh = new btTriangleMesh();
+                for (const auto& tri : tris)
+                {
+                    btVector3 v0(tri.v0.x, tri.v0.y, tri.v0.z);
+                    btVector3 v1(tri.v1.x, tri.v1.y, tri.v1.z);
+                    btVector3 v2(tri.v2.x, tri.v2.y, tri.v2.z);
+                    m_mapTriMesh->addTriangle(v0, v1, v2);
+                }
+
+                //  BVHメッシュ形状を作成（静的オブジェクト専用）
+                m_mapMeshShape = new btBvhTriangleMeshShape(m_mapTriMesh, true);
+
+                //  静的剛体として登録（mass=0 = 動かない）
+                btTransform meshTransform;
+                meshTransform.setIdentity();
+
+                btDefaultMotionState* ms = new btDefaultMotionState(meshTransform);
+                btRigidBody::btRigidBodyConstructionInfo info(
+                    0.0f, ms, m_mapMeshShape);
+                m_mapMeshBody = new btRigidBody(info);
+
+                // マップの剛体にはuserPointerをnullにしておく（敵と区別）
+                m_mapMeshBody->setUserPointer(nullptr);
+
+                m_dynamicsWorld->addRigidBody(m_mapMeshBody);
+
+                char buf[256];
+                sprintf_s(buf, "[PHYSICS] Mesh collider created: %zu triangles\n",
+                    tris.size());
+                OutputDebugStringA(buf);
+            }
+
+            // === ナビゲーショングリッド構築 ===
+            BuildNavGrid();
+
             //  既存プリミティブも描画する（床・壁を残す）
             m_mapSystem->SetDrawPrimitives(false);
             m_mapSystem->SetMapTransform(
                 XMFLOAT3(0.0f, -0.1f, 0.0f),
                 0.0f,
-                0.005f
+                1.0f
             );
         }
         
@@ -1651,6 +1961,20 @@ void Game::CreateRenderResources()
     {
         // 影の色を黒の半透明に設定
         m_shadow->SetShadowColor(DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.5f));
+    }
+
+    //  === StunRingの初期化    ===
+    m_stunRing = std::make_unique<StunRing>();
+    if (!m_stunRing->Initialize(m_d3dDevice.Get()))
+    {
+        OutputDebugStringA("[StunRing] Failed to initialize!\n");
+    }
+
+    //  === TargetMarkerの初期化    ===
+    m_targetMarker = std::make_unique<TargetMarker>();
+    if (!m_targetMarker->Initialize(m_d3dDevice.Get()))
+    {
+        OutputDebugStringA("[TargetMarker] Failed to initialze");
     }
 
     //  === Effekseerの初期化   ===
@@ -1776,6 +2100,8 @@ void Game::DrawDebugUI()
         int runnerCount = 0;
         int tankCount = 0;
 
+
+
         for (const auto& enemy : m_enemySystem->GetEnemies())
         {
             if (!enemy.isAlive && !enemy.isDying)
@@ -1796,6 +2122,8 @@ void Game::DrawDebugUI()
                 break;
             }
         }
+
+        ImGui::Checkbox("Draw NavGrid", &m_debugDrawNavGrid);
 
         // === ライト調整 ===
         if (m_mapSystem && ImGui::CollapsingHeader("Map Lighting"))
@@ -3213,8 +3541,7 @@ void Game::DrawHitboxes()
     if (m_showBulletTrajectory)
     {
         // 発射位置（実際の射撃と同じ計算）
-        DirectX::XMFLOAT3 laserStart(playerPos.x, m_rayStartY, playerPos.z);
-
+        DirectX::XMFLOAT3 laserStart(playerPos.x, playerPos.y, playerPos.z);
         // 視線方向（実際の射撃と同じ計算）
         float dirX = sinf(playerRot.y) * cosf(playerRot.x);
         float dirY = -sinf(playerRot.x);
@@ -3533,8 +3860,17 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                         //  リムライト用: Color.a にスタガー情報を仕込む
                          // a > 1.5 → PSでスタガーと判定
                          // frac(a) → パルスアニメーションの位相
-                        float phase = fmodf(enemy.staggerFlashTimer * 1.5f, 1.0f);  // 0.0?1.0 を繰り返す
-                        float rimAlpha = 2.0f + phase;  // 2.0?3.0 の範囲（>1.5でスタガー検出
+                        float phase = fmodf(enemy.staggerFlashTimer * 1.5f, 1.0f);
+                        float rimBase = 2.0f;
+                        switch (enemy.type)
+                        {
+                        case EnemyType::NORMAL:  rimBase = 2.0f; break;
+                        case EnemyType::RUNNER:  rimBase = 2.0f; break;
+                        case EnemyType::TANK:    rimBase = 3.0f; break;
+                        case EnemyType::MIDBOSS: rimBase = 4.0f; break;
+                        case EnemyType::BOSS:    rimBase = 5.0f; break;
+                        }
+                        float rimAlpha = rimBase + phase * 0.1f;
                         // 色は通常色を維持（紫のリムライトはシェーダーが足す）
                         instance.color = DirectX::XMFLOAT4(
                             enemy.color.x,
@@ -3635,7 +3971,54 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
                 }
             }
 
+            
+
             continue;  // 生きている敵の処理はスキップ
+        }
+        //=== スタンリング描画 ===
+        if (m_stunRing && enemy.isStaggered && enemy.isAlive && !enemy.isDying)
+        {
+            float sdx = enemy.position.x - playerPos.x;
+            float sdz = enemy.position.z - playerPos.z;
+            float distSq = sdx * sdx + sdz * sdz;
+
+            //  20m以上は描画しない、15?20mはフェードアウト
+            if (distSq < 300.0f)  // 20m以内
+            {
+                float ringSize = 1.5f;
+                switch (enemy.type)
+                {
+                case EnemyType::NORMAL:  ringSize = 1.2f;  break;
+                case EnemyType::RUNNER:  ringSize = 1.0f;  break;
+                case EnemyType::TANK:    ringSize = 1.8f;  break;
+                case EnemyType::MIDBOSS: ringSize = 2.2f;  break;
+                case EnemyType::BOSS:    ringSize = 3.0f;  break;
+                }
+
+                //  15?20mで徐々に縮小（フェードアウト）
+                float dist = sqrtf(distSq);
+                float fadeStart = 12.0f;  // ここからフェード開始
+                float fadeEnd = 17.3f;    // ここで完全に消える
+                if (dist > fadeStart)
+                {
+                    float fade = 1.0f - (dist - fadeStart) / (fadeEnd - fadeStart);
+                    ringSize *= fade;  // 遠いほど小さく→自然に消える
+                }
+
+                DirectX::XMFLOAT3 ringPos = enemy.position;
+                ringPos.y += 0.9f;
+
+                m_stunRing->Render(
+                    m_d3dContext.Get(),
+                    ringPos,
+                    ringSize,
+                    enemy.staggerTimer,
+                    viewMatrix,
+                    projectionMatrix
+                );
+            }
+
+            // 敵タイプ別のリングサイズ
         }
 
         // ========================================================================
@@ -3650,8 +4033,17 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
             //  リムライト用: Color.a にスタガー情報を仕込む
              // a > 1.5 → PSでスタガーと判定
              // frac(a) → パルスアニメーションの位相
-            float phase = fmodf(enemy.staggerFlashTimer * 1.5f, 1.0f);  // 0.0?1.0 を繰り返す
-            float rimAlpha = 2.0f + phase;  // 2.0?3.0 の範囲（>1.5でスタガー検出
+            float phase = fmodf(enemy.staggerFlashTimer * 1.5f, 1.0f);
+            float rimBase = 2.0f;
+            switch (enemy.type)
+            {
+            case EnemyType::NORMAL:  rimBase = 2.0f; break;
+            case EnemyType::RUNNER:  rimBase = 2.0f; break;
+            case EnemyType::TANK:    rimBase = 3.0f; break;
+            case EnemyType::MIDBOSS: rimBase = 4.0f; break;
+            case EnemyType::BOSS:    rimBase = 5.0f; break;
+            }
+            float rimAlpha = rimBase + phase * 0.1f;
             // 色は通常色を維持（紫のリムライトはシェーダーが足す）
             instance.color = DirectX::XMFLOAT4(
             enemy.color.x,
@@ -3719,8 +4111,22 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
             break;
 
             //MIDBOSS
-        case EnemyType::MIDBOSS:
-            if (enemy.headDestroyed)
+            case EnemyType::MIDBOSS:
+            //  スタガー中は個別描画
+            if (enemy.isStaggered)
+            {
+                std::string stunAnim = m_midBossModel->HasAnimation("Stun") ? "Stun" : "Idle";
+                float animTime = m_midBossModel->HasAnimation("Stun")
+                    ? enemy.animationTime
+                    : 0.0f;
+                m_midBossModel->DrawAnimated(
+                    m_d3dContext.Get(),
+                    world, viewMatrix, projectionMatrix,
+                    DirectX::XMLoadFloat4(&instance.color),
+                    stunAnim, animTime
+                );
+            }
+            else if (enemy.headDestroyed)
             {
                 if (enemy.currentAnimation == "Attack")
                     m_midBossAttackingHeadless.push_back(instance);
@@ -3737,7 +4143,21 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
             break;
 
         case EnemyType::BOSS:
-            if (enemy.headDestroyed)
+            //  スタガー中はインスタンシングせず個別描画（Idleで静止）
+            if (enemy.isStaggered)
+            {
+                std::string stunAnim = m_bossModel->HasAnimation("Stun") ? "Stun" : "Idle";
+                float animTime = m_bossModel->HasAnimation("Stun")
+                    ? enemy.animationTime
+                    : 0.0f;  // Idleの先頭フレームで固定
+                m_bossModel->DrawAnimated(
+                    m_d3dContext.Get(),
+                    world, viewMatrix, projectionMatrix,
+                    DirectX::XMLoadFloat4(&instance.color),
+                    stunAnim, animTime
+                );
+            }
+            else if (enemy.headDestroyed)
             {
                 if (enemy.currentAnimation == "AttackJump")
                     m_bossAttackingJumpHeadless.push_back(instance);
@@ -4284,6 +4704,39 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
         }
 
         m_bossModel->SetBoneScale("Head", 1.0f);
+    }
+
+    // === ターゲットマーカー描画 ===               // ★ここに追加（4377行目）
+    if (m_targetMarker && m_shieldState == ShieldState::Guarding && m_guardLockTargetID >= 0)
+    {
+        float markerSize = 1.5f;
+        for (const auto& enemy : m_enemySystem->GetEnemies())
+        {
+            if (enemy.id == m_guardLockTargetID && enemy.isAlive)
+            {
+                switch (enemy.type)
+                {
+                case EnemyType::NORMAL:  markerSize = 1.2f;  break;
+                case EnemyType::RUNNER:  markerSize = 1.0f;  break;
+                case EnemyType::TANK:    markerSize = 1.8f;  break;
+                case EnemyType::MIDBOSS: markerSize = 2.5f;  break;
+                case EnemyType::BOSS:    markerSize = 3.5f;  break;
+                }
+                break;
+            }
+        }
+
+        DirectX::XMFLOAT3 markerPos = m_guardLockTargetPos;
+        markerPos.y += 1.0f;
+
+        m_targetMarker->Render(
+            m_d3dContext.Get(),
+            markerPos,
+            markerSize,
+            m_gameTime,
+            viewMatrix,
+            projectionMatrix
+        );
     }
 
     //	========================================================================
@@ -5117,8 +5570,8 @@ void Game::DrawShield()
         DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(shieldScale, shieldScale, shieldScale);
 
         // 回転: 元の向き補正 + 高速スピン
-        DirectX::XMMATRIX modelFix = DirectX::XMMatrixRotationY(-DirectX::XM_PIDIV2);
-        DirectX::XMMATRIX standUp = DirectX::XMMatrixRotationX(DirectX::XM_PIDIV2);
+        DirectX::XMMATRIX modelFix = DirectX::XMMatrixRotationY(DirectX::XM_PI);
+        DirectX::XMMATRIX standUp = DirectX::XMMatrixRotationX(-DirectX::XM_PIDIV2);
         DirectX::XMMATRIX spin = DirectX::XMMatrixRotationY(m_thrownShieldSpin);
 
         // 飛ぶ方向に向ける
@@ -5229,8 +5682,8 @@ void Game::DrawShield()
     DirectX::XMMATRIX scale = DirectX::XMMatrixScaling(shieldScale, shieldScale, shieldScale);
 
     // === 回転 ===
-    DirectX::XMMATRIX modelFix = DirectX::XMMatrixRotationY(-DirectX::XM_PIDIV2);
-    DirectX::XMMATRIX standUp = DirectX::XMMatrixRotationZ(DirectX::XM_PIDIV2);
+    DirectX::XMMATRIX modelFix = DirectX::XMMatrixRotationY(DirectX::XM_PI);
+    DirectX::XMMATRIX standUp = DirectX::XMMatrixIdentity();
     // ガード中は盾をまっすぐ、待機中は少し傾ける
     float tiltAngle = 0.1f * (1.0f - guardProgress);
     DirectX::XMMATRIX tilt = DirectX::XMMatrixRotationX(tiltAngle);
@@ -5378,6 +5831,8 @@ void Game::RenderPlaying()
         {
             m_mapSystem->Draw(m_d3dContext.Get(), viewMatrix, projectionMatrix);
         }
+
+        DrawNavGridDebug(viewMatrix, projectionMatrix);
 
         //  地面の苔を描画
            /* if (m_furRenderer && m_furReady)
@@ -5654,6 +6109,8 @@ void Game::RenderPlaying()
         {
             m_mapSystem->Draw(m_d3dContext.Get(), viewMatrix, projectionMatrix);
         }
+
+        DrawNavGridDebug(viewMatrix, projectionMatrix);
 
         ////  地面の苔を描画
         //    if (m_furRenderer && m_furReady)
@@ -7036,8 +7493,8 @@ void Game::UpdatePlaying()
     DirectX::XMFLOAT3 testPositionX = oldPosition;
     testPositionX.x = newPosition.x;
 
-    //  --- 壁・箱との当たり判定チェック  X---
-    if (m_mapSystem && m_mapSystem->CheckCollision(testPositionX, playerRadius))
+    //  --- メッシュコライダーとの壁判定  X ---
+    if (CheckMeshCollision(testPositionX, playerRadius))
     {
         newPosition.x = oldPosition.x;
     }
@@ -7046,15 +7503,14 @@ void Game::UpdatePlaying()
     DirectX::XMFLOAT3 testPositionZ = oldPosition;
     testPositionZ.z = newPosition.z;
 
-    if (m_mapSystem && m_mapSystem->CheckCollision(testPositionZ, playerRadius))
+    if (CheckMeshCollision(testPositionZ, playerRadius))
     {
         newPosition.z = oldPosition.z;
     }
 
     //  床の高さに合わせてY座標を更新
-    if (m_mapSystem)
     {
-        float floorY = m_mapSystem->GetFloorHeight(newPosition.x, newPosition.z);
+        float floorY = GetMeshFloorHeight(newPosition.x, newPosition.z, newPosition.y - 1.8f);
         newPosition.y = floorY + 1.8f;  // 1.8 = 目の高さ
     }
 
@@ -7499,7 +7955,6 @@ void Game::UpdatePlaying()
 
                 //  カメラ(視点)空の位置から玉を発射
                 DirectX::XMFLOAT3 rayStart = playerPos;
-                rayStart.y = m_rayStartY;  // 固定で地面から0.5m（目の高さ）
 
                 //  射撃方向
                 DirectX::XMFLOAT3 rayDir(
@@ -7822,6 +8277,27 @@ void Game::UpdatePlaying()
                                     m_effekseerManager->StopEffect(m_beamHandle);
                                     m_beamHandle = -1;
                                 }
+
+                                // ポイント加算
+                                int waveBonus = m_waveManager->OnEnemyKilled();
+                                if (waveBonus > 0) SpawnScorePopup(waveBonus, ScorePopupType::WAVE_BONUS);
+                                int totalPoints = (isHeadShot ? 150 : 60) + waveBonus;
+                                m_player->AddPoints(totalPoints);
+                                SpawnScorePopup(totalPoints, isHeadShot ? ScorePopupType::HEADSHOT : ScorePopupType::KILL);
+
+                                //  スタイルランク：キル通知
+                                m_styleRank->NotifyKill(isHeadShot);
+
+                                //  スタッツ記録
+                                m_statKills++;
+                                if (isHeadShot) m_statHeadshots++;
+
+                                // ダメージ表示
+                                m_showDamageDisplay = true;
+                                m_damageDisplayTimer = 2.0f;
+                                m_damageDisplayPos = hitEnemy->position;
+                                m_damageDisplayPos.y += 2.0f;
+                                m_damageValue = isHeadShot ? 150 : 60;
                             }
 
                             else
@@ -7830,26 +8306,7 @@ void Game::UpdatePlaying()
                                 /*//OutputDebugStringA("[DEBUG] Enemy already dying (isDying=true)\n");*/
                             }
 
-                            // ポイント加算
-                            int waveBonus = m_waveManager->OnEnemyKilled();
-                            if (waveBonus > 0) SpawnScorePopup(waveBonus, ScorePopupType::WAVE_BONUS);
-                            int totalPoints = (isHeadShot ? 150 : 60) + waveBonus;
-                            m_player->AddPoints(totalPoints);
-                            SpawnScorePopup(totalPoints, isHeadShot ? ScorePopupType::HEADSHOT : ScorePopupType::KILL);
-
-                            //  スタイルランク：キル通知
-                            m_styleRank->NotifyKill(isHeadShot);
-
-                            //  スタッツ記録
-                            m_statKills++;
-                            if (isHeadShot) m_statHeadshots++;
-
-                            // ダメージ表示
-                            m_showDamageDisplay = true;
-                            m_damageDisplayTimer = 2.0f;
-                            m_damageDisplayPos = hitEnemy->position;
-                            m_damageDisplayPos.y += 2.0f;
-                            m_damageValue = isHeadShot ? 150 : 60;
+                            
 
                             // ウィンドウタイトル更新
                             /*char debug[256];
@@ -8007,14 +8464,167 @@ void Game::UpdatePlaying()
     //  グローリーキル中は敵の更新を停止
     if (!m_gloryKillCameraActive)
     {
-        //  m_cameraPOs
-        //  【型】DirectX::XMFLOAT3
+        // === 敵の旧座標を保存（パス追従の基準に使う） ===
+        struct EnemyOldPos { int id; float x, z; };
+        std::vector<EnemyOldPos> enemyOldPositions;
+        for (const auto& enemy : m_enemySystem->GetEnemies())
+        {
+            if (enemy.isAlive && !enemy.isDying && !enemy.isRagdoll)
+                enemyOldPositions.push_back({ enemy.id, enemy.position.x, enemy.position.z });
+        }
         //  【意味】プレイヤーの現在位置
         //  【用途】敵がプレイヤーに向かって動くため
         m_enemySystem->Update(deltaTime, m_player->GetPosition());
+
+        if (m_navGrid.IsReady())
+        {
+            DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+
+            for (auto& enemy : m_enemySystem->GetEnemies())
+            {
+                // 死亡中・ラグドール・スタガー中・ボス系はスキップ
+                if (!enemy.isAlive || enemy.isDying || enemy.isRagdoll
+                    || enemy.isStaggered
+                    || enemy.type == EnemyType::MIDBOSS
+                    || enemy.type == EnemyType::BOSS)
+                    continue;
+
+                // --- 経路再計算タイマー ---
+                enemy.aiPathTimer -= deltaTime;
+                if (enemy.aiPathTimer <= 0.0f)
+                {
+                    enemy.aiPathTimer = 0.5f + (float)(enemy.id % 5) * 0.1f;
+
+                    enemy.aiPath = m_navGrid.FindPath(
+                        enemy.position.x, enemy.position.z,
+                        playerPos.x, playerPos.z);
+                    enemy.aiPathIndex = 0;
+
+                    if (enemy.aiPath.size() > 1)
+                        enemy.aiPathIndex = 1;
+                }
+
+                // パスが無い or 短い → EnemySystemのまま
+                if (enemy.aiPath.empty() || enemy.aiPathIndex >= (int)enemy.aiPath.size())
+                {
+                    enemy.aiControlled = false;
+                    continue;
+                }
+                // プレイヤーが近い → 直接移動
+                float dxP = playerPos.x - enemy.position.x;
+                float dzP = playerPos.z - enemy.position.z;
+                if (sqrtf(dxP * dxP + dzP * dzP) < 3.0f)
+                {
+                    enemy.aiPath.clear();
+                    enemy.aiControlled = false;
+                    continue;
+                }
+
+                // 旧座標を取得
+                float oldX = enemy.position.x;
+                float oldZ = enemy.position.z;
+                for (const auto& op : enemyOldPositions)
+                {
+                    if (op.id == enemy.id) { oldX = op.x; oldZ = op.z; break; }
+                }
+
+                // EnemySystemの移動を取り消し、パスに沿って移動
+                DirectX::XMFLOAT3& waypoint = enemy.aiPath[enemy.aiPathIndex];
+
+                float dx = waypoint.x - oldX;
+                float dz = waypoint.z - oldZ;
+                float dist = sqrtf(dx * dx + dz * dz);
+
+                if (dist > 0.1f)
+                {
+                    enemy.aiControlled = true;  // A*が制御中
+
+                    float nx = dx / dist;
+                    float nz = dz / dist;
+
+                    // プレイヤーとの距離で速度を決定
+                    float distToPlayer = sqrtf(dxP * dxP + dzP * dzP);
+                    float runThreshold = 8.0f;
+
+                    float walkSpeed = 2.5f;
+                    float runSpeed = 5.0f;
+                    switch (enemy.type)
+                    {
+                    case EnemyType::NORMAL: walkSpeed = 2.5f; runSpeed = 4.5f; break;
+                    case EnemyType::RUNNER: walkSpeed = 3.0f; runSpeed = 6.0f; break;
+                    case EnemyType::TANK:   walkSpeed = 1.5f; runSpeed = 2.5f; break;
+                    }
+
+                    bool shouldRun = (distToPlayer > runThreshold);
+                    float speed = shouldRun ? runSpeed : walkSpeed;
+                    speed *= m_enemySystem->m_waveSpeedMult;
+
+                    enemy.position.x = oldX + nx * speed * deltaTime;
+                    enemy.position.z = oldZ + nz * speed * deltaTime;
+                    enemy.rotationY = atan2f(nx, nz) + 3.14159f;
+
+                    // velocityをEnemySystemと整合させる
+                    float velMag = shouldRun ? 2.0f : 0.5f;
+                    enemy.velocity.x = nx * velMag;
+                    enemy.velocity.z = nz * velMag;
+
+                    // アニメーション設定
+                    std::string moveAnim = shouldRun ? "Run" : "Walk";
+                    if (enemy.currentAnimation != moveAnim &&
+                        enemy.currentAnimation != "Death" &&
+                        enemy.currentAnimation != "Stun")
+                    {
+                        enemy.currentAnimation = moveAnim;
+                        enemy.animationTime = 0.0f;
+                    }
+                }
+               
+                // ウェイポイントに近づいたら次へ
+                float dxW = waypoint.x - enemy.position.x;
+                float dzW = waypoint.z - enemy.position.z;
+                if (sqrtf(dxW * dxW + dzW * dzW) < 1.0f)
+                {
+                    enemy.aiPathIndex++;
+                }
+            }
+        }
     }
 
-   
+    // =============================================
+     // === 敵同士の重なり押し出し（A*移動後） ===
+     // =============================================
+     {
+         auto& enemies = m_enemySystem->GetEnemies();
+         const float collisionRadius = 0.5f;
+         const float minDist = collisionRadius * 2.0f;  // 1.0m以内で押し出し
+         const float pushStr = 0.08f;
+
+         for (size_t i = 0; i < enemies.size(); i++)
+         {
+             if (!enemies[i].isAlive || enemies[i].isDying) continue;
+
+             for (size_t j = i + 1; j < enemies.size(); j++)
+             {
+                 if (!enemies[j].isAlive || enemies[j].isDying) continue;
+
+                 float dx = enemies[j].position.x - enemies[i].position.x;
+                 float dz = enemies[j].position.z - enemies[i].position.z;
+                 float dist = sqrtf(dx * dx + dz * dz);
+
+                 if (dist < minDist && dist > 0.001f)
+                 {
+                     float nx = dx / dist;
+                     float nz = dz / dist;
+                     float overlap = (minDist - dist) * pushStr;
+
+                     enemies[i].position.x -= nx * overlap;
+                     enemies[i].position.z -= nz * overlap;
+                     enemies[j].position.x += nx * overlap;
+                     enemies[j].position.z += nz * overlap;
+                 }
+             }
+         }
+    }
 
     //  === 敵の「移動・回転・アニメーション更新・死亡」をまとめて制御するループ   ===
     //DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
@@ -8222,7 +8832,7 @@ void Game::UpdatePlaying()
     }
 
     //  全敵のY座標を床の高さに合わせる
-    if (m_mapSystem)
+    //  全敵のY座標をメッシュ床の高さに合わせる
     {
         for (auto& enemy : m_enemySystem->GetEnemiesMutable())
         {
@@ -8234,8 +8844,8 @@ void Game::UpdatePlaying()
                         enemy.bossPhase == BossAttackPhase::JUMP_SLAM))
                     continue;
 
-                enemy.position.y = m_mapSystem->GetFloorHeight(
-                    enemy.position.x, enemy.position.z);
+                enemy.position.y = GetMeshFloorHeight(
+                    enemy.position.x, enemy.position.z, enemy.position.y);
             }
         }
     }
@@ -8397,95 +9007,76 @@ void Game::UpdatePlaying()
             }
         }
 
-        //  シールドチャージ: ガード中に左クリックで突進！
-        bool lmbDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
-        if (lmbDown && m_chargeReady)
+        // === 毎フレーム: ベストターゲットを追跡 ===
         {
-            // --- ロックオン: 視線方向に最も近い敵を探す ---
             DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
             float camYaw = m_player->GetRotation().y;
             float camPitch = m_player->GetRotation().x;
-
-            // プレイヤーの視線方向ベクトル
+        
             DirectX::XMFLOAT3 lookDir;
             lookDir.x = sinf(camYaw) * cosf(camPitch);
             lookDir.y = -sinf(camPitch);
             lookDir.z = cosf(camYaw) * cosf(camPitch);
-
-            // 視線に最も近い敵を検索
+        
             float bestScore = -1.0f;
-            int bestEnemyID = -1;
-            DirectX::XMFLOAT3 bestPos = { 0,0,0 };
-
+            m_guardLockTargetID = -1;
+        
             for (auto& enemy : m_enemySystem->GetEnemies())
             {
                 if (!enemy.isAlive || enemy.isDying) continue;
-
-                // プレイヤーから敵へのベクトル
+        
                 float dx = enemy.position.x - playerPos.x;
                 float dy = enemy.position.y - playerPos.y;
                 float dz = enemy.position.z - playerPos.z;
                 float dist = sqrtf(dx * dx + dy * dy + dz * dz);
-
-                if (dist < 1.0f || dist > 50.0f) continue;  // 近すぎ・遠すぎは無視
-
-                // 正規化
+        
+                if (dist < 1.0f || dist > 50.0f) continue;
+        
                 float nx = dx / dist;
                 float ny = dy / dist;
                 float nz = dz / dist;
-
-                // 視線との内積（1.0に近いほど正面）
+        
                 float dot = nx * lookDir.x + ny * lookDir.y + nz * lookDir.z;
-
-                // 視野角45度以内（dot > 0.7）の敵だけ対象
+        
                 if (dot > 0.7f)
                 {
-                    // スコア = 内積が高く、距離が近いほど優先
                     float score = dot / dist;
                     if (score > bestScore)
                     {
                         bestScore = score;
-                        bestEnemyID = enemy.id;
-                        bestPos = enemy.position;
+                        m_guardLockTargetID = enemy.id;
+                        m_guardLockTargetPos = enemy.position;
                     }
                 }
             }
-
-            if (bestEnemyID >= 0)
-            {
-                // ロックオン成功 → チャージ開始！
-                m_shieldState = ShieldState::Charging;
-                m_chargeTimer = 0.0f;
-                m_chargeEnergy = 0.0f;  //  エネルギー消費
-                m_chargeReady = false;  //  リセット
-                m_chargeHasTarget = true;
-                m_chargeTargetEnemyID = bestEnemyID;
-                m_chargeTarget = bestPos;
-
-                // 突進方向を計算（水平方向のみ）
-                float dx = bestPos.x - playerPos.x;
-                float dz = bestPos.z - playerPos.z;
-                float len = sqrtf(dx * dx + dz * dz);
-                if (len > 0.01f)
-                {
-                    m_chargeDirection = { dx / len, 0.0f, dz / len };
-                }
-                else
-                {
-                    m_chargeDirection = lookDir;
-                    m_chargeDirection.y = 0.0f;
-                }
-
-                // 距離に応じてチャージ時間を調整（最低0.2秒、最大0.8秒）
-                float distToTarget = len;
-                m_chargeDuration = min(0.8f, max(0.2f, distToTarget / m_chargeSpeed));
-
-                //OutputDebugStringA("[SHIELD] CHARGE START! Lock-on!\n");
-            }
+        }
+        
+        bool lmbDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+        if (lmbDown && m_chargeReady && m_guardLockTargetID >= 0)
+        {
+            // ロックオン成功 → チャージ開始！
+            m_shieldState = ShieldState::Charging;
+            m_chargeTimer = 0.0f;
+            m_chargeEnergy = 0.0f;
+            m_chargeReady = false;
+            m_chargeHasTarget = true;
+            m_chargeTargetEnemyID = m_guardLockTargetID;
+            m_chargeTarget = m_guardLockTargetPos;
+        
+            DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+            float dx = m_guardLockTargetPos.x - playerPos.x;
+            float dz = m_guardLockTargetPos.z - playerPos.z;
+            float len = sqrtf(dx * dx + dz * dz);
+            if (len > 0.01f)
+                m_chargeDirection = { dx / len, 0.0f, dz / len };
             else
             {
-                
+                float camYaw = m_player->GetRotation().y;
+                m_chargeDirection = { sinf(camYaw), 0.0f, cosf(camYaw) };
             }
+        
+            float distToTarget = len;
+            m_chargeDuration = min(0.8f, max(0.2f, distToTarget / m_chargeSpeed));
         }
 
         if (!rmbDown)
@@ -8493,6 +9084,7 @@ void Game::UpdatePlaying()
             // 右クリック離す → Idleに戻る
             m_shieldState = ShieldState::Idle;
             m_isGuarding = false;
+            m_guardLockTargetID = -1;
             //OutputDebugStringA("[SHIELD] State: IDLE (guard released)\n");
         }
         break;
@@ -8611,7 +9203,7 @@ void Game::UpdatePlaying()
                     m_gpuParticles->Emit(enemy.position, 30, 4.0f);
 
                     //  タンクだけ確定よろめき
-                    if (enemy.type == EnemyType::TANK)
+                    if (enemy.type == EnemyType::TANK && !enemy.isStaggered)
                     {
                         enemy.isStaggered = true;
                         enemy.staggerFlashTimer = 0.0f;
@@ -8624,7 +9216,7 @@ void Game::UpdatePlaying()
                     {
                         // MIDBOSS/BOSS はスタン蓄積のみ
                         enemy.stunValue += 60.0f;
-                        if (enemy.stunValue >= enemy.maxStunValue)
+                        if (enemy.stunValue >= enemy.maxStunValue && !enemy.isStaggered)
                         {
                             enemy.isStaggered = true;
                             enemy.staggerFlashTimer = 0.0f;
@@ -8890,6 +9482,13 @@ void Game::UpdatePlaying()
         m_shieldGlowIntensity += (targetGlow - m_shieldGlowIntensity) * min(1.0f, 12.0f * deltaTime);
     }
 
+    // GPU血パーティクルに地面の高さを伝える
+    {
+        DirectX::XMFLOAT3 pPos = m_player->GetPosition();
+        float groundY = GetMeshFloorHeight(pPos.x, pPos.z, 0.0f);
+        m_gpuParticles->SetFloorY(groundY + 0.02f);  // 地面のちょっと上
+    }
+
     m_gpuParticles->Update(deltaTime);
     //  回復アイテム更新
     UpdateHealthPickups(deltaTime);
@@ -8978,7 +9577,7 @@ void Game::UpdatePlaying()
 
                         float stunDamage = m_slamStunDamage;
                         enemy.stunValue += stunDamage;
-                        if (enemy.stunValue >= enemy.maxStunValue)
+                        if (enemy.stunValue >= enemy.maxStunValue && !enemy.isStaggered)
                         {
                             enemy.isStaggered = true;
                             enemy.staggerFlashTimer = 0.0f;
@@ -9039,7 +9638,7 @@ void Game::UpdatePlaying()
                 {
                     m_effekseerManager->Play(
                         m_effectGroundSlam,
-                        enemy.position.x, 0.1f, enemy.position.z);
+                        enemy.position.x, enemy.position.y + 0.1f, enemy.position.z);
                 }
 
                 enemy.attackJustLanded = false;
@@ -9075,7 +9674,7 @@ void Game::UpdatePlaying()
 
                     // 発射位置（ボスの前方1m）
                     proj.position.x = enemy.position.x + proj.direction.x * 1.0f;
-                    proj.position.y = 1.0f;  // 地面より少し上
+                    proj.position.y = enemy.position.y + 1.0f;
                     proj.position.z = enemy.position.z + proj.direction.z * 1.0f;
 
                     proj.speed = m_slashSpeed;
@@ -9199,7 +9798,7 @@ void Game::UpdatePlaying()
                         }
 
                         enemy.stunValue += m_beamStunOnParry * 2.0f;
-                        if (enemy.stunValue >= enemy.maxStunValue)
+                        if (enemy.stunValue >= enemy.maxStunValue && !enemy.isStaggered)
                         {
                             enemy.isStaggered = true;
                             enemy.staggerFlashTimer = 0.0f;
@@ -9324,7 +9923,7 @@ void Game::UpdatePlaying()
                         enemy.id, enemy.stunValue, enemy.maxStunValue);*/
                     //OutputDebugStringA(buf);
 
-                    if (enemy.stunValue >= enemy.maxStunValue)
+                    if (enemy.stunValue >= enemy.maxStunValue && !enemy.isStaggered)
                     {
                         enemy.isStaggered = true;
                         enemy.staggerFlashTimer = 0.0f;
@@ -9503,7 +10102,7 @@ void Game::UpdatePlaying()
                         if (enemy.id == proj.ownerID && enemy.isAlive)
                         {
                             enemy.stunValue += m_slashStunOnParry;
-                            if (enemy.stunValue >= enemy.maxStunValue)
+                            if (enemy.stunValue >= enemy.maxStunValue && !enemy.isStaggered)
                             {
                                 enemy.isStaggered = true;
                                 enemy.staggerFlashTimer = 0.0f;
@@ -9640,7 +10239,17 @@ void Game::ResetGame()
     m_pickupSpawnTimer = 0.0f;   // 
     m_clawTimer = 0.0f;
     m_scorePopups.clear();
-    m_player->SetPosition(DirectX::XMFLOAT3(0.0f, 1.8f, -0.5f));  // コンストラクタと同じ初期位置
+    {
+        float spawnX = 0.0f;
+        float spawnZ = -0.5f;
+        float groundY = GetMeshFloorHeight(spawnX, spawnZ, 0.0f);
+        m_player->SetPosition(DirectX::XMFLOAT3(spawnX, groundY + 1.8f, spawnZ));
+
+        char buf[256];
+        sprintf_s(buf, "[SPAWN] Player at (%.2f, %.2f, %.2f) groundY=%.2f\n",
+            spawnX, groundY + 1.8f, spawnZ, groundY);
+        OutputDebugStringA(buf);
+    }
     m_player->SetRotation(DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f));   // 向きも正面にリセット
     m_player->GetPointsRef() = 0;  // 初期ポイント
     m_scoreDisplayValue = 0.0f;  // 初期ポイントに合わせる
@@ -12239,7 +12848,7 @@ void Game::SpawnHealthPickup()
     float dist = 8.0f + ((float)rand() / RAND_MAX) * 17.0f;
 
     pickup.position.x = playerPos.x + cosf(angle) * dist;
-    pickup.position.y = 0.5f;
+    pickup.position.y = GetMeshFloorHeight(pickup.position.x, pickup.position.z, 0.0f) + 0.5f;
     pickup.position.z = playerPos.z + sinf(angle) * dist;
 
     //  マップ内にクランプ（歩行エリア内のみ）
