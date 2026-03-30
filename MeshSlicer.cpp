@@ -112,7 +112,7 @@ SliceResult MeshSlicer::Slice(
 
         int aboveCount = (above0 ? 1 : 0) + (above1 ? 1 : 0) + (above2 ? 1 : 0);
 
-        // ヘルパー: 三角形を指定メッシュに追加
+        // ヘルパー: 三角形を指定メッシュに//
         auto addTriangle = [](
             std::vector<SliceVertex>& verts,
             std::vector<uint32_t>& inds,
@@ -331,7 +331,7 @@ void MeshSlicer::GenerateCap(
         float dy = sorted[i].pos.y - uniquePoints.back().y;
         float dz = sorted[i].pos.z - uniquePoints.back().z;
         float distSq = dx * dx + dy * dy + dz * dz;
-        if (distSq > 0.0001f)  // 0.01m以上離れてたら追加
+        if (distSq > 0.0001f)  // 0.01m以上離れてたら//
         {
             uniquePoints.push_back(sorted[i].pos);
         }

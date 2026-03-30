@@ -221,7 +221,7 @@ std::vector<DirectX::XMFLOAT3> NavGrid::FindPath(
         CompareF
             > openList;
 
-            // --- スタートノードを追加 ---
+            // --- スタートノードを// ---
             float h0 = heuristic(sx, sz, gx, gz);
             allNodes.push_back({ sx, sz, h0, 0.0f, -1 });
             bestG[sz * m_width + sx] = 0.0f;

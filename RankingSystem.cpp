@@ -1,5 +1,5 @@
 // RankingSystem.cpp
-// 【役割】ランキングの保存・読み込み・ソート・追加を実装
+// 【役割】ランキングの保存・読み込み・ソート・//を実装
 // 【保存形式】バイナリファイル（高速＆コンパクト）
 //   ヘッダー: MAGIC(4byte) + VERSION(4byte) + COUNT(4byte)
 //   データ: RankingEntry × COUNT件
@@ -33,7 +33,7 @@ RankingSystem::RankingSystem()
 }
 
 // =============================================
-// AddEntry - スコアを追加してファイルに保存
+// AddEntry - スコアを//してファイルに保存
 // =============================================
 int RankingSystem::AddEntry(const RankingEntry& entry)
 {
@@ -41,7 +41,7 @@ int RankingSystem::AddEntry(const RankingEntry& entry)
     RankingEntry newEntry = entry;
     newEntry.timestamp = time(nullptr);     // 現在のUNIX時間
 
-    // --- 配列に追加 ---
+    // --- 配列に// ---
     m_entries.push_back(newEntry);
 
     // --- スコア降順でソート ---
@@ -53,7 +53,7 @@ int RankingSystem::AddEntry(const RankingEntry& entry)
         m_entries.resize(MAX_ENTRIES);
     }
 
-    // --- 追加したエントリーの順位を探す ---
+    // --- //したエントリーの順位を探す ---
     int rank = -1;  // ランク外
     for (int i = 0; i < (int)m_entries.size(); i++)
     {

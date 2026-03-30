@@ -632,7 +632,7 @@ void EnemySystem::BuildSpatialGrid()
 		// この敵が属するセルを計算
 		GridKey key = GetGridKey(enemy.position);
 
-		// セルに敵のインデックスを追加
+		// セルに敵のインデックスを//
 		m_spatialGrid[key].push_back(i);
 	}
 }

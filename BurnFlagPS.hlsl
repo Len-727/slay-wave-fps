@@ -80,7 +80,7 @@ float4 main(PS_INPUT input) : SV_TARGET
         // ========================================
         float emberT = (burnValue - emberStart) / emberWidth;
         
-        // 揺らぎを追加（激しい炎のちらつき）
+        // 揺らぎを//（激しい炎のちらつき）
         float flicker = sin(time * 20.0 + noise * 25.0) * 0.15 + 0.85;
         float flicker2 = sin(time * 35.0 + noise * 15.0) * 0.08;
         flicker += flicker2;

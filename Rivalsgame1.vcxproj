@@ -284,9 +284,14 @@
     <ClCompile Include="FireParticleSystem.cpp" />
     <ClCompile Include="FlagMesh.cpp" />
     <ClCompile Include="Furrenderer.cpp" />
-    <ClCompile Include="game.cpp" />
+    <ClCompile Include="GameCore.cpp" />
     <ClCompile Include="GameDebug.cpp" />
+    <ClCompile Include="GameHUD.cpp" />
     <ClCompile Include="GamePhysics.cpp" />
+    <ClCompile Include="GamePlay.cpp" />
+    <ClCompile Include="GameRender.cpp" />
+    <ClCompile Include="GameScene.cpp" />
+    <ClCompile Include="GameSlice.cpp" />
     <ClCompile Include="GPUParticleSystem.cpp" />
     <ClCompile Include="imgui-master\backends\imgui_impl_allegro5.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>

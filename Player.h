@@ -36,7 +36,7 @@ public:
     // y–ß‚è’lz€‚ñ‚¾‚çtrue
     bool TakeDamage(int damage);
 
-    // AddPoints - ƒ|ƒCƒ“ƒg‚ğ’Ç‰Á
+    // AddPoints - ƒ|ƒCƒ“ƒg‚ğ//
     // y–ğŠ„z“G‚ğ“|‚µ‚½‚È‚Ç‚ÉŒÄ‚Ô
     void AddPoints(int points);
 

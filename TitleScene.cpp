@@ -59,7 +59,7 @@ void TitleScene::Initialize(ID3D11Device* device, int screenWidth, int screenHei
     CreateWhiteTexture(device);
     InitBloodDrips();
 
-    // === 炎パーティクルシステムを作成（追加）===
+    // === 炎パーティクルシステムを作成（//）===
     m_fireParticleSystem = std::make_unique<FireParticleSystem>();
     m_fireParticleSystem->Initialize(device, 1000);  // 最大1000パーティクル
 
@@ -574,7 +574,7 @@ void TitleScene::CreateNoiseTexture(ID3D11Device* device)
             // 0-1に正規化
             noise = (noise / maxValue + 1.0f) * 0.5f;
 
-            // グラデーション（下から上へ燃える）を追加
+            // グラデーション（下から上へ燃える）を//
             float gradient = (float)y / height;
             noise = noise * 0.7f + gradient * 0.3f;
 

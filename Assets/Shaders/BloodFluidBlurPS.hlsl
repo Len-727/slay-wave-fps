@@ -87,7 +87,7 @@ float main(PSInput input) : SV_Target
         //  SampleLevel(0)で安全に読む(gradient不要)
         float sampleDepth = DepthTexture.SampleLevel(PointSampler, sampleUV, 0);
         
-        // // 追加: 深度0のサンプルはスキップ（隙間は合算に入れない）
+        // // //: 深度0のサンプルはスキップ（隙間は合算に入れない）
         if (sampleDepth <= 0.0f)
             continue;
 

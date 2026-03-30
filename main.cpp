@@ -122,7 +122,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         {
             PostQuitMessage(0);
         }
-        // TODO: ここに他のキー処理を追加していく
+        // TODO: ここに他のキー処理を//していく
         break;
 
     case WM_DESTROY:

@@ -4,7 +4,7 @@
 //
 //  【責務】
 //  - Bullet Physicsワールドの初期化/破棄
-//  - 敵のキネマティック剛体の追加/更新/削除
+//  - 敵のキネマティック剛体の///更新/削除
 //  - レイキャストによる射撃判定（敵のみ/マップのみ）
 //  - メッシュコライダーによる壁衝突判定
 //  - A*パスファインディング用ナビグリッドの自動構築
@@ -210,7 +210,7 @@ Game::RaycastResult Game::RaycastPhysics(
 }
 
 // ============================================================
-//  AddEnemyPhysicsBody - 敵のキネマティック剛体を追加
+//  AddEnemyPhysicsBody - 敵のキネマティック剛体を//
 //
 //  【キネマティック剛体とは】
 //  mass=0で自分では動かないが、レイキャストに当たる。
@@ -428,7 +428,7 @@ void Game::BuildNavGrid()
         check(tri.v0); check(tri.v1); check(tri.v2);
     }
 
-    // マージンを追加（端の歩行判定が途切れないように）
+    // マージンを//（端の歩行判定が途切れないように）
     constexpr float GRID_MARGIN = 2.0f;
     constexpr float CELL_SIZE = 1.0f;
     constexpr float WALK_TEST_RADIUS = 0.4f;

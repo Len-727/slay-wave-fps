@@ -99,7 +99,7 @@ void ParticleSystem::CreateExplosion(DirectX::XMFLOAT3 position)
         particle.lifetime = 1.0f + (float)rand() / RAND_MAX * 2.0f;
         particle.maxLifetime = particle.lifetime;
 
-        // ”z—ñ‚É’Ç‰Á
+        // ”z—ñ‚É//
         m_particles.push_back(particle);
     }
 }

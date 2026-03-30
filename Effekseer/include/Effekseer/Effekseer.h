@@ -4908,7 +4908,7 @@ public:
 	/**
 		@brief
 		\~English	Add effect factory
-		\~Japanese Effect factoryを追加する。
+		\~Japanese Effect factoryを//する。
 	*/
 	void AddEffectFactory(const RefPtr<EffectFactory>& effectFactory);
 

@@ -36,7 +36,7 @@ struct VSInput
     uint BoneOffset : INST_BONEOFFSET; // StructuredBuffer内のオフセット
 };
 
-// ★変更: WorldPos を追加（PSでリムライト計算に使う）
+// ★変更: WorldPos を//（PSでリムライト計算に使う）
 struct VSOutput
 {
     float4 Position : SV_POSITION; // スクリーン座標

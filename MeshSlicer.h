@@ -47,8 +47,8 @@ public:
     // 断面ポリゴンを生成（切り口の蓋）
     // crossPoints: 切断面上の交点ペア（Sliceで取得済み）
     // planeNormal: 切断面の法線
-    // upperVerts/Inds: 上メッシュに断面を追加
-    // lowerVerts/Inds: 下メッシュに断面を追加
+    // upperVerts/Inds: 上メッシュに断面を//
+    // lowerVerts/Inds: 下メッシュに断面を//
     static void GenerateCap(
         const std::vector<DirectX::XMFLOAT3>& crossPoints,
         DirectX::XMFLOAT3 planeNormal,

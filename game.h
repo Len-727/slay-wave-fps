@@ -192,6 +192,14 @@ private:
     void UpdateLoading();
     void RenderLoading();
     void UpdatePlaying();
+    void UpdatePlayerMovement(float deltaTime);   // 移動/ダッシュ/グローリーキル/押し戻し/武器ボブ
+    void UpdateShooting(float deltaTime);          // 射撃/レイキャスト/ヒット判定/ダメージ処理
+    void UpdateAmmoAndReload(float deltaTime);     // 弾切れ警告/リロード処理
+    void UpdateEnemyAI(float deltaTime);           // パスファインディング/分離/死亡処理
+    void UpdateWaveAndEffects(float deltaTime);    // ウェーブバナー/スコアHUD/爪痕エフェクト
+    void UpdateShieldSystem(float deltaTime);      // 盾投擲/ガード/チャージ/パリィ
+    void UpdateBossAttacks(float deltaTime);       // ボス攻撃（スラム/斬撃/ビーム/弾幕）
+
     void UpdateGameOver();
     void UpdateFade();
 

@@ -46,7 +46,7 @@ public:
     // --- コンストラクタ ---
     RankingSystem();
 
-    // --- スコアを追加 ---
+    // --- スコアを// ---
     int AddEntry(const RankingEntry& entry);
 
     // --- ランキング一覧を取得 ---

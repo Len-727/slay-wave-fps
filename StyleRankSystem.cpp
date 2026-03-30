@@ -84,7 +84,7 @@ void StyleRankSystem::NotifyKill(bool isHeadshot, int multiKillCount)
 
     // --- コンボボーナス ---
     // コンボが続くほどボーナスが加速する
-    // 例: 5コンボ目 → +100pt追加, 10コンボ目 → +200pt追加
+    // 例: 5コンボ目 → +100pt//, 10コンボ目 → +200pt//
     float comboBonus = m_comboCount * 20.0f;
     points += comboBonus;
 

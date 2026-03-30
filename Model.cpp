@@ -39,7 +39,7 @@ std::string Model::GetShortName(const std::string& fullName)
 	}
 
 
-	// Assimpが付ける余計なサフィックスを削除する処理を追加（最小限）
+	// Assimpが付ける余計なサフィックスを削除する処理を//（最小限）
 	const std::string assimpSuffix = "_$AssimpFbx$_";
 	size_t assimpPos = name.find(assimpSuffix);
 	if (assimpPos != std::string::npos)
@@ -215,7 +215,7 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 					}
 				}
 
-				//	---	見つからない場合は新規追加	---
+				//	---	見つからない場合は新規//	---
 				if (boneIndex == -1)
 				{
 					//	新しいボーンを作成
@@ -238,7 +238,7 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 					//	親ボーンは後で
 					newBone.parentIndex = -1;
 
-					//	ボーン配列に追加
+					//	ボーン配列に//
 					m_bones.push_back(newBone);
 
 					//	このボーンのインデックス
@@ -340,7 +340,7 @@ bool Model::LoadFromFile(ID3D11Device* device, const std::string& filename)
 			//	その面が持つindex(頂点番号)を戦闘から順に読む
 			for (unsigned int idx = 0; idx < face.mNumIndices; idx++)
 			{
-				//	読み取った頂点座標を、自前メッシュのインデックス配列に追加
+				//	読み取った頂点座標を、自前メッシュのインデックス配列に//
 				mesh.indices.push_back(face.mIndices[idx]);
 			}
 		}
@@ -643,7 +643,7 @@ void Model::Draw(ID3D11DeviceContext* context,
 
 	//	===	エフェクト適用	===
 	m_effect->Apply(context);
-	// デバッグログ追加
+	// デバッグログ//
 	//OutputDebugStringA("[MODEL] Draw called\n");
 
 	// 深度書き込みを強制有効化
@@ -812,10 +812,10 @@ bool Model::LoadAnimation(const std::string& filename, const std::string& animat
 				keyframe.scale = DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f);
 			}
 
-			//	キーフレームっ配列に追加
+			//	キーフレームっ配列に//
 			animChannel.keyframes.push_back(keyframe);
 		}
-		//	チャンネルをアニメーションクリップに追加
+		//	チャンネルをアニメーションクリップに//
 		clip.channels.push_back(animChannel);
 	}
 
@@ -835,7 +835,7 @@ bool Model::LoadAnimation(const std::string& filename, const std::string& animat
 	//	// 元のログ
 	//	OutputDebugStringA(("AnimChannel: " + channel.boneName + "\n").c_str());
 
-	//	// 追加の詳細ログ
+	//	// //の詳細ログ
 	//	std::string shortName = GetShortName(channel.boneName);
 	//	char buf[256];
 	//	sprintf_s(
@@ -1166,11 +1166,11 @@ void Model::ReadNodeHierarchy(const aiNode* srcNode, int parentIndex)
 		}
 	}
 
-	// ノードリストに追加
+	// ノードリストに//
 	int currentIndex = static_cast<int>(m_nodes.size());
 	m_nodes.push_back(node);
 
-	// 親の子リストに自分を追加
+	// 親の子リストに自分を//
 	if (parentIndex != -1) {
 		m_nodes[parentIndex].children.push_back(currentIndex);
 	}
@@ -1515,7 +1515,7 @@ float animationTime)
 		//	---	エフェクト適用	---
 		m_effect->Apply(context);
 		
-		// デバッグログ追加
+		// デバッグログ//
 		/*char debugDraw[256];
 		sprintf_s(debugDraw, "[MODEL] DrawInstanced called, instances=%zu\n", instances.size());
 		OutputDebugStringA(debugDraw);*/

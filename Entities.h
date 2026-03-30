@@ -23,7 +23,7 @@ enum class WeaponType {
 	SNIPER
 };
 
-//	===	“G‚Ìí—Ş‚ğ’Ç‰Á	===
+//	===	“G‚Ìí—Ş‚ğ//	===
 enum class EnemyType{
 	NORMAL,	//	’Êí‚Ì“G
 	RUNNER,	//	‘«‚ª‘¬‚¢“G

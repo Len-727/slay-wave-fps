@@ -243,7 +243,7 @@ bool Player::TakeDamage(int damage)
     return false;  // まだ生きている
 }
 
-// AddPoints - ポイント追加
+// AddPoints - ポイント//
 void Player::AddPoints(int points)
 {
     m_points += points;
