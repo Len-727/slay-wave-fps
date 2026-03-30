@@ -285,6 +285,7 @@
     <ClCompile Include="FlagMesh.cpp" />
     <ClCompile Include="Furrenderer.cpp" />
     <ClCompile Include="game.cpp" />
+    <ClCompile Include="GameDebug.cpp" />
     <ClCompile Include="GamePhysics.cpp" />
     <ClCompile Include="GPUParticleSystem.cpp" />
     <ClCompile Include="imgui-master\backends\imgui_impl_allegro5.cpp">

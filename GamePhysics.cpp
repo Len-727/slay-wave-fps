@@ -61,7 +61,7 @@ void Game::InitPhysics()
 // ============================================================
 void Game::CleanupPhysics()
 {
-    // --- Step 1: マップメッシュコライダーの解放 ---
+    // --- マップメッシュコライダーの解放 ---
     if (m_mapMeshBody)
     {
         if (m_dynamicsWorld) m_dynamicsWorld->removeRigidBody(m_mapMeshBody);
@@ -72,7 +72,7 @@ void Game::CleanupPhysics()
     if (m_mapMeshShape) { delete m_mapMeshShape; m_mapMeshShape = nullptr; }
     if (m_mapTriMesh) { delete m_mapTriMesh; m_mapTriMesh = nullptr; }
 
-    // --- Step 2: 全敵の物理ボディを削除 ---
+    // --- 全敵の物理ボディを削除 ---
     for (auto& pair : m_enemyPhysicsBodies)
     {
         btRigidBody* body = pair.second;
@@ -94,7 +94,7 @@ void Game::CleanupPhysics()
     }
     m_enemyPhysicsBodies.clear();
 
-    // --- Step 3: Bullet Physicsワールド本体を解放 ---
+    // --- Bullet Physicsワールド本体を解放 ---
     // 作成の逆順で破棄（依存関係を壊さない）
     m_dynamicsWorld.reset();
     m_solver.reset();

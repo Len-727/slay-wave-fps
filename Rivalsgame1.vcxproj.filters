@@ -407,6 +407,9 @@
     <ClCompile Include="GamePhysics.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
+    <ClCompile Include="GameDebug.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\Models\Y_Bot\Y_Bot.fbx">
