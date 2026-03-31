@@ -47,60 +47,52 @@ bool TargetMarker::Initialize(ID3D11Device* device)
 
 bool TargetMarker::CreateShaders(ID3D11Device* device)
 {
-    UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
-#ifdef _DEBUG
-    flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#endif
+    // ========================================
+    // 【役割】ロックオンマーカー用シェーダーを .cso から読み込む
+    // ========================================
 
-    Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
     HRESULT hr;
+    Microsoft::WRL::ComPtr<ID3DBlob> blob;
 
-    // VS: StunRingVS.hlsl を使い回す（同じビルボード計算）
-    hr = D3DCompileFromFile(
-        L"Assets/Shaders/StunRingVS.hlsl", nullptr, nullptr,
-        "main", "vs_5_0", flags, 0,
-        vsBlob.GetAddressOf(), errorBlob.GetAddressOf()
-    );
+    // --- 頂点シェーダー（StunRingVS を共用）---
+    hr = D3DReadFileToBlob(L"Assets/Shaders/StunRingVS.cso", &blob);
     if (FAILED(hr))
     {
-        if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        OutputDebugStringA("[TargetMarker] VS compile FAILED!\n");
+        OutputDebugStringA("[TargetMarker] StunRingVS.cso load FAILED!\n");
         return false;
     }
 
     hr = device->CreateVertexShader(
-        vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
+        blob->GetBufferPointer(), blob->GetBufferSize(),
         nullptr, m_vs.GetAddressOf());
     if (FAILED(hr)) return false;
 
+    // --- 入力レイアウト ---
     D3D11_INPUT_ELEMENT_DESC layout[] = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
-    hr = device->CreateInputLayout(layout, 2,
-        vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
+    hr = device->CreateInputLayout(
+        layout, ARRAYSIZE(layout),
+        blob->GetBufferPointer(), blob->GetBufferSize(),
         m_inputLayout.GetAddressOf());
     if (FAILED(hr)) return false;
 
-    // PS: TargetMarkerPS.hlsl（赤いマーカー）
-    hr = D3DCompileFromFile(
-        L"Assets/Shaders/TargetMarkerPS.hlsl", nullptr, nullptr,
-        "main", "ps_5_0", flags, 0,
-        psBlob.GetAddressOf(), errorBlob.GetAddressOf()
-    );
+    // --- ピクセルシェーダー（TargetMarkerPS）---
+    blob.Reset();
+    hr = D3DReadFileToBlob(L"Assets/Shaders/TargetMarkerPS.cso", &blob);
     if (FAILED(hr))
     {
-        if (errorBlob) OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        OutputDebugStringA("[TargetMarker] PS compile FAILED!\n");
+        OutputDebugStringA("[TargetMarker] TargetMarkerPS.cso load FAILED!\n");
         return false;
     }
 
     hr = device->CreatePixelShader(
-        psBlob->GetBufferPointer(), psBlob->GetBufferSize(),
+        blob->GetBufferPointer(), blob->GetBufferSize(),
         nullptr, m_ps.GetAddressOf());
     if (FAILED(hr)) return false;
 
-    OutputDebugStringA("[TargetMarker] Shaders compiled OK\n");
+    OutputDebugStringA("[TargetMarker] Shaders loaded from CSO\n");
     return true;
 }
 

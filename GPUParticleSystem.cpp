@@ -126,73 +126,51 @@ bool GPUParticleSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* co
     return true;
 }
 
-// ============================================================
-//  シェーダーコンパイル(CS, VS, PS の3つ)
-// ============================================================
 bool GPUParticleSystem::CompileShaders()
 {
     HRESULT hr;
     Microsoft::WRL::ComPtr<ID3DBlob> blob;
-    Microsoft::WRL::ComPtr<ID3DBlob> errBlob;
 
-    // === Compute Shader(物理演算) ===
-    hr = D3DCompileFromFile(
-        L"Assets/Shaders/BloodParticleCS.hlsl",
-        nullptr, nullptr, "main", "cs_5_0",
-        D3DCOMPILE_OPTIMIZATION_LEVEL3, 0,
-        blob.GetAddressOf(), errBlob.GetAddressOf());
-
+    // === Compute Shader (物理演算) ===
+    hr = D3DReadFileToBlob(L"Assets/Shaders/BloodParticleCS.cso", blob.GetAddressOf());
     if (FAILED(hr))
     {
-        if (errBlob) OutputDebugStringA((char*)errBlob->GetBufferPointer());
-        OutputDebugStringA("[GPUParticle] CS compile failed\n");
+        OutputDebugStringA("[GPUParticle] BloodParticleCS.cso load failed\n");
         return false;
     }
     hr = m_device->CreateComputeShader(
         blob->GetBufferPointer(), blob->GetBufferSize(),
         nullptr, m_computeShader.GetAddressOf());
     if (FAILED(hr)) return false;
-    OutputDebugStringA("[GPUParticle] CS compiled OK\n");
+    OutputDebugStringA("[GPUParticle] CS loaded from CSO\n");
 
-    // === Vertex Shader(ビルボード展開) ===
-    blob.Reset(); errBlob.Reset();
-    hr = D3DCompileFromFile(
-        L"Assets/Shaders/BloodParticleVS.hlsl",
-        nullptr, nullptr, "main", "vs_5_0",
-        D3DCOMPILE_OPTIMIZATION_LEVEL3, 0,
-        blob.GetAddressOf(), errBlob.GetAddressOf());
-
+    // === Vertex Shader (ビルボード展開) ===
+    blob.Reset();
+    hr = D3DReadFileToBlob(L"Assets/Shaders/BloodParticleVS.cso", blob.GetAddressOf());
     if (FAILED(hr))
     {
-        if (errBlob) OutputDebugStringA((char*)errBlob->GetBufferPointer());
-        OutputDebugStringA("[GPUParticle] VS compile failed\n");
+        OutputDebugStringA("[GPUParticle] BloodParticleVS.cso load failed\n");
         return false;
     }
     hr = m_device->CreateVertexShader(
         blob->GetBufferPointer(), blob->GetBufferSize(),
         nullptr, m_vertexShader.GetAddressOf());
     if (FAILED(hr)) return false;
-    OutputDebugStringA("[GPUParticle] VS compiled OK\n");
+    OutputDebugStringA("[GPUParticle] VS loaded from CSO\n");
 
-    // === Pixel Shader(血の描画) ===
-    blob.Reset(); errBlob.Reset();
-    hr = D3DCompileFromFile(
-        L"Assets/Shaders/BloodParticlePS.hlsl",
-        nullptr, nullptr, "main", "ps_5_0",
-        D3DCOMPILE_OPTIMIZATION_LEVEL3, 0,
-        blob.GetAddressOf(), errBlob.GetAddressOf());
-
+    // === Pixel Shader (血の描画) ===
+    blob.Reset();
+    hr = D3DReadFileToBlob(L"Assets/Shaders/BloodParticlePS.cso", blob.GetAddressOf());
     if (FAILED(hr))
     {
-        if (errBlob) OutputDebugStringA((char*)errBlob->GetBufferPointer());
-        OutputDebugStringA("[GPUParticle] PS compile failed\n");
+        OutputDebugStringA("[GPUParticle] BloodParticlePS.cso load failed\n");
         return false;
     }
     hr = m_device->CreatePixelShader(
         blob->GetBufferPointer(), blob->GetBufferSize(),
         nullptr, m_pixelShader.GetAddressOf());
     if (FAILED(hr)) return false;
-    OutputDebugStringA("[GPUParticle] PS compiled OK\n");
+    OutputDebugStringA("[GPUParticle] PS loaded from CSO\n");
 
     return true;
 }
@@ -715,68 +693,61 @@ void GPUParticleSystem::Draw(XMMATRIX view, XMMATRIX proj, XMFLOAT3 cameraPos)
 
 }
 
-// ============================================================
-//  流体シェーダーコンパイル
-// ============================================================
 bool GPUParticleSystem::CompileFluidShaders()
 {
     HRESULT hr;
-    Microsoft::WRL::ComPtr<ID3DBlob> blob, errBlob;
+    Microsoft::WRL::ComPtr<ID3DBlob> blob;
 
-    // --- フルスクリーンVS ---
-    hr = D3DCompileFromFile(L"Assets/Shaders/FullscreenQuadVS.hlsl",
-        nullptr, nullptr, "main", "vs_5_0",
-        D3DCOMPILE_OPTIMIZATION_LEVEL3, 0,
-        blob.GetAddressOf(), errBlob.GetAddressOf());
-    if (FAILED(hr)) {
-        if (errBlob) OutputDebugStringA((char*)errBlob->GetBufferPointer());
-        OutputDebugStringA("[GPUParticle] FullscreenVS compile FAILED\n");
+    // --- フルスクリーン VS ---
+    hr = D3DReadFileToBlob(L"Assets/Shaders/FullscreenQuadVS.cso", blob.GetAddressOf());
+    if (FAILED(hr))
+    {
+        OutputDebugStringA("[GPUParticle] FullscreenQuadVS.cso load FAILED\n");
         return false;
     }
-    m_device->CreateVertexShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, m_fullscreenVS.GetAddressOf());
-    OutputDebugStringA("[GPUParticle] FullscreenVS compiled OK\n");
+    m_device->CreateVertexShader(
+        blob->GetBufferPointer(), blob->GetBufferSize(),
+        nullptr, m_fullscreenVS.GetAddressOf());
+    OutputDebugStringA("[GPUParticle] FullscreenVS loaded from CSO\n");
 
-    // --- 深度PS ---
-    blob.Reset(); errBlob.Reset();
-    hr = D3DCompileFromFile(L"Assets/Shaders/BloodFluidDepthPS.hlsl",
-        nullptr, nullptr, "main", "ps_5_0",
-        D3DCOMPILE_OPTIMIZATION_LEVEL3, 0,
-        blob.GetAddressOf(), errBlob.GetAddressOf());
-    if (FAILED(hr)) {
-        if (errBlob) OutputDebugStringA((char*)errBlob->GetBufferPointer());
-        OutputDebugStringA("[GPUParticle] FluidDepthPS compile FAILED\n");
+    // --- 深度 PS ---
+    blob.Reset();
+    hr = D3DReadFileToBlob(L"Assets/Shaders/BloodFluidDepthPS.cso", blob.GetAddressOf());
+    if (FAILED(hr))
+    {
+        OutputDebugStringA("[GPUParticle] BloodFluidDepthPS.cso load FAILED\n");
         return false;
     }
-    m_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, m_fluidDepthPS.GetAddressOf());
-    OutputDebugStringA("[GPUParticle] FluidDepthPS compiled OK\n");
+    m_device->CreatePixelShader(
+        blob->GetBufferPointer(), blob->GetBufferSize(),
+        nullptr, m_fluidDepthPS.GetAddressOf());
+    OutputDebugStringA("[GPUParticle] FluidDepthPS loaded from CSO\n");
 
-    // --- ブラーPS ---
-    blob.Reset(); errBlob.Reset();
-    hr = D3DCompileFromFile(L"Assets/Shaders/BloodFluidBlurPS.hlsl",
-        nullptr, nullptr, "main", "ps_5_0",
-        D3DCOMPILE_OPTIMIZATION_LEVEL3, 0,
-        blob.GetAddressOf(), errBlob.GetAddressOf());
-    if (FAILED(hr)) {
-        if (errBlob) OutputDebugStringA((char*)errBlob->GetBufferPointer());
-        OutputDebugStringA("[GPUParticle] FluidBlurPS compile FAILED\n");
+    // --- ブラー PS ---
+    blob.Reset();
+    hr = D3DReadFileToBlob(L"Assets/Shaders/BloodFluidBlurPS.cso", blob.GetAddressOf());
+    if (FAILED(hr))
+    {
+        OutputDebugStringA("[GPUParticle] BloodFluidBlurPS.cso load FAILED\n");
         return false;
     }
-    m_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, m_fluidBlurPS.GetAddressOf());
-    OutputDebugStringA("[GPUParticle] FluidBlurPS compiled OK\n");
+    m_device->CreatePixelShader(
+        blob->GetBufferPointer(), blob->GetBufferSize(),
+        nullptr, m_fluidBlurPS.GetAddressOf());
+    OutputDebugStringA("[GPUParticle] FluidBlurPS loaded from CSO\n");
 
-    // --- 合成PS ---
-    blob.Reset(); errBlob.Reset();
-    hr = D3DCompileFromFile(L"Assets/Shaders/BloodFluidCompositePS.hlsl",
-        nullptr, nullptr, "main", "ps_5_0",
-        D3DCOMPILE_OPTIMIZATION_LEVEL3, 0,
-        blob.GetAddressOf(), errBlob.GetAddressOf());
-    if (FAILED(hr)) {
-        if (errBlob) OutputDebugStringA((char*)errBlob->GetBufferPointer());
-        OutputDebugStringA("[GPUParticle] FluidCompositePS compile FAILED\n");
+    // --- 合成 PS ---
+    blob.Reset();
+    hr = D3DReadFileToBlob(L"Assets/Shaders/BloodFluidCompositePS.cso", blob.GetAddressOf());
+    if (FAILED(hr))
+    {
+        OutputDebugStringA("[GPUParticle] BloodFluidCompositePS.cso load FAILED\n");
         return false;
     }
-    m_device->CreatePixelShader(blob->GetBufferPointer(), blob->GetBufferSize(), nullptr, m_fluidCompositePS.GetAddressOf());
-    OutputDebugStringA("[GPUParticle] FluidCompositePS compiled OK\n");
+    m_device->CreatePixelShader(
+        blob->GetBufferPointer(), blob->GetBufferSize(),
+        nullptr, m_fluidCompositePS.GetAddressOf());
+    OutputDebugStringA("[GPUParticle] FluidCompositePS loaded from CSO\n");
 
     m_fluidShadersReady = true;
     return true;

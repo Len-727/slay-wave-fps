@@ -1650,8 +1650,8 @@ void Game::CreateBlurResources()
     //OutputDebugStringA(debugOffscreenDepth);
 
     // === シェーダー読み込み ===
-    m_fullscreenVS = LoadVertexShader(L"FullscreenVS.cso");
-    m_blurPS = LoadPixelShader(L"GaussianBlur.cso");
+    m_fullscreenVS = LoadVertexShader(L"Assets/Shaders/FullscreenQuadVS.cso");
+    m_blurPS = LoadPixelShader(L"Assets/Shaders/GaussianBlur.cso");
 
     //OutputDebugStringA("[BLUR] Blur resources created successfully\n");
 }

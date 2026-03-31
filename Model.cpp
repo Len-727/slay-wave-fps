@@ -1,5 +1,6 @@
 //	Model.cpp
 #include "Model.h"
+#include <d3dcompiler.h>
 #include <DirectXColors.h>
 #include <assimp/Importer.hpp>	//	Assimp　のインポーター	(FBX, OBJ)
 #include <assimp/scene.h>		//	読み込んだシーン(ノード階層・メッシュ・マテリアル・アニメーション)にアクセスする
@@ -15,6 +16,7 @@
 #include "InstanceData.h"
 
 #pragma comment(lib, "assimp-vc143-mt.lib")
+#pragma comment(lib, "d3dcompiler.lib")
 
 using namespace DirectX;
 
@@ -1655,33 +1657,27 @@ void Model::SetBoneScaleByPrefix(const std::string& prefix, float scale)
 // === カスタムシェーダー読み込み ===
 bool Model::LoadCustomShaders(ID3D11Device* device)
 {
-	// ---頂点シェーダーの .cso を読み込む ---
-	// .cso = （ビルド済みバイナリ）
+	// ========================================
+	// 【役割】敵モデル用カスタムシェーダー（スキニング対応）を読み込む
+	// 【変更】fopen_s → D3DReadFileToBlob に統一
+	//         パスを Assets/Shaders/ に統一
+	// ========================================
 
-	// ファイルを開く
-	FILE* vsFile = nullptr;
-	fopen_s(&vsFile, "SkinnedVS.cso", "rb");  // rb = バイナリ読み込み
-	if (!vsFile)
+	HRESULT hr;
+	Microsoft::WRL::ComPtr<ID3DBlob> blob;
+
+	// --- 頂点シェーダー .cso を読み込む ---
+	hr = D3DReadFileToBlob(L"Assets/Shaders/SkinnedVS.cso", &blob);
+	if (FAILED(hr))
 	{
 		OutputDebugStringA("[SHADER] SkinnedVS.cso が見つからない！\n");
 		return false;
 	}
 
-	// ファイルサイズを取得
-	fseek(vsFile, 0, SEEK_END);        // ファイル末尾に移動
-	long vsSize = ftell(vsFile);       // 現在位置 = ファイルサイズ
-	fseek(vsFile, 0, SEEK_SET);        // 先頭に戻す
-
-	// バイナリデータを読み込む
-	std::vector<char> vsData(vsSize);
-	fread(vsData.data(), 1, vsSize, vsFile);
-	fclose(vsFile);
-
-	// GPUに頂点シェーダーを作成
-	HRESULT hr = device->CreateVertexShader(
-		vsData.data(),    // シェーダーのバイナリ
-		vsSize,           // サイズ
-		nullptr,          // クラスリンクなし
+	hr = device->CreateVertexShader(
+		blob->GetBufferPointer(),
+		blob->GetBufferSize(),
+		nullptr,
 		m_customVS.GetAddressOf()
 	);
 	if (FAILED(hr))
@@ -1690,8 +1686,7 @@ bool Model::LoadCustomShaders(ID3D11Device* device)
 		return false;
 	}
 
-	// --- 入力レイアウト（頂点データの構造をGPUに教える）---
-	// VSInput の各メンバーと対応させる
+	// --- 入力レイアウト（頂点データの構造を GPU に教える）---
 	D3D11_INPUT_ELEMENT_DESC layout[] = {
 		// スロット0: 頂点データ（モデルの各頂点）
 		{ "POSITION",        0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA,   0 },
@@ -1701,7 +1696,6 @@ bool Model::LoadCustomShaders(ID3D11Device* device)
 		{ "BLENDWEIGHT",     0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 48, D3D11_INPUT_PER_VERTEX_DATA,   0 },
 
 		// スロット1: インスタンスデータ（敵1体ごとに違う）
-		// matrix = float4×4行 なので4要素に分割
 		{ "INST_WORLD",      0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1,  0, D3D11_INPUT_PER_INSTANCE_DATA, 1 },
 		{ "INST_WORLD",      1, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 16, D3D11_INPUT_PER_INSTANCE_DATA, 1 },
 		{ "INST_WORLD",      2, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 32, D3D11_INPUT_PER_INSTANCE_DATA, 1 },
@@ -1712,9 +1706,9 @@ bool Model::LoadCustomShaders(ID3D11Device* device)
 
 	hr = device->CreateInputLayout(
 		layout,
-		11,                    // 要素数
-		vsData.data(),        // 頂点シェーダーのバイナリ（検証用）
-		vsSize,
+		ARRAYSIZE(layout),          // 要素数（= 11）
+		blob->GetBufferPointer(),   // 頂点シェーダーのバイナリ（検証用）
+		blob->GetBufferSize(),
 		m_customInputLayout.GetAddressOf()
 	);
 	if (FAILED(hr))
@@ -1723,26 +1717,18 @@ bool Model::LoadCustomShaders(ID3D11Device* device)
 		return false;
 	}
 
-	// ---  ピクセルシェーダーの .cso を読み込む ---
-	FILE* psFile = nullptr;
-	fopen_s(&psFile, "SkinnedPS.cso", "rb");
-	if (!psFile)
+	// --- ピクセルシェーダー .cso を読み込む ---
+	blob.Reset();
+	hr = D3DReadFileToBlob(L"Assets/Shaders/SkinnedPS.cso", &blob);
+	if (FAILED(hr))
 	{
 		OutputDebugStringA("[SHADER] SkinnedPS.cso が見つからない！\n");
 		return false;
 	}
 
-	fseek(psFile, 0, SEEK_END);
-	long psSize = ftell(psFile);
-	fseek(psFile, 0, SEEK_SET);
-
-	std::vector<char> psData(psSize);
-	fread(psData.data(), 1, psSize, psFile);
-	fclose(psFile);
-
 	hr = device->CreatePixelShader(
-		psData.data(), psSize, nullptr,
-		m_customPS.GetAddressOf()
+		blob->GetBufferPointer(), blob->GetBufferSize(),
+		nullptr, m_customPS.GetAddressOf()
 	);
 	if (FAILED(hr))
 	{
@@ -1751,10 +1737,8 @@ bool Model::LoadCustomShaders(ID3D11Device* device)
 	}
 
 	// --- 定数バッファを3つ作成 ---
-	// 定数バッファ = CPUからGPUにデータを送るための箱
-
 	D3D11_BUFFER_DESC cbDesc = {};
-	cbDesc.Usage = D3D11_USAGE_DEFAULT;          // GPUが読み書き
+	cbDesc.Usage = D3D11_USAGE_DEFAULT;
 	cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 	cbDesc.CPUAccessFlags = 0;
 
@@ -1775,15 +1759,15 @@ bool Model::LoadCustomShaders(ID3D11Device* device)
 
 	// --- サンプラーステート ---
 	D3D11_SAMPLER_DESC sampDesc = {};
-	sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;  // 滑らかな補間
-	sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;      // テクスチャの繰り返し
+	sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
 	sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
 	sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
 	hr = device->CreateSamplerState(&sampDesc, m_customSampler.GetAddressOf());
 	if (FAILED(hr)) return false;
 
 	m_useCustomShader = true;
-	OutputDebugStringA("[SHADER] カスタムシェーダー読み込み完了！\n");
+	OutputDebugStringA("[SHADER] Custom shaders loaded from CSO!\n");
 	return true;
 }
 

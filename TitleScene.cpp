@@ -237,155 +237,108 @@ void TitleScene::Render(
 void TitleScene::CreateShaders(ID3D11Device* device)
 {
     // ========================================
-    // 頂点シェーダー
+    // 【役割】旗シェーダー3つを .cso（プリコンパイル済み）から読み込む
+    // 【理由】ランタイムコンパイルは起動が遅い＆d3dcompiler_47.dll が必須になる。
+    //         .cso なら読み込むだけなので高速＆配布も楽。
     // ========================================
 
-    Microsoft::WRL::ComPtr<ID3DBlob> vsBlob;
-    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+    HRESULT hr;  // 関数の成否を受け取る変数（型: HRESULT = long）
 
-    // ファイル名を変更
-    HRESULT hr = D3DCompileFromFile(
-        L"FlagVS_Standalone.hlsl",  
-        nullptr,
-        nullptr,  // ← D3D_COMPILE_STANDARD_FILE_INCLUDE 不要
-        "main",
-        "vs_5_0",
-        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
-        0,
-        &vsBlob,
-        &errorBlob
+    // --- blob: コンパイル済みバイナリの入れ物 ---
+    // ComPtr = スマートポインタ。スコープ外で自動解放してくれる便利な型。
+    Microsoft::WRL::ComPtr<ID3DBlob> blob;
+
+    // ========================================
+    // 頂点シェーダー（FlagVS）
+    // 【役割】旗メッシュの各頂点の位置を計算する
+    // ========================================
+    hr = D3DReadFileToBlob(
+        L"Assets/Shaders/FlagVS.cso",  // プリコンパイル済みファイルのパス
+        &blob                           // 読み込み結果を受け取るポインタ
     );
-
     if (FAILED(hr))
     {
-        if (errorBlob)
-        {
-            OutputDebugStringA("[SHADER ERROR - VS]\n");
-            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        }
-        throw std::runtime_error("Failed to compile vertex shader");
+        OutputDebugStringA("[SHADER] FlagVS.cso load FAILED\n");
+        throw std::runtime_error("Failed to load FlagVS.cso");
     }
 
     hr = device->CreateVertexShader(
-        vsBlob->GetBufferPointer(),
-        vsBlob->GetBufferSize(),
-        nullptr,
-        &m_vertexShader
+        blob->GetBufferPointer(),  // バイナリデータの先頭アドレス
+        blob->GetBufferSize(),     // バイナリデータのサイズ（バイト）
+        nullptr,                   // クラスリンク（通常 nullptr）
+        &m_vertexShader            // 作成されたシェーダーの出力先
     );
-
     if (FAILED(hr))
-    {
-        throw std::runtime_error("Failed to create vertex shader");
-    }
+        throw std::runtime_error("Failed to create FlagVS");
 
-    OutputDebugStringA("[SHADER] Vertex shader compiled\n");
-
-    // 入力レイアウト（変更なし）
+    // ========================================
+    // 入力レイアウト（頂点データの構造を GPU に教える）
+    // 【理由】blob がないと InputLayout が作れない。
+    //         .cso の blob でも D3DCompileFromFile の blob でも同じように使える。
+    // ========================================
     D3D11_INPUT_ELEMENT_DESC layout[] =
     {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        // セマンティック名, インデックス, フォーマット, スロット, オフセット, 分類, ステップレート
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,  D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
 
     hr = device->CreateInputLayout(
         layout,
-        ARRAYSIZE(layout),
-        vsBlob->GetBufferPointer(),
-        vsBlob->GetBufferSize(),
-        &m_inputLayout
+        ARRAYSIZE(layout),         // 配列の要素数（= 3）
+        blob->GetBufferPointer(),  // 頂点シェーダーのバイトコード
+        blob->GetBufferSize(),     // バイトコードのサイズ
+        &m_inputLayout             // 出力先
     );
-
     if (FAILED(hr))
-    {
-        throw std::runtime_error("Failed to create input layout");
-    }
+        throw std::runtime_error("Failed to create flag input layout");
+
+    OutputDebugStringA("[SHADER] FlagVS loaded from CSO\n");
 
     // ========================================
-    // ピクセルシェーダー
+    // ピクセルシェーダー（FlagPS）
+    // 【役割】旗の各ピクセルの色を計算する（テクスチャ＋ライティング）
     // ========================================
-
-    Microsoft::WRL::ComPtr<ID3DBlob> psBlob;
-
-    // ファイル名を変更
-    hr = D3DCompileFromFile(
-        L"FlagPS_Standalone.hlsl",  // ← ここを変更
-        nullptr,
-        nullptr,  // ← D3D_COMPILE_STANDARD_FILE_INCLUDE 不要
-        "main",
-        "ps_5_0",
-        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
-        0,
-        &psBlob,
-        &errorBlob
-    );
-
+    blob.Reset();  // 前の blob を解放してから再利用
+    hr = D3DReadFileToBlob(L"Assets/Shaders/FlagPS.cso", &blob);
     if (FAILED(hr))
     {
-        if (errorBlob)
-        {
-            OutputDebugStringA("[SHADER ERROR - PS]\n");
-            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        }
-        throw std::runtime_error("Failed to compile pixel shader");
+        OutputDebugStringA("[SHADER] FlagPS.cso load FAILED\n");
+        throw std::runtime_error("Failed to load FlagPS.cso");
     }
 
     hr = device->CreatePixelShader(
-        psBlob->GetBufferPointer(),
-        psBlob->GetBufferSize(),
-        nullptr,
-        &m_pixelShader
+        blob->GetBufferPointer(), blob->GetBufferSize(),
+        nullptr, &m_pixelShader
     );
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create FlagPS");
 
+    OutputDebugStringA("[SHADER] FlagPS loaded from CSO\n");
+
+    // ========================================
+    // 燃焼ピクセルシェーダー（BurnFlagPS）
+    // 【役割】旗が燃える演出の色を計算する
+    // ========================================
+    blob.Reset();
+    hr = D3DReadFileToBlob(L"Assets/Shaders/BurnFlagPS.cso", &blob);
     if (FAILED(hr))
     {
-        throw std::runtime_error("Failed to create pixel shader");
-    }
-
-    OutputDebugStringA("[SHADER] Pixel shader compiled\n");
-
-
-    //  燻焼用ピクセルシェーダー
-    Microsoft::WRL::ComPtr<ID3DBlob> burnPsBlob;
-
-    hr = D3DCompileFromFile(
-        L"BurnFlagPS.hlsl",
-        nullptr,
-        nullptr,
-        "main",
-        "ps_5_0",
-        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
-        0,
-        &burnPsBlob,
-        &errorBlob
-    );
-
-    if (FAILED(hr))
-    {
-        if (errorBlob)
-        {
-            OutputDebugStringA("[SHADER ERROR - BurnPS]\n");
-            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        }
-        throw std::runtime_error("Failed to compile burn pixel shader");
+        OutputDebugStringA("[SHADER] BurnFlagPS.cso load FAILED\n");
+        throw std::runtime_error("Failed to load BurnFlagPS.cso");
     }
 
     hr = device->CreatePixelShader(
-        burnPsBlob->GetBufferPointer(),
-        burnPsBlob->GetBufferSize(),
-        nullptr,
-        &m_burnPixelShader
+        blob->GetBufferPointer(), blob->GetBufferSize(),
+        nullptr, &m_burnPixelShader
     );
-
     if (FAILED(hr))
-    {
-        throw std::runtime_error("Failed to create burn pixel shader");
-    }
+        throw std::runtime_error("Failed to create BurnFlagPS");
 
-    OutputDebugStringA("[SHADER] Burn pixel shader compiled\n");
-
-
+    OutputDebugStringA("[SHADER] BurnFlagPS loaded from CSO\n");
 }
+
 void TitleScene::CreateBuffers(ID3D11Device* device)
 {
     // === 行列用定数バッファ ===
@@ -717,135 +670,85 @@ void TitleScene::CreatePostProcessResources(ID3D11Device* device)
 void TitleScene::CreatePostProcessShaders(ID3D11Device* device)
 {
     HRESULT hr;
-    Microsoft::WRL::ComPtr<ID3DBlob> vsBlob;
-    Microsoft::WRL::ComPtr<ID3DBlob> psBlob;
-    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+    Microsoft::WRL::ComPtr<ID3DBlob> blob;
 
     // ========================================
-    // 1) ポストプロセス頂点シェーダー
+    // ポストプロセス 頂点シェーダー
     // ========================================
-    hr = D3DCompileFromFile(
-        L"PostProcessVS.hlsl", nullptr, nullptr,
-        "main", "vs_5_0",
-        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
-        0, &vsBlob, &errorBlob
-    );
+    hr = D3DReadFileToBlob(L"Assets/Shaders/PostProcessVS.cso", &blob);
     if (FAILED(hr))
-    {
-        if (errorBlob) {
-            OutputDebugStringA("[SHADER ERROR - PostProcessVS]\n");
-            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        }
-        throw std::runtime_error("Failed to compile post-process vertex shader");
-    }
+        throw std::runtime_error("Failed to load PostProcessVS.cso");
 
     hr = device->CreateVertexShader(
-        vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
-        nullptr, &m_postProcessVS
-    );
+        blob->GetBufferPointer(), blob->GetBufferSize(),
+        nullptr, &m_postProcessVS);
     if (FAILED(hr))
         throw std::runtime_error("Failed to create post-process vertex shader");
 
-    // 入力レイアウト
+    // 入力レイアウト（PostProcessVS の CSO から作成）
     D3D11_INPUT_ELEMENT_DESC layout[] =
     {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,  D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
 
     hr = device->CreateInputLayout(
         layout, ARRAYSIZE(layout),
-        vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
-        &m_postProcessLayout
-    );
+        blob->GetBufferPointer(), blob->GetBufferSize(),
+        &m_postProcessLayout);
     if (FAILED(hr))
         throw std::runtime_error("Failed to create post-process input layout");
 
+    OutputDebugStringA("[SHADER] PostProcessVS loaded from CSO\n");
+
     // ========================================
-    // 2) ブラーピクセルシェーダー
+    // ブラー ピクセルシェーダー
     // ========================================
-    hr = D3DCompileFromFile(
-        L"BlurPS.hlsl", nullptr, nullptr,
-        "main", "ps_5_0",
-        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
-        0, &psBlob, &errorBlob
-    );
+    blob.Reset();
+    hr = D3DReadFileToBlob(L"Assets/Shaders/BlurPS.cso", &blob);
     if (FAILED(hr))
-    {
-        if (errorBlob) {
-            OutputDebugStringA("[SHADER ERROR - BlurPS]\n");
-            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        }
-        throw std::runtime_error("Failed to compile blur pixel shader");
-    }
+        throw std::runtime_error("Failed to load BlurPS.cso");
 
     hr = device->CreatePixelShader(
-        psBlob->GetBufferPointer(), psBlob->GetBufferSize(),
-        nullptr, &m_blurPS
-    );
+        blob->GetBufferPointer(), blob->GetBufferSize(),
+        nullptr, &m_blurPS);
     if (FAILED(hr))
         throw std::runtime_error("Failed to create blur pixel shader");
 
-    // ========================================
-    // 3) メニューFXピクセルシェーダー（稲妻・ビネット等）
-    // ========================================
-    Microsoft::WRL::ComPtr<ID3DBlob> menuFxBlob;
-    Microsoft::WRL::ComPtr<ID3DBlob> menuFxErrorBlob;
+    OutputDebugStringA("[SHADER] BlurPS loaded from CSO\n");
 
-    hr = D3DCompileFromFile(
-        L"MenuPostProcessPS.hlsl", nullptr, nullptr,
-        "main", "ps_5_0",
-        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
-        0, &menuFxBlob, &menuFxErrorBlob
-    );
+    // ========================================
+    // メニュー FX ピクセルシェーダー
+    // ========================================
+    blob.Reset();
+    hr = D3DReadFileToBlob(L"Assets/Shaders/MenuPostProcessPS.cso", &blob);
     if (FAILED(hr))
-    {
-        if (menuFxErrorBlob) {
-            OutputDebugStringA("[SHADER ERROR - MenuFX]\n");
-            OutputDebugStringA((char*)menuFxErrorBlob->GetBufferPointer());
-        }
-        throw std::runtime_error("Failed to compile menu FX shader");
-    }
+        throw std::runtime_error("Failed to load MenuPostProcessPS.cso");
 
     hr = device->CreatePixelShader(
-        menuFxBlob->GetBufferPointer(), menuFxBlob->GetBufferSize(),
-        nullptr, &m_menuFxPS
-    );
+        blob->GetBufferPointer(), blob->GetBufferSize(),
+        nullptr, &m_menuFxPS);
     if (FAILED(hr))
         throw std::runtime_error("Failed to create menu FX shader");
 
-    OutputDebugStringA("[SHADER] Menu FX shader compiled\n");
+    OutputDebugStringA("[SHADER] MenuPostProcessPS loaded from CSO\n");
 
     // ========================================
-    // 4) タイトル背景ピクセルシェーダー（うごめく闇）
+    // タイトル背景 ピクセルシェーダー
     // ========================================
-    Microsoft::WRL::ComPtr<ID3DBlob> titleBgBlob;
-    Microsoft::WRL::ComPtr<ID3DBlob> titleBgErrorBlob;
-
-    hr = D3DCompileFromFile(
-        L"TitleBackgroundPS.hlsl", nullptr, nullptr,
-        "main", "ps_5_0",
-        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
-        0, &titleBgBlob, &titleBgErrorBlob
-    );
+    blob.Reset();
+    hr = D3DReadFileToBlob(L"Assets/Shaders/TitleBackgroundPS.cso", &blob);
     if (FAILED(hr))
-    {
-        if (titleBgErrorBlob) {
-            OutputDebugStringA("[SHADER ERROR - TitleBG]\n");
-            OutputDebugStringA((char*)titleBgErrorBlob->GetBufferPointer());
-        }
-        throw std::runtime_error("Failed to compile title BG shader");
-    }
+        throw std::runtime_error("Failed to load TitleBackgroundPS.cso");
 
     hr = device->CreatePixelShader(
-        titleBgBlob->GetBufferPointer(), titleBgBlob->GetBufferSize(),
-        nullptr, &m_titleBgPS
-    );
+        blob->GetBufferPointer(), blob->GetBufferSize(),
+        nullptr, &m_titleBgPS);
     if (FAILED(hr))
         throw std::runtime_error("Failed to create title BG shader");
 
-    OutputDebugStringA("[SHADER] Title background shader compiled\n");
-    OutputDebugStringA("[TITLE] All post-process shaders created\n");
+    OutputDebugStringA("[SHADER] TitleBackgroundPS loaded from CSO\n");
+    OutputDebugStringA("[TITLE] All post-process shaders loaded from CSO\n");
 }
 
 void TitleScene::RenderToTexture(ID3D11DeviceContext* context)
@@ -882,9 +785,9 @@ void TitleScene::RenderToTexture(ID3D11DeviceContext* context)
     // ========================================
     // シェーダー設定（PostProcessVS + BurnFlagPS）
     // ========================================
-    context->VSSetShader(m_postProcessVS.Get(), nullptr, 0);     // ← 変更！フルスクリーン用VS
+    context->VSSetShader(m_postProcessVS.Get(), nullptr, 0);
     context->PSSetShader(m_burnPixelShader.Get(), nullptr, 0);   // 燃焼PSはそのまま
-    context->IASetInputLayout(m_postProcessLayout.Get());         // ← 変更！ポストプロセス用レイアウト
+    context->IASetInputLayout(m_postProcessLayout.Get());
 
     // 定数バッファ（燃焼パラメータ）
     context->PSSetConstantBuffers(0, 1, m_burnBuffer.GetAddressOf());

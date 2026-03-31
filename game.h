@@ -1,18 +1,48 @@
-// Game.h - ゲームクラス定義（構造を理解しよう）
+// ============================================================
+//  Game.h ? Gameクラス定義
+//
+//  Gothic Swarm のメインクラス。
+//  DirectX 11デバイスの管理、ゲームループの制御、
+//  全サブシステムの統括を担当する。
+//
+//  【ファイル構成】
+//  実装は8つの.cppファイルに分割されている：
+//    GameCore.cpp    ? 初期化 / Tick / リソース作成
+//    GamePlay.cpp    ? ゲームプレイロジック
+//    GameRender.cpp  ? 3D描画パイプライン
+//    GameScene.cpp   ? シーン管理（タイトル/GO/ランキング）
+//    GameHUD.cpp     ? HUD描画
+//    GamePhysics.cpp ? Bullet Physics統合
+//    GameSlice.cpp   ? メッシュ切断 / 肉片物理
+//    GameDebug.cpp   ? デバッグUI（ImGui）
+// ============================================================
 #pragma once
 
+// -----------------------------------------------
+//  標準ライブラリ
+// -----------------------------------------------
 #include <windows.h>
+#include <vector>
+#include <map>
+#include <set>
+#include <memory>
+#include <string>
+#include <algorithm>
+#include <stdexcept>
+
+// -----------------------------------------------
+//  DirectX 11
+// -----------------------------------------------
 #include <d3d11.h>
 #include <dxgi.h>
 #include <DirectXMath.h>
 #include <DirectXColors.h>
 #include <wrl/client.h>
-#include <vector>
-#include <map>
-#include <memory>
-#include <stdexcept>          
-#include <algorithm>
-#include "CommonStates.h"
+
+// -----------------------------------------------
+//  DirectXTK
+// -----------------------------------------------
+#include <CommonStates.h>
 #include <Effects.h>
 #include <PrimitiveBatch.h>
 #include <VertexTypes.h>
@@ -20,47 +50,58 @@
 #include <SpriteBatch.h>
 #include <SpriteFont.h>
 #include <SimpleMath.h>
-#include <SimpleMath.h>
-#include <SpriteBatch.h>
-#include <SpriteFont.h>
-#include <WICTextureLoader.h>   // PNG/JPGなど
-#include <DDSTextureLoader.h>   // DDSテクスチャ
-#include <CommonStates.h>
-#include <set>
+#include <WICTextureLoader.h>
+#include <DDSTextureLoader.h>
+
+// -----------------------------------------------
+//  Effekseer（パーティクルエフェクト）
+// -----------------------------------------------
 #include <Effekseer.h>
 #include <EffekseerRendererDX11.h>
+
+// -----------------------------------------------
+//  Dear ImGui（デバッグUI）
+// -----------------------------------------------
 #include <imgui.h>
 #include <imgui_impl_win32.h>
 #include <imgui_impl_dx11.h>
+
+// -----------------------------------------------
+//  Bullet Physics（物理演算）
+// -----------------------------------------------
 #include <btBulletDynamicsCommon.h>
 #include <btBulletCollisionCommon.h>
-#include <set>
 
-
-#include "TitleScene.h"
+// -----------------------------------------------
+//  プロジェクト内ヘッダー
+// -----------------------------------------------
 #include "Entities.h"
 #include "InstanceData.h"
+#include "TitleScene.h"
+#include "Player.h"
 #include "WeaponSystem.h"
 #include "EnemySystem.h"
-#include "ParticleSystem.h"
-#include "Wavemanager.h"
-#include "Player.h"
+#include "WaveManager.h"
+#include "StyleRankSystem.h"
+#include "RankingSystem.h"
 #include "UISystem.h"
 #include "Model.h"
 #include "MapSystem.h"
-#include "WeaponSpawn.h"
-#include "Shadow.h"
-#include "StyleRankSystem.h"
-#include "Furrenderer.h"
-#include "BloodSystem.h"
-#include "GPUParticleSystem.h"
-#include "RankingSystem.h"
-#include "StunRing.h"
-#include "TargetMarker.h"
 #include "NavGrid.h"
 #include "MeshSlicer.h"
+#include "WeaponSpawn.h"
+#include "ParticleSystem.h"
+#include "BloodSystem.h"
+#include "GPUParticleSystem.h"
+#include "Shadow.h"
+#include "FurRenderer.h"
+#include "StunRing.h"
+#include "TargetMarker.h"
 
 
+// ============================================================
+//  Gameクラス
+// ============================================================
 class Game
 {
 public:
@@ -68,351 +109,70 @@ public:
     ~Game();
 
     // コピー禁止（DirectXリソースは複製不可）
-    Game(Game const&) = delete;
-    Game& operator= (Game const&) = delete;
+    Game(const Game&) = delete;
+    Game& operator=(const Game&) = delete;
 
-    // === ゲームの基本メソッド（役割を理解しよう） ===
-    void Initialize(HWND window, int width, int height);  // 初期化
-    void Tick();                                          // メインループ
-    void OnWindowSizeChanged(int width, int height);      // ウィンドウサイズ変更
-
+    // --- ライフサイクル ---
+    void Initialize(HWND window, int width, int height);
+    void Tick();
+    void OnWindowSizeChanged(int width, int height);
     void ResetGame();
 
 private:
 
-    bool m_enemiesInitialized = false;
-
-    std::unique_ptr<TitleScene> m_titleScene;
-
-    //  m_weaponSystem->Update()    みたいに使う
-    std::unique_ptr<WeaponSystem> m_weaponSystem;       //  武器管理システム    unique_ptr 自動でメモリ管理
-
-    //  m_enemySystem->Update()     みたいに使う
-    std::unique_ptr<EnemySystem> m_enemySystem;         //  敵管理システム      unique_ptr 自動でメモリ管理
-
-    //  m_particleSystem->Update()  みたいに使う
-    std::unique_ptr<ParticleSystem> m_particleSystem;   //  パーティクル管理システム    unique_ptr 自動でメモリ管理
-
-    //  m_waveManager->Update() みたいに使う
-    std::unique_ptr<WaveManager> m_waveManager;         //  ウェーブ管理システム
-
-    //  m_player->Update()  みたいに使う
-    std::unique_ptr<Player> m_player;       //  プレイヤー管理システム
-
-    //  m_uiSystem->Draw...みたいに使う
-    std::unique_ptr<UISystem> m_uiSystem;   //  UI管理システム
-
-    //  スタイルランクシステム
-    std::unique_ptr<StyleRankSystem> m_styleRank;
-
-    std::unique_ptr<BloodSystem> m_bloodSystem;
-    std::unique_ptr<GPUParticleSystem> m_gpuParticles;
-
-    //  ===========================
-    //  === キャラクターモデル   ===
-    //  ===========================
-    std::unique_ptr<Model> m_weaponModel;   //  武器モデル
-    std::unique_ptr<Model> m_shieldModel;
-
-    std::unique_ptr<Model> m_testModel;     //  テストモデル
-
-    //  ==================
-    //  === 敵モデル    ===
-    //  ==================
-    std::unique_ptr<Model> m_enemyModel;    //  NORMAL用モデル
-    std::unique_ptr<Model> m_runnerModel;   //  RUNNER用モデル
-    std::unique_ptr<Model> m_tankModel;     //  TANK用モデル
-    std::unique_ptr<Model> m_midBossModel;     //  MIDBOSS用モデル
-    std::unique_ptr<Model> m_bossModel;
-
-
-    std::unique_ptr<MapSystem> m_mapSystem;
-    std::unique_ptr<FurRenderer> m_furRenderer;
-    bool m_furReady= false;
-
-    std::unique_ptr<WeaponSpawnSystem> m_weaponSpawnSystem; //  壁武器管理システム
-    WeaponSpawn* m_nearbyWeaponSpawn;                       //  プレイヤー近くの壁武器
-    //  --- 壁武器用モデル ---
-    std::unique_ptr<Model> m_pistolModel;   //  初期武器ピストル
-    std::unique_ptr<Model> m_shotgunModel;  //  ショットガンモデル
-    std::unique_ptr<Model> m_rifleModel;    //  ライフルモデル
-    std::unique_ptr<Model> m_sniperModel;   //  スナイパーモデル
-
-    //  --- グローリーキル用手とナイフのモデル
-    std::unique_ptr<Model> m_gloryKillArmModel;
-    std::unique_ptr<Model> m_gloryKillKnifeModel;
-
-    //  --- テクスチャ   ---
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_armDiffuseTexture;
-
-    //  === 影   ===
-    std::unique_ptr<Shadow> m_shadow;
-
-    std::unique_ptr<StunRing> m_stunRing;
-
-    std::unique_ptr<TargetMarker> m_targetMarker;
-    int m_guardLockTargetID = -1;
-    DirectX::XMFLOAT3 m_guardLockTargetPos = { 0, 0, 0 };
-
-    // 切断ピース描画用（起動時に1回だけ作成）
-    std::unique_ptr<DirectX::BasicEffect> m_sliceEffectTex;
-    std::unique_ptr<DirectX::BasicEffect> m_sliceEffectNoTex;
-    ComPtr<ID3D11InputLayout> m_sliceInputLayoutTex;
-    ComPtr<ID3D11InputLayout> m_sliceInputLayoutNoTex;
-    ComPtr<ID3D11RasterizerState> m_sliceNoCullRS;
-
-    void InitSliceRendering();
-
-
-    // === ゲームループの内部処理 ===
-    void Update();     // ゲームロジック更新
-    void Render();     // 描画処理
-
-
-    void Clear();
-    void CreateDevice();
-    void CreateResources();
-    void CreateRenderResources();
-
-    //void DrawGrid();
-    //void DrawCubes();
-    //void DrawHealthBar(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch);
-    void DrawBillboard();
-    void DrawWeapon();
-    void DrawShield();
-    void DrawWeaponSpawns();
-    void DrawParticles();
-    void DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix, bool skipGloryKillTarget = false);
-    void DrawSingleEnemy(const Enemy& enemy, DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix);
-    void DrawUI();
-   
-
-
-    void UpdateTitle();
-    void UpdateLoading();
-    void RenderLoading();
-    void UpdatePlaying();
-    void UpdatePlayerMovement(float deltaTime);   // 移動/ダッシュ/グローリーキル/押し戻し/武器ボブ
-    void UpdateShooting(float deltaTime);          // 射撃/レイキャスト/ヒット判定/ダメージ処理
-    void UpdateAmmoAndReload(float deltaTime);     // 弾切れ警告/リロード処理
-    void UpdateEnemyAI(float deltaTime);           // パスファインディング/分離/死亡処理
-    void UpdateWaveAndEffects(float deltaTime);    // ウェーブバナー/スコアHUD/爪痕エフェクト
-    void UpdateShieldSystem(float deltaTime);      // 盾投擲/ガード/チャージ/パリィ
-    void UpdateBossAttacks(float deltaTime);       // ボス攻撃（スラム/斬撃/ビーム/弾幕）
-
-    void UpdateGameOver();
-    void UpdateFade();
-
-    void RenderTitle();
-    void RenderPlaying();
-    void RenderGameOver();
-    void UpdateRanking();
-    void RenderRanking();
-    void RenderFade();
-    void RenderDamageFlash();
-    void RenderLowHealthVignette();
-    void RenderGloryKillFlash();
-
-
-
-    float CheckRayIntersection(
-        DirectX::XMFLOAT3 rayStart,
-        DirectX::XMFLOAT3 rayDir,
-        DirectX::XMFLOAT3 enemyPos,
-        float enemyRotationY,
-        EnemyType enemyType
-    );
-
-    void UpdateGloryKillAnimation(float deltaTime);
-
-    void PerformMeleeAttack();  //  近接攻撃を実行
-
-    // DirectXデバイス（GPU制御）
-    Microsoft::WRL::ComPtr<ID3D11Device>            m_d3dDevice;
-    Microsoft::WRL::ComPtr<ID3D11DeviceContext>     m_d3dContext;
-    Microsoft::WRL::ComPtr<IDXGISwapChain>          m_swapChain;
-
-    // レンダリングターゲット（描画先）
-    Microsoft::WRL::ComPtr<ID3D11RenderTargetView>  m_renderTargetView;
-    Microsoft::WRL::ComPtr<ID3D11DepthStencilView>  m_depthStencilView;
-
-    // ウィンドウ情報
-    HWND    m_window;
-    int     m_outputWidth;
-    int     m_outputHeight;
-
-    //  3D描画用
-    std::unique_ptr<DirectX::CommonStates>      m_states;
-    std::unique_ptr<DirectX::BasicEffect>       m_effect;
-    Microsoft::WRL::ComPtr<ID3D11InputLayout>   m_inputLayout;
-    std::unique_ptr<DirectX::GeometricPrimitive> m_cube;
-
-
-    
-    //std::unique_ptr<DirectX::GeometricPrimitive> m_muzzleFlashModel;
-    float m_weaponSwayX;
-    float m_weaponSwayY;
-    float m_lastCameraRotX;
-    float m_lastCameraRotY;
-    float m_weaponScale = 0.2f;    // 武器スケール
-    float m_weaponTiltX = -0.1f;     // X回転（上下）
-    float m_weaponRotX = 1.47f;   // X回転
-    float m_weaponRotY = 1.57f;   // Y回転
-    float m_weaponRotZ = -0.1f;   // Z回転
-
-    float m_weaponOffsetRight = 0.1f;   // 右方向
-    float m_weaponOffsetUp = -0.09f;  // 上方向（マイナスで下）
-    float m_weaponOffsetForward = 0.16f;    // 前方向
-
-    // 武器ボブ（武器だけ揺れる）
-    float m_weaponBobTimer = 0.0f;
-    float m_weaponBobSpeed = 10.0f;
-    float m_weaponBobStrength = 0.02f;  // 上下量
-    float m_weaponBobAmount = 0.0f;
-    float m_weaponLandingImpact = 0.0f;
-    float m_prevWeaponBobSin = 0.0f;
-    bool  m_isPlayerMoving = false;
-
-    // === 発砲リコイル ===
-    float m_weaponKickBack = 0.0f;     // 銃が後ろに下がる量（発砲で増加→戻る）
-    float m_weaponKickUp = 0.0f;       // 銃が上に跳ねる量
-    float m_weaponKickRot = 0.0f;      // 銃が回転する量（傾き）
-
-    float m_cameraRecoilX = 0.0f;      // カメラの上方向への反動（累積）
-    float m_cameraRecoilVelocity = 0.0f; // カメラ反動の速度（滑らかに戻す用）
-    
-    bool m_showMuzzleFlash;
-    float m_muzzleFlashTimer;
-
-
-    std::unique_ptr<DirectX::SpriteBatch> m_spriteBatch;
-
-
-    bool m_mouseClicked;
-    bool m_lastMouseState;
-
-    //  キューブ破壊
-    //bool m_cubesDestroyed[3];
-    int m_score;
-    // ビルボード表示用
-    bool m_showDamageDisplay;
-    float m_damageDisplayTimer;
-    DirectX::XMFLOAT3 m_damageDisplayPos;
-    int m_damageValue;
-
-   
-
-    GameState m_gameState;
-    float m_fadeAlpha;
-    bool m_fadingIn;
-    bool m_fadeActive;
-
-    // === ロード画面 ===
-    float m_loadingTimer = 0.0f;         // 経過時間
-    float m_loadingDuration = 3.5f;      // ロード画面の表示時間
-    int   m_loadingPhase = 0;            // 現在のメッセージフェーズ
-    float m_loadingBarTarget = 0.0f;     // バーの目標
-    float m_loadingBarCurrent = 0.0f;    // バーの現在値
-
-   
-
-    //  UI用
-    std::unique_ptr<DirectX::SpriteFont> m_font;
-    std::unique_ptr<DirectX::SpriteFont> m_fontLarge;
-
-    //  ランクテクスチャ
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_rankTextures[7];
-    bool m_rankTexturesLoaded = false;
-
-    //  コンボテクスチャ
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_comboDigitTex[10]; // 0 - 9
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_comboLabelTex;
-    bool m_comboTexturesLoaded = false;
-
-    //  FPS計算用
-    float m_fpsTimer;
-    int m_frameCount;
-    float m_currentFPS;
-
-    //  deltaTime計測用
-    LARGE_INTEGER m_lastFrameTime;
-    LARGE_INTEGER m_performanceFrequency;
-    float m_deltaTime;
-
-    //  スローモーション
-    float m_timeScale;      //  時間の流れる速度
-    float m_slowMoTimer;    //  スローモーション残り時間
-
-    //  アニメーション累積時間
-    float m_accumulatedAnimTime;
-
-    // タイプ別アニメタイマー [0]=NORMAL [1]=RUNNER [2]=TANK [3]=MIDBOSS [4]=BOSS
-    float m_typeWalkTimer[5] = {};
-    float m_typeAttackTimer[5] = {};
-
-    int m_gloryKillTargetID;
-    float m_gloryKillRange;
-
-    //  グローリーキル演出用
-    bool m_gloryKillActive;           // グローリーキル実行中
-    float m_gloryKillInvincibleTimer; // 無敵時間タイマー
-    float m_gloryKillFlashTimer;      // 画面フラッシュタイマー
-    float m_gloryKillFlashAlpha;      // フラッシュの透明度
-    Enemy* m_gloryKillTargetEnemy;    // ターゲット敵へのポインタ
-
-    //  グローリーキルカメラ用
-    bool m_gloryKillCameraActive;   //  グローリーキルカメラ有効
-    DirectX::XMFLOAT3 m_gloryKillCameraPos; //  カメラ位置
-    DirectX::XMFLOAT3 m_gloryKillCameraTarget;  //  カメラターゲット
-    float m_gloryKillCameraLerpTime;    //  カメラ補間時間
-
-
-    // グローリーキル腕・ナイフアニメーション用
-    bool m_gloryKillArmAnimActive;       // アニメーション再生中
-    float m_gloryKillArmAnimTime;        // アニメーション時間（0.0～1.0）
-    DirectX::XMFLOAT3 m_gloryKillArmPos; // 腕の位置
-    DirectX::XMFLOAT3 m_gloryKillArmRot; // 腕の回転
-
-    // === グローリーキルモデル調整用（デバッグ） ===
-    bool m_debugShowGloryKillArm = false;
-
-    float m_gloryKillArmScale = 0.010f;      // スケール
-    DirectX::XMFLOAT3 m_gloryKillArmOffset = { 0.48f, -0.238f, 0.217f };  // 前方, 上下, 左右
-
-    // ベース回転（モデルを正しい向きに補正）
-    DirectX::XMFLOAT3 m_gloryKillArmBaseRot = { 0.392f, 1.472f, 0.0f };
-    // アニメーション回転（グローリーキル動作で変化）
-    DirectX::XMFLOAT3 m_gloryKillArmAnimRot = { 0.0f, 0.0f, 0.0f };
-
-    float m_gloryKillKnifeScale = 0.01f;
-    DirectX::XMFLOAT3 m_gloryKillKnifeOffset = { 0.265f, 0.099f, -0.041f };
-    DirectX::XMFLOAT3 m_gloryKillKnifeBaseRot = { -0.196f, -0.098f, -0.229f };
-    DirectX::XMFLOAT3 m_gloryKillKnifeAnimRot = { 0.0f, -0.098f, -0.196f };
-
-    // グローリーキルアニメーション時間設定
-    static constexpr float GLORY_KILL_ANIM_DURATION = 1.2f;  // 全体の時間（秒）
-
-    // グローリーキル腕・ナイフモデル（プリミティブ）
-    std::unique_ptr<DirectX::GeometricPrimitive> m_gloryKillArm;   // 腕（円柱）
-    std::unique_ptr<DirectX::GeometricPrimitive> m_gloryKillKnife; // ナイフ（円錐）
-
-    // === ガウシアンブラー用（ポストプロセス） ===
-    // オフスクリーンレンダーターゲット
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> m_offscreenTexture;
-    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> m_offscreenRTV;
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_offscreenSRV;
-
-    //  流体レンダリング用シーンコピー(DrawFluidがシーンを読むために必要)
-    Microsoft::WRL::ComPtr<ID3D11Texture2D>          m_sceneCopyTex;
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_sceneCopySRV;
-
-    // ブラーシェーダー
-    Microsoft::WRL::ComPtr<ID3D11VertexShader> m_fullscreenVS;
-    Microsoft::WRL::ComPtr<ID3D11PixelShader> m_blurPS;
-    Microsoft::WRL::ComPtr<ID3D11Buffer> m_blurConstantBuffer;
-    Microsoft::WRL::ComPtr<ID3D11SamplerState> m_linearSampler;
-
-    // ブラーパラメータ構造体
+    // =========================================================
+    //  内部構造体・列挙型（メソッド宣言より前に定義が必要）
+    // =========================================================
+
+    // レイキャスト結果
+    struct RaycastResult
+    {
+        bool hit = false;
+        DirectX::XMFLOAT3 hitPoint = { 0, 0, 0 };
+        DirectX::XMFLOAT3 hitNormal = { 0, 0, 0 };
+        Enemy* hitEnemy = nullptr;
+    };
+
+    // 切断ピース（盾投げで敵を切った後の破片）
+    struct SlicedPiece
+    {
+        Microsoft::WRL::ComPtr<ID3D11Buffer> vertexBuffer;
+        Microsoft::WRL::ComPtr<ID3D11Buffer> indexBuffer;
+        UINT indexCount = 0;
+        DirectX::XMFLOAT3 position = { 0, 0, 0 };
+        DirectX::XMFLOAT3 velocity = { 0, 0, 0 };
+        DirectX::XMFLOAT3 rotation = { 0, 0, 0 };
+        DirectX::XMFLOAT3 angularVel = { 0, 0, 0 };
+        float lifetime = 5.0f;
+        bool active = false;
+        ID3D11ShaderResourceView* texture = nullptr;
+    };
+
+    // 肉片（敵死亡時に飛び散るキューブ）
+    struct Gib
+    {
+        btRigidBody* body = nullptr;
+        btCollisionShape* shape = nullptr;
+        float lifetime = 0.0f;
+        float size = 0.0f;
+        DirectX::XMFLOAT4 color = { 1, 0, 0, 1 };
+        bool hasLanded = false;
+        DirectX::XMFLOAT3 finalPos = { 0, 0, 0 };
+        DirectX::XMFLOAT4 finalRot = { 0, 0, 0, 1 };
+    };
+
+    // 弾道トレーサー（射撃時の光る軌跡）
+    struct BulletTrace
+    {
+        DirectX::XMFLOAT3 start;
+        DirectX::XMFLOAT3 end;
+        float lifetime;
+        float maxLifetime;
+        DirectX::XMFLOAT4 color;
+        float width;
+    };
+
+    // ブラーパラメータ（ポストプロセス用）
     struct BlurParams
     {
         DirectX::XMFLOAT2 texelSize;
@@ -420,68 +180,359 @@ private:
         float focalDepth;
     };
 
-    //  描画会深度(ぼかし用)
-    bool m_gloryKillDOFActive; //  描写会深度有効
-    float m_gloryKillDOFIntensity;  //  ぼかし強度
-    float m_gloryKillFocalDepth;
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> m_depthTexture;
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_depthSRV;
-    Microsoft::WRL::ComPtr<ID3D11Texture2D> m_offscreenDepthTexture;
-    Microsoft::WRL::ComPtr<ID3D11DepthStencilView> m_offscreenDepthStencilView;
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_offscreenDepthSRV;
+    // 盾の状態
+    enum class ShieldState {
+        Idle,       // 通常
+        Parrying,   // パリィ受付中
+        Guarding,   // ガード中
+        Charging,   // チャージ中
+        Throwing,   // 盾投擲中
+        Broken      // 盾破損
+    };
 
-    //  カメラシェイク
-    float m_cameraShake;        //  カメラの揺れ強度
-    float m_cameraShakeTimer;   //  揺れの残り時間
+    // =========================================================
+    //  メソッド宣言（実装ファイル別に整理）
+    // =========================================================
 
-    //  ヒットストップ
-    float m_hitStopTimer;   //  ヒットストップ残り時間
+    // --- GameCore.cpp: エンジンコア ---
+    void Update();
+    void Render();
+    void Clear();
+    void CreateDevice();
+    void CreateResources();
+    void CreateRenderResources();
+    void CreateBlurResources();
+    ID3D11VertexShader* LoadVertexShader(const wchar_t* filename);
+    ID3D11PixelShader* LoadPixelShader(const wchar_t* filename);
+    void DrawFullscreenQuad();
 
-    //  Effekseerの管理クラス
-    Effekseer::ManagerRef m_effekseerManager;
-    EffekseerRendererDX11::RendererRef m_effekseerRenderer;
+    // --- GamePlay.cpp: ゲームプレイロジック ---
+    void UpdatePlaying();
+    void UpdatePlayerMovement(float deltaTime);
+    void UpdateShooting(float deltaTime);
+    void UpdateAmmoAndReload(float deltaTime);
+    void UpdateEnemyAI(float deltaTime);
+    void UpdateWaveAndEffects(float deltaTime);
+    void UpdateShieldSystem(float deltaTime);
+    void UpdateBossAttacks(float deltaTime);
+    void UpdateGloryKillAnimation(float deltaTime);
+    void PerformMeleeAttack();
+    void SpawnHealthPickup();
+    void UpdateHealthPickups(float deltaTime);
+    void DrawHealthPickups(DirectX::XMMATRIX view, DirectX::XMMATRIX proj);
+    void SpawnScorePopup(int points, ScorePopupType type);
+    void UpdateScorePopups(float deltaTime);
+    void DrawScorePopups();
 
-    Effekseer::EffectRef m_effectShieldTrail;   //  盾トレイルえふぇっくと
-    Effekseer::Handle m_shieldTrailHandle = -1; //  再生ハンドル
-    float m_shieldTrailSpawnTimer = 0.0f;
+    // --- GameRender.cpp: 3D描画パイプライン ---
+    void RenderPlaying();
+    void DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix, bool skipGloryKillTarget = false);
+    void DrawSingleEnemy(const Enemy& enemy, DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix);
+    float CheckRayIntersection(DirectX::XMFLOAT3 rayStart, DirectX::XMFLOAT3 rayDir,
+        DirectX::XMFLOAT3 enemyPos, float enemyRotationY, EnemyType enemyType);
+    void DrawBillboard();
+    void DrawParticles();
+    void DrawWeapon();
+    void DrawShield();
+    void DrawWeaponSpawns();
+    void DrawUI();
 
-    // === ボスエフェクト ===
-    Effekseer::EffectRef m_effectSlashRed;       // 赤斬撃（パリィ不可）
-    Effekseer::EffectRef m_effectSlashGreen;     // 緑斬撃（パリィ可）
-    Effekseer::EffectRef m_effectGroundSlam;     // 地面叩きつけ衝撃波
-    Effekseer::EffectRef m_effectBeamRed;    // 赤ビーム（ガードのみ）
-    Effekseer::EffectRef m_effectBeamGreen;  // 緑ビーム（パリィ可）
-    Effekseer::Handle m_beamHandle = -1;         // ビームのハンドル（継続再生用）
+    // --- GameScene.cpp: シーン管理 ---
+    void UpdateTitle();
+    void UpdateLoading();
+    void UpdateGameOver();
+    void UpdateFade();
+    void UpdateRanking();
+    void RenderTitle();
+    void RenderLoading();
+    void RenderGameOver();
+    void RenderFade();
+    void RenderRanking();
 
-    Effekseer::EffectRef m_effectGunFire;
-    Effekseer::EffectRef m_effectAttackImpact;
-    Effekseer::EffectRef m_effectBossSpawn;
-    Effekseer::EffectRef m_effectEnemySpawn;
-    Effekseer::EffectRef m_effectParry;
+    // --- GameHUD.cpp: HUD描画 ---
+    void RenderDamageFlash();
+    void RenderLowHealthVignette();
+    void RenderSpeedLines();
+    void RenderDashOverlay();
+    void RenderReloadWarning();
+    void RenderWaveBanner();
+    void RenderScoreHUD();
+    void RenderClawDamage();
+    void RenderGloryKillFlash();
 
-    // === パリィ＆ボス攻撃チューニング ===
-    // パリィウィンドウ
-    // m_parryWindowDuration は既存（0.15f）→ スライダー化
-    // ジャンプ叩きつけ
-    float m_slamRadiusBoss = 8.0f;       // BOSS叩き範囲
-    float m_slamRadiusMidBoss = 6.0f;    // MIDBOSS叩き範囲
-    float m_slamDamageBoss = 20.0f;      // BOSSダメージ
-    float m_slamDamageMidBoss = 15.0f;   // MIDBOSSダメージ
-    float m_slamStunDamage = 60.0f;      // パリィ時スタン量
+    // --- GamePhysics.cpp: 物理演算 ---
+    void InitPhysics();
+    void CleanupPhysics();
+    void UpdatePhysics(float deltaTime);
+    RaycastResult RaycastPhysics(DirectX::XMFLOAT3 start, DirectX::XMFLOAT3 direction, float maxDistance);
+    void AddEnemyPhysicsBody(Enemy& enemy);
+    void UpdateEnemyPhysicsBody(Enemy& enemy);
+    void RemoveEnemyPhysicsBody(int enemyID);
+    bool CheckMeshCollision(DirectX::XMFLOAT3 position, float radius);
+    float GetMeshFloorHeight(float x, float z, float defaultY = 0.0f);
+    void BuildNavGrid();
+    void DrawNavGridDebug(DirectX::XMMATRIX view, DirectX::XMMATRIX proj);
+    void TestMeshSlice();
 
-    // 斬撃プロジェクタイル
-    float m_slashSpeed = 15.0f;          // 弾速
-    float m_slashDamage = 30.0f;         // ダメージ
-    float m_slashHitRadius = 2.0f;       // 当たり判定幅
-    float m_slashStunOnParry = 50.0f;    // パリィ時スタン量
+    // --- GameSlice.cpp: メッシュ切断 ---
+    void InitSliceRendering();
+    SlicedPiece CreateSlicedPiece(const std::vector<SliceVertex>& vertices,
+        const std::vector<uint32_t>& indices, DirectX::XMFLOAT3 position, DirectX::XMFLOAT3 velocity);
+    void ExecuteSliceTest();
+    void SliceEnemyWithShield(Enemy& enemy, DirectX::XMFLOAT3 shieldDir);
+    void UpdateSlicedPieces(float deltaTime);
+    void DrawSlicedPieces(DirectX::XMMATRIX view, DirectX::XMMATRIX proj);
+    void SpawnGibs(DirectX::XMFLOAT3 position, int count, float power);
+    void UpdateGibs(float deltaTime);
+    void DrawGibs(DirectX::XMMATRIX view, DirectX::XMMATRIX proj);
 
-    // ビーム
-    float m_beamWidth = 2.0f;            // ビーム幅
-    float m_beamLength = 20.0f;          // ビーム長さ
-    float m_beamDPS = 15.0f;             // 秒間ダメージ
-    float m_beamStunOnParry = 30.0f;     // パリィ時スタン量
+    // --- GameDebug.cpp: デバッグUI ---
+    void InitImGui();
+    void ShutdownImGui();
+    void DrawDebugUI();
+    void DrawHitboxes();
+    void DrawBulletTracers();
+    void DrawCapsule(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
+        const DirectX::XMFLOAT3& center, float radius, float cylinderHeight,
+        const DirectX::XMFLOAT4& color);
 
-    // ボスAIタイミング（秒）
+    // =========================================================
+    //  メンバ変数（カテゴリ別に整理）
+    // =========================================================
+
+    // --- DirectX 11 デバイス ---
+    Microsoft::WRL::ComPtr<ID3D11Device>            m_d3dDevice;
+    Microsoft::WRL::ComPtr<ID3D11DeviceContext>      m_d3dContext;
+    Microsoft::WRL::ComPtr<IDXGISwapChain>           m_swapChain;
+    Microsoft::WRL::ComPtr<ID3D11RenderTargetView>   m_renderTargetView;
+    Microsoft::WRL::ComPtr<ID3D11DepthStencilView>   m_depthStencilView;
+
+    // --- ウィンドウ ---
+    HWND m_window = nullptr;
+    int  m_outputWidth = 0;
+    int  m_outputHeight = 0;
+
+    // --- 描画ヘルパー ---
+    std::unique_ptr<DirectX::CommonStates>       m_states;
+    std::unique_ptr<DirectX::BasicEffect>        m_effect;
+    Microsoft::WRL::ComPtr<ID3D11InputLayout>    m_inputLayout;
+    std::unique_ptr<DirectX::GeometricPrimitive> m_cube;
+    std::unique_ptr<DirectX::SpriteBatch>        m_spriteBatch;
+    std::unique_ptr<DirectX::SpriteFont>         m_font;
+    std::unique_ptr<DirectX::SpriteFont>         m_fontLarge;
+
+
+    // --- ゲームシステム ---
+    std::unique_ptr<Player>          m_player;
+    std::unique_ptr<WeaponSystem>    m_weaponSystem;
+    std::unique_ptr<EnemySystem>     m_enemySystem;
+    std::unique_ptr<WaveManager>     m_waveManager;
+    std::unique_ptr<StyleRankSystem> m_styleRank;
+    std::unique_ptr<UISystem>        m_uiSystem;
+    std::unique_ptr<RankingSystem>   m_rankingSystem;
+    std::unique_ptr<ParticleSystem>  m_particleSystem;
+    std::unique_ptr<BloodSystem>     m_bloodSystem;
+    std::unique_ptr<GPUParticleSystem> m_gpuParticles;
+    std::unique_ptr<MapSystem>       m_mapSystem;
+    std::unique_ptr<Shadow>          m_shadow;
+    std::unique_ptr<FurRenderer>     m_furRenderer;
+    std::unique_ptr<WeaponSpawnSystem> m_weaponSpawnSystem;
+    std::unique_ptr<StunRing>        m_stunRing;
+    std::unique_ptr<TargetMarker>    m_targetMarker;
+    std::unique_ptr<TitleScene>      m_titleScene;
+    bool m_enemiesInitialized = false;
+    bool m_furReady = false;
+
+    // --- 3Dモデル ---
+    std::unique_ptr<Model> m_weaponModel;          // 武器
+    std::unique_ptr<Model> m_shieldModel;           // 盾
+    std::unique_ptr<Model> m_enemyModel;            // NORMAL
+    std::unique_ptr<Model> m_runnerModel;           // RUNNER
+    std::unique_ptr<Model> m_tankModel;             // TANK
+    std::unique_ptr<Model> m_midBossModel;          // MIDBOSS
+    std::unique_ptr<Model> m_bossModel;             // BOSS
+    std::unique_ptr<Model> m_testModel;             // テスト用
+    std::unique_ptr<Model> m_pistolModel;           // 壁武器: ピストル
+    std::unique_ptr<Model> m_shotgunModel;          // 壁武器: ショットガン
+    std::unique_ptr<Model> m_rifleModel;            // 壁武器: ライフル
+    std::unique_ptr<Model> m_sniperModel;           // 壁武器: スナイパー
+    std::unique_ptr<Model> m_gloryKillArmModel;     // グローリーキル: 腕
+    std::unique_ptr<Model> m_gloryKillKnifeModel;   // グローリーキル: ナイフ
+    WeaponSpawn* m_nearbyWeaponSpawn = nullptr;     // 近くの壁武器（非所有ポインタ）
+
+    // --- タイミング ---
+    LARGE_INTEGER m_lastFrameTime = {};
+    LARGE_INTEGER m_performanceFrequency = {};
+    float m_deltaTime = 0.0f;
+    float m_gameTime = 0.0f;
+    float m_timeScale = 1.0f;          // スローモーション倍率
+    float m_slowMoTimer = 0.0f;
+    float m_accumulatedAnimTime = 0.0f;
+    float m_fpsTimer = 0.0f;
+    int   m_frameCount = 0;
+    float m_currentFPS = 0.0f;
+    float m_typeWalkTimer[5] = {};     // タイプ別アニメタイマー
+    float m_typeAttackTimer[5] = {};
+
+    // --- ゲーム状態 ---
+    GameState m_gameState = GameState::TITLE;
+    float m_fadeAlpha = 0.0f;
+    bool  m_fadingIn = false;
+    bool  m_fadeActive = false;
+    int   m_score = 0;
+
+    // --- 武器表示 ---
+    float m_weaponSwayX = 0.0f;
+    float m_weaponSwayY = 0.0f;
+    float m_lastCameraRotX = 0.0f;
+    float m_lastCameraRotY = 0.0f;
+    float m_weaponScale = 0.2f;
+    float m_weaponTiltX = -0.1f;
+    float m_weaponRotX = 1.47f;
+    float m_weaponRotY = 1.57f;
+    float m_weaponRotZ = -0.1f;
+    float m_weaponOffsetRight = 0.1f;
+    float m_weaponOffsetUp = -0.09f;
+    float m_weaponOffsetForward = 0.16f;
+    float m_weaponBobTimer = 0.0f;
+    float m_weaponBobSpeed = 10.0f;
+    float m_weaponBobStrength = 0.02f;
+    float m_weaponBobAmount = 0.0f;
+    float m_weaponLandingImpact = 0.0f;
+    float m_prevWeaponBobSin = 0.0f;
+    bool  m_isPlayerMoving = false;
+
+    // --- 射撃リコイル ---
+    float m_weaponKickBack = 0.0f;
+    float m_weaponKickUp = 0.0f;
+    float m_weaponKickRot = 0.0f;
+    float m_cameraRecoilX = 0.0f;
+    float m_cameraRecoilVelocity = 0.0f;
+    bool  m_showMuzzleFlash = false;
+    float m_muzzleFlashTimer = 0.0f;
+    bool  m_mouseClicked = false;
+    bool  m_lastMouseState = false;
+
+    // --- カメラエフェクト ---
+    float m_cameraShake = 0.0f;
+    float m_cameraShakeTimer = 0.0f;
+    float m_hitStopTimer = 0.0f;
+    float m_currentFOV = 70.0f;
+    float m_targetFOV = 70.0f;
+    float m_speedLineAlpha = 0.0f;
+    float m_damageFlashAlpha = 0.0f;
+
+    // --- ビルボード / ダメージ表示 ---
+    bool  m_showDamageDisplay = false;
+    float m_damageDisplayTimer = 0.0f;
+    DirectX::XMFLOAT3 m_damageDisplayPos = {};
+    int   m_damageValue = 0;
+
+
+    // --- グローリーキル ---
+    int   m_gloryKillTargetID = -1;
+    float m_gloryKillRange = 0.0f;
+    bool  m_gloryKillActive = false;
+    float m_gloryKillInvincibleTimer = 0.0f;
+    float m_gloryKillFlashTimer = 0.0f;
+    float m_gloryKillFlashAlpha = 0.0f;
+    Enemy* m_gloryKillTargetEnemy = nullptr;
+    bool  m_gloryKillCameraActive = false;
+    DirectX::XMFLOAT3 m_gloryKillCameraPos = {};
+    DirectX::XMFLOAT3 m_gloryKillCameraTarget = {};
+    float m_gloryKillCameraLerpTime = 0.0f;
+    bool  m_gloryKillArmAnimActive = false;
+    float m_gloryKillArmAnimTime = 0.0f;
+    DirectX::XMFLOAT3 m_gloryKillArmPos = {};
+    DirectX::XMFLOAT3 m_gloryKillArmRot = {};
+    static constexpr float GLORY_KILL_ANIM_DURATION = 1.2f;
+
+    // グローリーキルモデル調整（デバッグ用）
+    bool  m_debugShowGloryKillArm = false;
+    float m_gloryKillArmScale = 0.010f;
+    DirectX::XMFLOAT3 m_gloryKillArmOffset = { 0.48f, -0.238f, 0.217f };
+    DirectX::XMFLOAT3 m_gloryKillArmBaseRot = { 0.392f, 1.472f, 0.0f };
+    DirectX::XMFLOAT3 m_gloryKillArmAnimRot = { 0.0f, 0.0f, 0.0f };
+    float m_gloryKillKnifeScale = 0.01f;
+    DirectX::XMFLOAT3 m_gloryKillKnifeOffset = { 0.265f, 0.099f, -0.041f };
+    DirectX::XMFLOAT3 m_gloryKillKnifeBaseRot = { -0.196f, -0.098f, -0.229f };
+    DirectX::XMFLOAT3 m_gloryKillKnifeAnimRot = { 0.0f, -0.098f, -0.196f };
+    std::unique_ptr<DirectX::GeometricPrimitive> m_gloryKillArm;
+    std::unique_ptr<DirectX::GeometricPrimitive> m_gloryKillKnife;
+
+    // --- シールドシステム ---
+    ShieldState m_shieldState = ShieldState::Idle;
+    float m_parryWindowTimer = 0.0f;
+    float m_parryWindowDuration = 0.15f;
+    bool  m_parrySuccess = false;
+    float m_parryFlashTimer = 0.0f;
+    bool  m_isGuarding = false;
+    float m_guardDamageReduction = 0.7f;
+    float m_shieldHP = 100.0f;
+    float m_shieldMaxHP = 100.0f;
+    float m_shieldRegenRate = 15.0f;
+    float m_shieldRegenDelay = 1.5f;
+    float m_shieldRegenDelayTimer = 0.0f;
+    float m_shieldBrokenTimer = 0.0f;
+    float m_shieldBrokenDuration = 3.0f;
+    float m_shieldBashTimer = 0.0f;
+    float m_shieldBashDuration = 0.5f;
+    float m_shieldGuardBlend = 0.0f;
+    float m_shieldDisplayHP = 100.0f;
+    float m_shieldGlowIntensity = 0.0f;
+    int   m_guardLockTargetID = -1;
+    DirectX::XMFLOAT3 m_guardLockTargetPos = {};
+
+    // シールドチャージ（突進攻撃）
+    float m_chargeTimer = 0.0f;
+    float m_chargeDuration = 0.5f;
+    float m_chargeSpeed = 30.0f;
+    DirectX::XMFLOAT3 m_chargeDirection = {};
+    DirectX::XMFLOAT3 m_chargeTarget = {};
+    float m_chargeDamage = 150.0f;
+    float m_chargeKnockback = 25.0f;
+    float m_chargeHitRadius = 3.0f;
+    float m_chargeEnergy = 0.0f;
+    float m_chargeEnergyRate = 0.7f;
+    bool  m_chargeReady = false;
+    bool  m_chargeHasTarget = false;
+    int   m_chargeTargetEnemyID = -1;
+
+    // シールドスロー（盾投げ）
+    DirectX::XMFLOAT3 m_thrownShieldPos = {};
+    DirectX::XMFLOAT3 m_thrownShieldDir = {};
+    float m_thrownShieldDist = 0.0f;
+    float m_thrownShieldMaxDist = 30.0f;
+    float m_thrownShieldSpeed = 40.0f;
+    bool  m_thrownShieldReturning = false;
+    float m_thrownShieldDamage = 80.0f;
+    float m_thrownShieldHitRadius = 2.0f;
+    float m_thrownShieldSpin = 0.0f;
+    std::set<int> m_thrownShieldHitEnemies;
+    std::set<int> m_thrownShieldReturnHitEnemies;
+
+    // 近接チャージ（Dark Ages式）
+    int   m_meleeCharges = 3;
+    int   m_meleeMaxCharges = 3;
+    float m_meleeRechargeTimer = 0.0f;
+    float m_meleeRechargeTime = 5.0f;
+    int   m_meleeAmmoRefill = 5;
+
+
+    // --- ボス攻撃パラメータ ---
+    float m_slamRadiusBoss = 8.0f;
+    float m_slamRadiusMidBoss = 6.0f;
+    float m_slamDamageBoss = 20.0f;
+    float m_slamDamageMidBoss = 15.0f;
+    float m_slamStunDamage = 60.0f;
+    float m_slashSpeed = 15.0f;
+    float m_slashDamage = 30.0f;
+    float m_slashHitRadius = 2.0f;
+    float m_slashStunOnParry = 50.0f;
+    float m_beamWidth = 2.0f;
+    float m_beamLength = 20.0f;
+    float m_beamDPS = 15.0f;
+    float m_beamStunOnParry = 30.0f;
     float m_jumpWindupTime = 0.5f;
     float m_jumpAirTime = 0.6f;
     float m_slamRecoveryTime = 1.5f;
@@ -491,174 +542,135 @@ private:
     float m_roarFireTime = 3.0f;
     float m_roarRecoveryTime = 2.0f;
     float m_bossAttackCooldownBase = 3.0f;
+    std::vector<BossProjectile> m_bossProjectiles;
 
-    // デバッグ表示
-    float m_lastParryAttemptTime = 0.0f;   // 最後にパリィ入力した時間
-    float m_lastParryResultTime = 0.0f;    // 最後にパリィ判定された時間
-    bool  m_lastParryWasSuccess = false;   // 最後のパリィ成功したか
-    int   m_parrySuccessCount = 0;         // パリィ成功回数
-    int   m_parryFailCount = 0;            // パリィ失敗回数
-    float m_gameTime = 0.0f;              // ゲーム経過時間
+    // --- ダッシュ演出 ---
+    bool  m_isSprinting = false;
+    float m_dashOverlayAlpha = 0.0f;
 
-   
+    // --- 弾薬 / リロード ---
+    float m_reloadWarningTimer = 0.0f;
+    float m_reloadWarningAlpha = 0.0f;
+    float m_reloadAnimProgress = 0.0f;
+    float m_reloadAnimOffset = 0.0f;
+    float m_reloadAnimTilt = 0.0f;
 
-    ////  読み込んだエフェクトデータ
-    //Effekseer::EffectRef m_effectBlood; //  血のエフェクト用(テスト)
-
-    // --- シールドの状態 ---
-    enum class ShieldState {
-        Idle,       // 盾を下ろしている（通常状態）
-        Parrying,   // パリィ受付中（右クリ押した瞬間?短時間）
-        Guarding,   // ガード中（右クリ押し続け）
-        Charging,   //  チャージ(右クリック中左クリック)
-        Throwing,
-        Broken      // 盾が壊れた（耐久値ゼロ、一時使用不能）
-    };
-    ShieldState m_shieldState = ShieldState::Idle;
-
-    // --- パリィ（ジャストガード）---
-    float m_parryWindowTimer = 0.0f;        // パリィ受付の残り時間
-    float m_parryWindowDuration = 0.15f;    // パリィ受付時間（短い！）
-    bool  m_parrySuccess = false;           // パリィ成功フラグ
-    float m_parryFlashTimer = 0.0f;         // パリィ成功エフェクトタイマー
-
-    // --- ガード（長押し）---
-    bool  m_isGuarding = false;             // 現在ガード中か
-    float m_guardDamageReduction = 0.7f;    // ガード時のダメージカット率（70%カット）
-
-    // --- シールド耐久値 ---
-    float m_shieldHP = 100.0f;              // 現在の耐久値
-    float m_shieldMaxHP = 100.0f;           // 最大耐久値
-    float m_shieldRegenRate = 15.0f;        // 毎秒の回復量（非ガード時）
-    float m_shieldRegenDelay = 1.5f;        // 被弾後のリジェネ開始までの遅延
-    float m_shieldRegenDelayTimer = 0.0f;   // リジェネ遅延タイマー
-    float m_shieldBrokenTimer = 0.0f;       // 壊れた後の復帰時間
-    float m_shieldBrokenDuration = 3.0f;    // 壊れてから復帰までの秒数
-
-    // --- 盾アニメーション ---
-    float m_shieldBashTimer = 0.0f;         // 盾アニメーション進行
-    float m_shieldBashDuration = 0.5f;      // 盾アニメーションの長さ
-    float m_shieldGuardBlend = 0.0f;        // ガード構えのブレンド値（0=下ろす、1=構え）
-
-    float m_shieldDisplayHP = 100.0f;       // 表示用HP（滑らかに追従）
-    float m_shieldGlowIntensity = 0.0f;     // グロウの強さ（0?1）
-
-    // --- シールドチャージ（突進） ---
-    float m_chargeTimer = 0.0f;              // チャージ経過時間
-    float m_chargeDuration = 0.5f;           // チャージ持続時間（秒）
-    float m_chargeSpeed = 30.0f;             // 突進速度（通常移動の約50倍）
-    DirectX::XMFLOAT3 m_chargeDirection = { 0,0,0 };  // 突進方向ベクトル
-    DirectX::XMFLOAT3 m_chargeTarget = { 0,0,0 };     // ロックオン対象の位置
-    float m_chargeDamage = 150.0f;           // チャージダメージ（雑魚即死級）
-    float m_chargeKnockback = 25.0f;         // ノックバック力
-    float m_chargeHitRadius = 3.0f;          // 突進の当たり判定半径
-    //  === チャージエネルギー   ===
-    float m_chargeEnergy = 0.0f;    //  現在のエネルギー 0 - 1
-    float m_chargeEnergyRate = 0.7f;    //  一秒あたりの田丸亮
-    bool m_chargeReady = false; //  満タンフラグ
-
-    //  === チャージ演出  ===
-    float m_currentFOV = 70.0f;  //  現在のFOV
-    float m_targetFOV = 70.0f;  //  目標FOV
-    float m_speedLineAlpha = 0.0f;  //  スピードラインの透明度
-
-    // === ダッシュ演出 ===
-    bool  m_isSprinting = false;           // ダッシュ中か
-    float m_dashOverlayAlpha = 0.0f;       // テクスチャオーバーレイのアルファ（0?1）
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_dashSpeedlineSRV;  // テクスチャ
-
-    // === 弾切れ警告UI ===
-    float m_reloadWarningTimer = 0.0f;     // 警告の表示時間（アニメ用）
-    float m_reloadWarningAlpha = 0.0f;     // フェードイン/アウト
-
-    void RenderSpeedLines();    //  スピードライン描画
-    void RenderDashOverlay();
-    void RenderReloadWarning();
-
-    // === ウェーブバナー ===
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_waveBannerNormalSRV;
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_waveBannerBossSRV;
+    // --- ウェーブバナー ---
     int   m_lastWaveNumber = 0;
     float m_waveBannerTimer = 0.0f;
     float m_waveBannerDuration = 2.5f;
     int   m_waveBannerNumber = 0;
     bool  m_waveBannerIsBoss = false;
 
-    void RenderWaveBanner();
+    // --- スコアHUD ---
+    float m_scoreDisplayValue = 0.0f;
+    float m_scoreFlashTimer = 0.0f;
+    float m_scoreShakeTimer = 0.0f;
+    int   m_lastDisplayedScore = 0;
 
-    // === スコアHUD ===
+    // --- 爪痕ダメージ ---
+    float m_clawTimer = 0.0f;
+    float m_clawDuration = 0.6f;
+
+    // --- ボスHPバー ---
+    float m_bossHpDisplay = 1.0f;
+    float m_bossHpTrail = 1.0f;
+
+    // --- ローディング画面 ---
+    float m_loadingTimer = 0.0f;
+    float m_loadingDuration = 3.5f;
+    int   m_loadingPhase = 0;
+    float m_loadingBarTarget = 0.0f;
+    float m_loadingBarCurrent = 0.0f;
+
+    // --- ゲームオーバー演出 ---
+    float m_gameOverTimer = 0.0f;
+    int   m_gameOverWave = 0;
+    int   m_gameOverScore = 0;
+    float m_gameOverCountUp = 0.0f;
+    int   m_gameOverRank = 0;           // 0=C, 1=B, 2=A, 3=S
+    float m_gameOverNoiseT = 0.0f;
+
+    // --- パリィデバッグ ---
+    float m_lastParryAttemptTime = 0.0f;
+    float m_lastParryResultTime = 0.0f;
+    bool  m_lastParryWasSuccess = false;
+    int   m_parrySuccessCount = 0;
+    int   m_parryFailCount = 0;
+
+    // --- プレイ中スタッツ ---
+    int   m_statKills = 0;
+    int   m_statHeadshots = 0;
+    int   m_statMeleeKills = 0;
+    int   m_statMaxCombo = 0;
+    int   m_statDamageDealt = 0;
+    int   m_statDamageTaken = 0;
+    int   m_statMaxStyleRank = 0;
+    float m_statSurvivalTime = 0.0f;
+
+    // --- ゲームオーバー時のスタッツ保存 ---
+    int   m_goKills = 0;
+    int   m_goHeadshots = 0;
+    int   m_goMeleeKills = 0;
+    int   m_goMaxCombo = 0;
+    int   m_goParryCount = 0;
+    int   m_goDamageDealt = 0;
+    int   m_goDamageTaken = 0;
+    int   m_goMaxStyleRank = 0;
+    float m_goSurvivalTime = 0.0f;
+    int   m_goStatScores[9] = {};
+    int   m_goTotalScore = 0;
+    float m_goStatCountUp[9] = {};
+
+    // --- ランキング ---
+    float m_rankingTimer = 0.0f;
+    int   m_newRecordRank = -1;
+    bool  m_rankingSaved = false;
+
+    // --- 名前入力 ---
+    bool  m_nameInputActive = false;
+    char  m_nameBuffer[16] = {};
+    int   m_nameLength = 0;
+    float m_nameKeyTimer = 0.0f;
+    bool  m_nameKeyWasDown = false;
+
+
+    // --- Effekseer ---
+    Effekseer::ManagerRef m_effekseerManager;
+    EffekseerRendererDX11::RendererRef m_effekseerRenderer;
+    Effekseer::EffectRef m_effectShieldTrail;
+    Effekseer::Handle m_shieldTrailHandle = -1;
+    float m_shieldTrailSpawnTimer = 0.0f;
+    Effekseer::EffectRef m_effectSlashRed;
+    Effekseer::EffectRef m_effectSlashGreen;
+    Effekseer::EffectRef m_effectGroundSlam;
+    Effekseer::EffectRef m_effectBeamRed;
+    Effekseer::EffectRef m_effectBeamGreen;
+    Effekseer::Handle m_beamHandle = -1;
+    Effekseer::EffectRef m_effectGunFire;
+    Effekseer::EffectRef m_effectAttackImpact;
+    Effekseer::EffectRef m_effectBossSpawn;
+    Effekseer::EffectRef m_effectEnemySpawn;
+    Effekseer::EffectRef m_effectParry;
+
+    // --- テクスチャ ---
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_armDiffuseTexture;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_dashSpeedlineSRV;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_waveBannerNormalSRV;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_waveBannerBossSRV;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreBackdropSRV;
-    float m_scoreDisplayValue = 0.0f;    // 表示中の数字（スムーズに追従）
-    float m_scoreFlashTimer = 0.0f;      // 加算時の赤フラッシュ
-    float m_scoreShakeTimer = 0.0f;      // 加算時の揺れ
-    int   m_lastDisplayedScore = 0;      // 前フレームのスコア（変化検出）
-
-    void RenderScoreHUD();
-
-    // === 爪痕ダメージエフェクト ===
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_clawDamageSRV;
-    float m_clawTimer = 0.0f;         // 演出タイマー（0で非表示）
-    float m_clawDuration = 0.6f;      // 演出の長さ
-
-    void RenderClawDamage();
-
-    bool m_chargeHasTarget = false;          // ロックオン対象がいるか
-    int m_chargeTargetEnemyID = -1;          // ロックオン対象の敵ID
-
-    // --- 近接チャージシステム（Dark Ages式） ---
-    int   m_meleeCharges = 3;          // 現在のチャージ数
-    int   m_meleeMaxCharges = 3;       // 最大チャージ数
-    float m_meleeRechargeTimer = 0.0f; // 自動回復タイマー
-    float m_meleeRechargeTime = 5.0f;  // 1チャージ回復に5秒
-    int   m_meleeAmmoRefill = 5;       // 1パンチで弾5発補充
-
-    // 近接チャージUI
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_meleeIconTexture;  // 拳アイコン
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_lowHealthVignetteSRV;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_bloodParticleSRV;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_whitePixel;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_meleeIconTexture;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_rankTextures[7];
+    bool m_rankTexturesLoaded = false;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_comboDigitTex[10];
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_comboLabelTex;
+    bool m_comboTexturesLoaded = false;
 
-    // --- シールドスロー（盾投げ） ---
-    DirectX::XMFLOAT3 m_thrownShieldPos = { 0,0,0 };    // 飛んでる盾の位置
-    DirectX::XMFLOAT3 m_thrownShieldDir = { 0,0,0 };    // 飛ぶ方向
-    float m_thrownShieldDist = 0.0f;                    // 飛んだ距離
-    float m_thrownShieldMaxDist = 30.0f;                // 最大飛距離
-    float m_thrownShieldSpeed = 40.0f;                  // 飛ぶ速度
-    bool  m_thrownShieldReturning = false;              // 戻り中フラグ
-    float m_thrownShieldDamage = 80.0f;                 // ヒットダメージ
-    float m_thrownShieldHitRadius = 2.0f;               // 当たり判定半径
-    float m_thrownShieldSpin = 0.0f;                    // 回転角度（見た目用
-
-    
-
-    std::set<int> m_thrownShieldHitEnemies;             // 行きで当たった敵（重複防止）
-    std::set<int> m_thrownShieldReturnHitEnemies;       // 帰りで当たった敵（重複防止）
-
-    //  ボスプロジェクトタイル
-    std::vector<BossProjectile> m_bossProjectiles;
-    // === 回復アイテム ===
-    std::vector<HealthPickup> m_healthPickups;
-    float m_pickupSpawnTimer = 0.0f;         // スポーン間隔タイマー
-    float m_pickupSpawnInterval = 12.0f;     // 何秒ごとにスポーン
-    int   m_maxPickups = 5;                  // 同時に存在できる最大数
-    float m_pickupRadius = 1.5f;             // 拾える距離
-
-    // === スコアポップアップ ===
-    std::vector<ScorePopup> m_scorePopups;
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreGlow;
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreGlowRed;
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreGlowBlue;
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreBurst;
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreSkull;
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreHeadshot;
-
-    void SpawnScorePopup(int points, ScorePopupType type);
-    void UpdateScorePopups(float deltaTime);
-    void DrawScorePopups();
-
-    void SpawnHealthPickup();
-    void UpdateHealthPickups(float deltaTime);
-    void DrawHealthPickups(DirectX::XMMATRIX view, DirectX::XMMATRIX proj);
-
-    // --- シールドHUDテクスチャ ---
+    // シールドHUDテクスチャ
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_shieldHudFrame;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_shieldHudFillBlue;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_shieldHudFillDanger;
@@ -672,257 +684,101 @@ private:
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_hpHudFillCritical;
     bool m_shieldHudLoaded = false;
 
-    bool m_showTutorial = true;
+    // スコアポップアップテクスチャ
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreGlow;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreGlowRed;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreGlowBlue;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreBurst;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreSkull;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_scoreHeadshot;
 
-    // === ボスHPバー演出 ===
-    float m_bossHpDisplay = 1.0f;      // 表示用HP（なめらかに減る）
-    float m_bossHpTrail = 1.0f;        // 残像HP（遅れて減る）
+    // --- ポストプロセス ---
+    Microsoft::WRL::ComPtr<ID3D11Texture2D>          m_offscreenTexture;
+    Microsoft::WRL::ComPtr<ID3D11RenderTargetView>   m_offscreenRTV;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_offscreenSRV;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D>          m_sceneCopyTex;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_sceneCopySRV;
+    Microsoft::WRL::ComPtr<ID3D11VertexShader>       m_fullscreenVS;
+    Microsoft::WRL::ComPtr<ID3D11PixelShader>        m_blurPS;
+    Microsoft::WRL::ComPtr<ID3D11Buffer>             m_blurConstantBuffer;
+    Microsoft::WRL::ComPtr<ID3D11SamplerState>       m_linearSampler;
+    bool  m_gloryKillDOFActive = false;
+    float m_gloryKillDOFIntensity = 0.0f;
+    float m_gloryKillFocalDepth = 0.0f;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D>          m_depthTexture;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_depthSRV;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D>          m_offscreenDepthTexture;
+    Microsoft::WRL::ComPtr<ID3D11DepthStencilView>   m_offscreenDepthStencilView;
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_offscreenDepthSRV;
 
-    // === リロードアニメーション ===
-    float m_reloadAnimProgress = 0.0f;  // 0.0?1.0（リロード進行度）
-    float m_reloadAnimOffset = 0.0f;    // 武器の下方向オフセット
-    float m_reloadAnimTilt = 0.0f;      // 武器の傾き
+    // 切断描画用
+    std::unique_ptr<DirectX::BasicEffect> m_sliceEffectTex;
+    std::unique_ptr<DirectX::BasicEffect> m_sliceEffectNoTex;
+    Microsoft::WRL::ComPtr<ID3D11InputLayout>       m_sliceInputLayoutTex;
+    Microsoft::WRL::ComPtr<ID3D11InputLayout>       m_sliceInputLayoutNoTex;
+    Microsoft::WRL::ComPtr<ID3D11RasterizerState>   m_sliceNoCullRS;
 
-    // === ゲームオーバー演出 ===
-    float m_gameOverTimer = 0.0f;       // 死んでからの経過時間（演出タイミング制御）
-    int   m_gameOverWave = 0;           // やられた時のウェーブ番号（リザルト表示用）
-    int   m_gameOverScore = 0;          // やられた時のスコア（リザルト表示用）
-    float m_gameOverCountUp = 0.0f;     // スコアカウントアップ用（0.0→1.0で最終スコアに到達）
-    
-    // === ランク＆演出 ===
-    int   m_gameOverRank = 0;           // 0=C, 1=B, 2=A, 3=S
-    float m_gameOverNoiseT = 0.0f;      // ノイズトランジション用（0→1で画面遷移）
+    // パーティクル描画用
+    std::unique_ptr<DirectX::BasicEffect>           m_particleEffect;
+    Microsoft::WRL::ComPtr<ID3D11InputLayout>       m_particleInputLayout;
 
-    // ===== プレイ中スタッツ（リアルタイム記録用） =====
-    int   m_statKills = 0;              // 総キル数
-    int   m_statHeadshots = 0;          // ヘッドショットキル数
-    int   m_statMeleeKills = 0;         // 近接キル数
-    int   m_statMaxCombo = 0;           // 最高コンボ数
-    int   m_statDamageDealt = 0;        // 与ダメージ合計
-    int   m_statDamageTaken = 0;        // 被ダメージ合計
-    int   m_statMaxStyleRank = 0;       // 最高スタイルランク（0=D ～ 6=SSS）
-    float m_statSurvivalTime = 0.0f;    // 生存時間（秒）
+    // --- Bullet Physics ---
+    std::unique_ptr<btDefaultCollisionConfiguration>      m_collisionConfiguration;
+    std::unique_ptr<btCollisionDispatcher>                 m_dispatcher;
+    std::unique_ptr<btBroadphaseInterface>                 m_broadphase;
+    std::unique_ptr<btSequentialImpulseConstraintSolver>   m_solver;
+    std::unique_ptr<btDiscreteDynamicsWorld>                m_dynamicsWorld;
+    std::map<int, btRigidBody*> m_enemyPhysicsBodies;
+    btTriangleMesh* m_mapTriMesh = nullptr;
+    btBvhTriangleMeshShape* m_mapMeshShape = nullptr;
+    btRigidBody* m_mapMeshBody = nullptr;
+    NavGrid m_navGrid;
+    bool m_debugDrawNavGrid = false;
 
-    // ===== ゲームオーバー時のスタッツ保存用 =====
-    int   m_goKills = 0;
-    int   m_goHeadshots = 0;
-    int   m_goMeleeKills = 0;
-    int   m_goMaxCombo = 0;
-    int   m_goParryCount = 0;
-    int   m_goDamageDealt = 0;
-    int   m_goDamageTaken = 0;
-    int   m_goMaxStyleRank = 0;
-    float m_goSurvivalTime = 0.0f;
+    // --- 切断/肉片データ ---
+    std::vector<SlicedPiece> m_slicedPieces;
+    std::vector<Gib> m_gibs;
+    std::vector<HealthPickup> m_healthPickups;
+    float m_pickupSpawnTimer = 0.0f;
+    float m_pickupSpawnInterval = 12.0f;
+    int   m_maxPickups = 5;
+    float m_pickupRadius = 1.5f;
+    std::vector<ScorePopup> m_scorePopups;
 
-    // ===== リザルトスコア =====
-    int   m_goStatScores[9] = {};       // 各スタッツのボーナスポイント
-    int   m_goTotalScore = 0;           // 合計スコア
-    float m_goStatCountUp[9] = {};      // 各行のカウントアップ進行（0→1）
-    std::unique_ptr<RankingSystem> m_rankingSystem;
-    float m_rankingTimer = 0.0f;
-    int   m_newRecordRank = -1;
-    bool  m_rankingSaved = false;
-    // === 名前入力 ===
-    bool  m_nameInputActive = false;    // 名前入力中かどうか
-    char  m_nameBuffer[16] = {};        // 入力バッファ（最大15文字+null）
-    int   m_nameLength = 0;             // 現在の入力文字数
-    float m_nameKeyTimer = 0.0f;        // キー入力クールダウン（連続入力防止）
-    bool  m_nameKeyWasDown = false;
-
-    // インスタンシング描画用（毎フレーム再利用でヒープ確保を防ぐ）
-    std::vector<DirectX::XMMATRIX> m_instWorlds;
-    std::vector<DirectX::XMVECTOR> m_instColors;
-    std::vector<std::string>       m_instAnims;
-    std::vector<float>             m_instTimes;
-
-    // === 旧インスタンシング用ワークバッファ（毎フレーム再利用）===
-    std::vector<InstanceData> m_normalDead;
-    std::vector<InstanceData> m_normalDeadHeadless;
-    std::vector<InstanceData> m_runnerDead;
-    std::vector<InstanceData> m_runnerDeadHeadless;
-    std::vector<InstanceData> m_tankAttackingHeadless;
-    std::vector<InstanceData> m_tankDead;
-    std::vector<InstanceData> m_tankDeadHeadless;
-    std::vector<InstanceData> m_midBossWalking;
-    std::vector<InstanceData> m_midBossAttacking;
-    std::vector<InstanceData> m_midBossWalkingHeadless;
-    std::vector<InstanceData> m_midBossAttackingHeadless;
-    std::vector<InstanceData> m_midBossDead;
-    std::vector<InstanceData> m_midBossDeadHeadless;
-    std::vector<InstanceData> m_bossWalking;
-    std::vector<InstanceData> m_bossAttackingJump;
-    std::vector<InstanceData> m_bossAttackingSlash;
-    std::vector<InstanceData> m_bossAttackingJumpHeadless;
-    std::vector<InstanceData> m_bossAttackingSlashHeadless;
-    std::vector<InstanceData> m_bossWalkingHeadless;
-    std::vector<InstanceData> m_bossDead;
-    std::vector<InstanceData> m_bossDeadHeadless;
-
-    // 血パーティクル用ソフト円テクスチャ
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_bloodParticleSRV;
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_lowHealthVignetteSRV;  // 充血テクスチャ
-    std::unique_ptr<DirectX::BasicEffect>            m_particleEffect;
-    Microsoft::WRL::ComPtr<ID3D11InputLayout>        m_particleInputLayout;
-
-    
-
-   
-
-    //  ==========================
-    //  === ImGui用  ===
-    //  ==========================
-    // 
-    //  デバッグ用
-    bool m_showDebugWindow;     //  デバッグウィンドウ表示
-    bool m_showHitboxes;        //  当たり判定表示
-    bool m_showHeadHitboxes;    //  頭の当たり判定を表示
-    bool m_showBulletTrajectory; //  弾の軌跡表示
-    bool m_showPhysicsHitboxes;
-
-    //  === リアルタイム調整用変数 ===
-    float m_debugRunnerSpeed;   //  Runner速度調整用
-    float m_debugTankSpeed;      //  Tank速度調整用
-    float m_debugRunnerHP;       //  RunnerHP調整用
-    float m_debugTankHP;         //  TankHP調整用
-    float m_debugHeadRadius;     //  頭の判定サイズ調整用
-    float m_rayStartY = 1.8f;   //  球の出る位置
-
-    //  === 弾の軌跡保存用 ===
-    struct BulletTrace
-    {
-        DirectX::XMFLOAT3 start;
-        DirectX::XMFLOAT3 end;
-        float lifetime;
-        float maxLifetime;             // 初期寿命（フェード計算用）
-        DirectX::XMFLOAT4 color;      // 武器ごとの色
-        float width;                   // トレーサーの太さ
-    };
-    std::vector<BulletTrace> m_bulletTraces;
-
-    
-
-
-    //  === ImGui 用変数   ===
-    void InitImGui();
-    void ShutdownImGui();
-    void DrawDebugUI();
-    void DrawHitboxes();
-    void DrawBulletTracers();  // ビルボード弾道トレーサー描画
-    void DrawCapsule(
-        DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
-        const DirectX::XMFLOAT3& center,
-        float radius,
-        float cylinderHeight,
-        const DirectX::XMFLOAT4& color);
-
-    //  === リアルタイム調整用のコンフィグ ===
-    EnemyTypeConfig
-    m_normalConfigDebug;
+    // --- デバッグ（ImGui） ---
+    bool  m_showDebugWindow = false;
+    bool  m_showHitboxes = false;
+    bool  m_showHeadHitboxes = false;
+    bool  m_showBulletTrajectory = false;
+    bool  m_showPhysicsHitboxes = false;
+    bool  m_useDebugHitboxes = false;
+    bool  m_showTutorial = true;
+    float m_debugRunnerSpeed = 0.0f;
+    float m_debugTankSpeed = 0.0f;
+    float m_debugRunnerHP = 0.0f;
+    float m_debugTankHP = 0.0f;
+    float m_debugHeadRadius = 0.0f;
+    float m_rayStartY = 1.8f;
+    EnemyTypeConfig m_normalConfigDebug;
     EnemyTypeConfig m_runnerConfigDebug;
     EnemyTypeConfig m_tankConfigDebug;
     EnemyTypeConfig m_midbossConfigDebug;
     EnemyTypeConfig m_bossConfigDebug;
-    bool m_useDebugHitboxes;  // デバッグ値を使うかどうか
+    std::vector<BulletTrace> m_bulletTraces;
 
-
-    //  === Bullet Physics構造体   ===
-    struct RaycastResult
-    {
-        bool hit;                       //  ヒットしたか
-        DirectX::XMFLOAT3 hitPoint;     //  ヒット位置
-        DirectX::XMFLOAT3 hitNormal;    //  ヒット法線
-        Enemy* hitEnemy;                //  ヒットした敵(nullptr = 壁)
-    };
-
-    //  === Bullet Physics ===
-    std::unique_ptr<btDefaultCollisionConfiguration> m_collisionConfiguration;
-    std::unique_ptr<btCollisionDispatcher> m_dispatcher;
-    std::unique_ptr<btBroadphaseInterface> m_broadphase;
-    std::unique_ptr<btSequentialImpulseConstraintSolver> m_solver;
-    std::unique_ptr<btDiscreteDynamicsWorld> m_dynamicsWorld;
-    std::map<int, btRigidBody*> m_enemyPhysicsBodies;
-
-    // === マップメッシュコライダー ===
-    btTriangleMesh* m_mapTriMesh = nullptr;   // 三角形データ
-    btBvhTriangleMeshShape* m_mapMeshShape = nullptr;  // コライダー形状
-    btRigidBody* m_mapMeshBody = nullptr;   // 剛体
-    // === ナビゲーショングリッド ===
-    NavGrid m_navGrid;
-    bool m_debugDrawNavGrid = false;
-
-
-    //  メッシュ切断テスト用
-    struct SlicedPiece
-    {
-        Microsoft::WRL::ComPtr<ID3D11Buffer> vertexBuffer;
-        Microsoft::WRL::ComPtr<ID3D11Buffer> indexBuffer;
-        UINT indexCount = 0;
-        DirectX::XMFLOAT3 position = { 0, 0, 0 };
-        DirectX::XMFLOAT3 velocity = { 0, 0, 0 };
-        DirectX::XMFLOAT3 rotation = { 0, 0, 0 };
-        DirectX::XMFLOAT3 angularVel = { 0, 0, 0 };  // 回転速度
-        float lifetime = 5.0f;
-        bool active = false;
-        ID3D11ShaderResourceView* texture = nullptr;
-    };
-    std::vector<SlicedPiece> m_slicedPieces;
-
-    // 切断結果からGPUバッファを作成
-    SlicedPiece CreateSlicedPiece(
-        const std::vector<SliceVertex>& vertices,
-        const std::vector<uint32_t>& indices,
-        DirectX::XMFLOAT3 position,
-        DirectX::XMFLOAT3 velocity);
-
-    // 切断テスト（キー入力で実行）
-    void ExecuteSliceTest();
-
-    // 敵を盾で切断する
-    void SliceEnemyWithShield(Enemy& enemy, DirectX::XMFLOAT3 shieldDir);
-
-    // 切断ピースの更新と描画
-    void UpdateSlicedPieces(float deltaTime);
-    void DrawSlicedPieces(DirectX::XMMATRIX view, DirectX::XMMATRIX proj);
-
-    // === 肉片物理 ===
-    struct Gib
-    {
-        btRigidBody* body;          // Bullet剛体
-        btCollisionShape* shape;    // 形状（解放用に保持）
-        float lifetime;             // 残り寿命（秒）
-        float size;                 // サイズ（スケール）
-        DirectX::XMFLOAT4 color;   // 色（肉片の色）
-        bool hasLanded = false;
-        DirectX::XMFLOAT3 finalPos;
-        DirectX::XMFLOAT4 finalRot;
-    };
-    std::vector<Gib> m_gibs;                            // 全肉片
-
-    void SpawnGibs(DirectX::XMFLOAT3 position, int count, float power);  // 肉片生成
-    void UpdateGibs(float deltaTime);                                     // 肉片更新
-    void DrawGibs(DirectX::XMMATRIX view, DirectX::XMMATRIX proj);      // 肉片描画
-
-    void InitPhysics();
-    void CleanupPhysics();
-    void UpdatePhysics(float deltaTime);
-    RaycastResult RaycastPhysics(
-        DirectX::XMFLOAT3 start,
-        DirectX::XMFLOAT3 direction,
-        float maxDistance
-    );
-    void AddEnemyPhysicsBody(Enemy& enemy);
-    // === メッシュコライダーとの衝突判定 ===
-    bool CheckMeshCollision(DirectX::XMFLOAT3 position, float radius);
-    float GetMeshFloorHeight(float x, float z, float defaultY = 0.0f);
-    void BuildNavGrid();
-    void TestMeshSlice();  // メッシュ切断テスト
-    void DrawNavGridDebug(DirectX::XMMATRIX view, DirectX::XMMATRIX proj);
-    void UpdateEnemyPhysicsBody(Enemy& enemy);
-    void RemoveEnemyPhysicsBody(int enemyID);
-
-    // === ポストプロセス用ヘルパー関数 ===
-    void CreateBlurResources();        // ブラー用リソース作成
-    void DrawFullscreenQuad();         // フルスクリーン四角形描画
-    ID3D11VertexShader* LoadVertexShader(const wchar_t* filename);
-    ID3D11PixelShader* LoadPixelShader(const wchar_t* filename);
+    // --- インスタンシング用ワークバッファ ---
+    std::vector<DirectX::XMMATRIX>  m_instWorlds;
+    std::vector<DirectX::XMVECTOR>  m_instColors;
+    std::vector<std::string>        m_instAnims;
+    std::vector<float>              m_instTimes;
+    std::vector<InstanceData> m_normalDead, m_normalDeadHeadless;
+    std::vector<InstanceData> m_runnerDead, m_runnerDeadHeadless;
+    std::vector<InstanceData> m_tankAttackingHeadless, m_tankDead, m_tankDeadHeadless;
+    std::vector<InstanceData> m_midBossWalking, m_midBossAttacking;
+    std::vector<InstanceData> m_midBossWalkingHeadless, m_midBossAttackingHeadless;
+    std::vector<InstanceData> m_midBossDead, m_midBossDeadHeadless;
+    std::vector<InstanceData> m_bossWalking, m_bossAttackingJump, m_bossAttackingSlash;
+    std::vector<InstanceData> m_bossAttackingJumpHeadless, m_bossAttackingSlashHeadless;
+    std::vector<InstanceData> m_bossWalkingHeadless, m_bossDead, m_bossDeadHeadless;
 };
+

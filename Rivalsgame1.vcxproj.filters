@@ -449,57 +449,21 @@
     <None Include="imgui-master\backends\imgui_impl_osx.mm">
       <Filter>imgui-master\backends</Filter>
     </None>
+    <None Include="Assets\Shaders\Common.hlsli">
+      <Filter>Assets\shader</Filter>
+    </None>
+    <None Include="Assets\Shaders\NoiseLib.hlsli">
+      <Filter>Assets\shader</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="FlagPS_Standalone.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="FlagVS_Standalone.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="PostProcessVS.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="BlurPS.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="GaussianBlur.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="FullscreenVS.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="BurnFlagPS.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="MenuPostProcessPS.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="TitleBackgroundPS.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="FurPS.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="FurVS.hlsl">
+    <FxCompile Include="Assets\Shaders\BloodFluidBlurPS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
     <FxCompile Include="Assets\Shaders\BloodFluidCompositePS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
     <FxCompile Include="Assets\Shaders\BloodFluidDepthPS.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Assets\Shaders\FullscreenQuadVS.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Assets\Shaders\BloodPS.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Assets\Shaders\BloodVS.hlsl">
-      <Filter>Assets\shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Assets\Shaders\BloodFluidBlurPS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
     <FxCompile Include="Assets\Shaders\BloodParticleCS.hlsl">
@@ -509,6 +473,36 @@
       <Filter>Assets\shader</Filter>
     </FxCompile>
     <FxCompile Include="Assets\Shaders\BloodParticleVS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\BloodPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\BloodVS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\BlurPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\BurnFlagPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\FullscreenQuadVS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\FurPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\FurVS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\GaussianBlur.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\MenuPostProcessPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\PostProcessVS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
     <FxCompile Include="Assets\Shaders\SkinnedPS.hlsl">
@@ -526,13 +520,20 @@
     <FxCompile Include="Assets\Shaders\TargetMarkerPS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <CopyFileToFolders Include="FireParticlePS_Standalone.hlsl">
+    <FxCompile Include="Assets\Shaders\TitleBackgroundPS.hlsl">
       <Filter>Assets\shader</Filter>
-    </CopyFileToFolders>
-    <CopyFileToFolders Include="FireParticleVS_Standalone.hlsl">
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\FireParticlePS.hlsl">
       <Filter>Assets\shader</Filter>
-    </CopyFileToFolders>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\FireParticleVS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\FlagPS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\FlagVS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>

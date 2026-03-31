@@ -55,30 +55,24 @@ bool StunRing::Initialize(ID3D11Device* device)
 // ============================================================
 bool StunRing::CreateShaders(ID3D11Device* device)
 {
-    UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
-#ifdef _DEBUG
-    flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#endif
+    // ========================================
+    // 【役割】スタンリング用シェーダーを .cso から読み込む
+    // 【理由】ランタイムコンパイル廃止 → 起動高速化＆配布時に .hlsl 不要
+    // ========================================
 
-    Microsoft::WRL::ComPtr<ID3DBlob> vsBlob, psBlob, errorBlob;
     HRESULT hr;
+    Microsoft::WRL::ComPtr<ID3DBlob> blob;
 
     // --- 頂点シェーダー ---
-    hr = D3DCompileFromFile(
-        L"Assets/Shaders/StunRingVS.hlsl", nullptr, nullptr,
-        "main", "vs_5_0", flags, 0,
-        vsBlob.GetAddressOf(), errorBlob.GetAddressOf()
-    );
+    hr = D3DReadFileToBlob(L"Assets/Shaders/StunRingVS.cso", &blob);
     if (FAILED(hr))
     {
-        if (errorBlob)
-            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        OutputDebugStringA("[StunRing] VS compile FAILED!\n");
+        OutputDebugStringA("[StunRing] StunRingVS.cso load FAILED!\n");
         return false;
     }
 
     hr = device->CreateVertexShader(
-        vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
+        blob->GetBufferPointer(), blob->GetBufferSize(),
         nullptr, m_vs.GetAddressOf()
     );
     if (FAILED(hr)) return false;
@@ -89,36 +83,30 @@ bool StunRing::CreateShaders(ID3D11Device* device)
         { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
     hr = device->CreateInputLayout(
-        layout, 2,
-        vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
+        layout, ARRAYSIZE(layout),
+        blob->GetBufferPointer(), blob->GetBufferSize(),
         m_inputLayout.GetAddressOf()
     );
     if (FAILED(hr)) return false;
 
     // --- ピクセルシェーダー ---
-    hr = D3DCompileFromFile(
-        L"Assets/Shaders/StunRingPS.hlsl", nullptr, nullptr,
-        "main", "ps_5_0", flags, 0,
-        psBlob.GetAddressOf(), errorBlob.GetAddressOf()
-    );
+    blob.Reset();
+    hr = D3DReadFileToBlob(L"Assets/Shaders/StunRingPS.cso", &blob);
     if (FAILED(hr))
     {
-        if (errorBlob)
-            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-        OutputDebugStringA("[StunRing] PS compile FAILED!\n");
+        OutputDebugStringA("[StunRing] StunRingPS.cso load FAILED!\n");
         return false;
     }
 
     hr = device->CreatePixelShader(
-        psBlob->GetBufferPointer(), psBlob->GetBufferSize(),
+        blob->GetBufferPointer(), blob->GetBufferSize(),
         nullptr, m_ps.GetAddressOf()
     );
     if (FAILED(hr)) return false;
 
-    OutputDebugStringA("[StunRing] Shaders compiled OK\n");
+    OutputDebugStringA("[StunRing] Shaders loaded from CSO\n");
     return true;
 }
-
 // ============================================================
 // クワッド（四角形）作成
 // ============================================================

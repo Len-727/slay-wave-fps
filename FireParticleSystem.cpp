@@ -231,107 +231,71 @@ void FireParticleSystem::CreateBuffers(ID3D11Device* device)
 // ========================================
 // シェーダー作成
 // ========================================
-
 void FireParticleSystem::CreateShaders(ID3D11Device* device)
 {
+
     HRESULT hr;
-    Microsoft::WRL::ComPtr<ID3DBlob> vsBlob;
-    Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+    Microsoft::WRL::ComPtr<ID3DBlob> blob;  // .cso バイナリの入れ物
 
-    hr = D3DCompileFromFile(
-        L"FireParticleVS_Standalone.hlsl",
-        nullptr,
-        nullptr,
-        "main",
-        "vs_5_0",
-        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
-        0,
-        &vsBlob,
-        &errorBlob
-    );
-
+    // ========================================
+    // 頂点シェーダー（FireParticleVS）
+    // 【役割】各パーティクル頂点の位置をビルボード展開する
+    // ========================================
+    hr = D3DReadFileToBlob(L"Assets/Shaders/FireParticleVS.cso", &blob);
     if (FAILED(hr))
     {
-        if (errorBlob)
-        {
-            //OutputDebugStringA("[FIRE VS] ");
-            //OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-            //OutputDebugStringA("\n");
-        }
-        throw std::runtime_error("Failed to compile FireParticleVS_Standalone.hlsl");
+        OutputDebugStringA("[FIRE] FireParticleVS.cso load FAILED\n");
+        throw std::runtime_error("Failed to load FireParticleVS.cso");
     }
 
     hr = device->CreateVertexShader(
-        vsBlob->GetBufferPointer(),
-        vsBlob->GetBufferSize(),
-        nullptr,
-        &m_vertexShader
+        blob->GetBufferPointer(), blob->GetBufferSize(),
+        nullptr, &m_vertexShader
     );
-
     if (FAILED(hr))
-    {
         throw std::runtime_error("Failed to create FireParticle VS");
-    }
 
-    Microsoft::WRL::ComPtr<ID3DBlob> psBlob;
-
-    hr = D3DCompileFromFile(
-        L"FireParticlePS_Standalone.hlsl",
-        nullptr,
-        nullptr,
-        "main",
-        "ps_5_0",
-        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,
-        0,
-        &psBlob,
-        &errorBlob
-    );
-
-    if (FAILED(hr))
-    {
-        if (errorBlob)
-        {
-            //OutputDebugStringA("[FIRE PS] ");
-            //OutputDebugStringA((char*)errorBlob->GetBufferPointer());
-            //OutputDebugStringA("\n");
-        }
-        throw std::runtime_error("Failed to compile FireParticlePS_Standalone.hlsl");
-    }
-
-    hr = device->CreatePixelShader(
-        psBlob->GetBufferPointer(),
-        psBlob->GetBufferSize(),
-        nullptr,
-        &m_pixelShader
-    );
-
-    if (FAILED(hr))
-    {
-        throw std::runtime_error("Failed to create FireParticle PS");
-    }
-
+    // ========================================
+    // 入力レイアウト（頂点データの構造を GPU に教える）
+    // ========================================
     D3D11_INPUT_ELEMENT_DESC layout[] =
     {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "PSIZE", 0, DXGI_FORMAT_R32_FLOAT, 0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 0,  D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT,  0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "PSIZE",    0, DXGI_FORMAT_R32_FLOAT,           0, 36, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
 
     hr = device->CreateInputLayout(
-        layout,
-        ARRAYSIZE(layout),
-        vsBlob->GetBufferPointer(),
-        vsBlob->GetBufferSize(),
+        layout, ARRAYSIZE(layout),
+        blob->GetBufferPointer(), blob->GetBufferSize(),
         &m_inputLayout
     );
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create fire particle input layout");
 
+    OutputDebugStringA("[FIRE] FireParticleVS loaded from CSO\n");
+
+    // ========================================
+    // ピクセルシェーダー（FireParticlePS）
+    // 【役割】各パーティクルの色とアルファを計算する
+    // ========================================
+    blob.Reset();  // 前の blob を解放してから再利用
+    hr = D3DReadFileToBlob(L"Assets/Shaders/FireParticlePS.cso", &blob);
     if (FAILED(hr))
     {
-        throw std::runtime_error("Failed to create input layout");
+        OutputDebugStringA("[FIRE] FireParticlePS.cso load FAILED\n");
+        throw std::runtime_error("Failed to load FireParticlePS.cso");
     }
 
-    //OutputDebugStringA("[FIRE] Shaders created successfully\n");
+    hr = device->CreatePixelShader(
+        blob->GetBufferPointer(), blob->GetBufferSize(),
+        nullptr, &m_pixelShader
+    );
+    if (FAILED(hr))
+        throw std::runtime_error("Failed to create FireParticle PS");
+
+    OutputDebugStringA("[FIRE] FireParticlePS loaded from CSO\n");
 }
 
 void FireParticleSystem::CreateTexture(ID3D11Device* device)
