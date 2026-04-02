@@ -16,6 +16,7 @@
 // ============================================================
 
 #include "Game.h"
+#include "Player.h"
 
 using namespace DirectX;
 
@@ -390,6 +391,52 @@ float Game::GetMeshFloorHeight(float x, float z, float defaultY)
 }
 
 // ============================================================
+// GetFloorHeightBelow - 指定Y座標より下の床を検出
+//
+// 【違い】GetMeshFloorHeight は Y=100 から撃つため天井にヒットする。
+//   こちらは startY から下だけを探すので、頭上の天井を無視できる。
+// 【用途】ジャンプ中のプレイヤーの着地判定
+// ============================================================
+float Game::GetFloorHeightBelow(float x, float startY, float z)
+{
+    if (!m_dynamicsWorld || !m_mapMeshBody) return -9999.0f;
+
+    // レイの始点：足元の少し上（地面に埋まってる時も拾えるように）
+    constexpr float RAY_MARGIN = 0.5f;
+    btVector3 rayFrom(x, startY + RAY_MARGIN, z);
+    btVector3 rayTo(x, -100.0f, z);
+
+    // マップメッシュだけに当たるコールバック（GetMeshFloorHeightと同じ仕組み）
+    struct MapOnlyRayCallback : public btCollisionWorld::ClosestRayResultCallback
+    {
+        btRigidBody* mapBody;
+
+        MapOnlyRayCallback(const btVector3& from, const btVector3& to, btRigidBody* map)
+            : ClosestRayResultCallback(from, to), mapBody(map) {
+        }
+
+        btScalar addSingleResult(btCollisionWorld::LocalRayResult& rayResult,
+            bool normalInWorldSpace) override
+        {
+            if (rayResult.m_collisionObject != mapBody)
+                return 1.0f;   // マップ以外は無視
+            return ClosestRayResultCallback::addSingleResult(rayResult, normalInWorldSpace);
+        }
+    };
+
+    MapOnlyRayCallback rayCallback(rayFrom, rayTo, m_mapMeshBody);
+    m_dynamicsWorld->rayTest(rayFrom, rayTo, rayCallback);
+
+    if (rayCallback.hasHit())
+    {
+        return rayCallback.m_hitPointWorld.getY();
+    }
+
+    return -9999.0f;   // 床が見つからない
+}
+
+
+// ============================================================
 //  BuildNavGrid - ナビゲーショングリッドの自動構築
 //
 //  【仕組み】
@@ -654,7 +701,7 @@ void Game::DrawNavGridDebug(DirectX::XMMATRIX view, DirectX::XMMATRIX proj)
             if (dx * dx + dz * dz > DRAW_RANGE_SQ) continue;
 
             // そのマスの地面の高さを取得（壁の上を蓋にする）
-            float cellY = GetMeshFloorHeight(wx, wz, pPos.y - 1.8f);
+            float cellY = GetMeshFloorHeight(wx, wz, pPos.y - Player::EYE_HEIGHT);
 
             float cellSize = m_navGrid.GetCellSize();
 

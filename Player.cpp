@@ -5,7 +5,7 @@
 // コンストラクタ
 // 【役割】初期位置、HP100、ポイント500で開始
 Player::Player() :
-    m_position(0.0f, 1.8f, -0.5f),   // 初期位置
+    m_position(0.0f, EYE_HEIGHT, -0.5f),   // 初期位置
     m_rotation(0.0f, 0.0f, 0.0f),    // 正面を向く
     m_health(100),
     m_points(500),
@@ -15,7 +15,14 @@ Player::Player() :
     m_firstMouse(true),
     m_lastMouseX(0),
     m_lastMouseY(0),
-    m_meleeAttackCooldown(0.0f)
+    m_meleeAttackCooldown(0.0f),
+    m_velocityY(0.0f),          // 初期速度ゼロ（落下していない）
+    m_isGrounded(true),         // 最初は地面の上にいる
+    m_coyoteTimer(0.0f),        // 猶予なし（地面にいるから不要）
+    m_jumpBufferTimer(0.0f),     // バッファなし
+    m_landingCameraOffset(0.0f),
+    m_wasGroundedLastFrame(true),
+    m_lastFallSpeed(0.0f)
 {
 }
 
@@ -33,6 +40,44 @@ void Player::Update(HWND window)
     // 移動処理
     UpdateMovement();
 
+    // === 着地演出の更新 ===
+    {
+        const float deltaTime = 1.0f / 60.0f;  // TODO: 外部から受け取る
+
+        // 空中にいる間、落下速度を記録し続ける
+        // （Land()でvelocityYが0にリセットされるので、着地後は取れない）
+        if (!m_isGrounded)
+        {
+            // velocityYが負（落下中）なら速度を記録
+            if (m_velocityY < 0.0f)
+                m_lastFallSpeed = -m_velocityY;  // 正の値に変換して保存
+        }
+
+        // 着地した瞬間を検出（前フレーム空中 → 今フレーム接地）
+        if (m_isGrounded && !m_wasGroundedLastFrame)
+        {
+            // 落下速度に応じて沈み量を計算
+            // 速度0 → DIP_MIN、速度LAND_FALL_SPEED_REF以上 → DIP_MAX
+            float ratio = m_lastFallSpeed / LAND_FALL_SPEED_REF;
+            if (ratio > 1.0f) ratio = 1.0f;  // 1.0で頭打ち
+
+            float dipAmount = LAND_CAMERA_DIP_MIN
+                + (LAND_CAMERA_DIP_MAX - LAND_CAMERA_DIP_MIN) * ratio;
+            m_landingCameraOffset = -dipAmount;
+
+            m_lastFallSpeed = 0.0f;  // リセット
+        }
+
+        // 沈み込みからゼロに向かって滑らかに戻る
+        if (m_landingCameraOffset < 0.0f)
+        {
+            m_landingCameraOffset += LAND_CAMERA_RECOVER * deltaTime;
+            if (m_landingCameraOffset > 0.0f)
+                m_landingCameraOffset = 0.0f;
+        }
+
+        m_wasGroundedLastFrame = m_isGrounded;
+    }
     // マウス視点回転
     UpdateMouseLook(window);
 
@@ -69,61 +114,118 @@ void Player::AddCameraRecoil(float pitchRecoil, float yawRecoil)
     m_rotation.y += randomYaw;
 }
 
-// UpdateMovement - 移動処理
+// UpdateMovement - 移動 + 重力 + ジャンプ
 void Player::UpdateMovement()
 {
-    float moveSpeed = 0.1f;
+    // --- deltaTime（1フレームの経過秒数）---
+    // TODO: 本来はタイマーから取得すべき。現在は60FPS固定の暫定値。
+    const float deltaTime = 1.0f / 60.0f;
 
-    //  シフトでダッシュ（1.8倍速）
+    // ========================================
+    //  水平移動（WASD）
+    // ========================================
+    float moveSpeed = MOVE_SPEED_WALK;
+
     if (GetAsyncKeyState(VK_SHIFT) & 0x8000)
-        moveSpeed = 0.13f;
+    {
+        moveSpeed = MOVE_SPEED_RUN;
+    }
 
     // W - 前進
     if (GetAsyncKeyState('W') & 0x8000)
     {
-        float forwardX = sinf(m_rotation.y);
-        float forwardZ = cosf(m_rotation.y);
-        m_position.x += forwardX * moveSpeed;
-        m_position.z += forwardZ * moveSpeed;
+        m_position.x += sinf(m_rotation.y) * moveSpeed;
+        m_position.z += cosf(m_rotation.y) * moveSpeed;
     }
-
     // S - 後退
     if (GetAsyncKeyState('S') & 0x8000)
     {
-        float forwardX = sinf(m_rotation.y);
-        float forwardZ = cosf(m_rotation.y);
-        m_position.x -= forwardX * moveSpeed;
-        m_position.z -= forwardZ * moveSpeed;
+        m_position.x -= sinf(m_rotation.y) * moveSpeed;
+        m_position.z -= cosf(m_rotation.y) * moveSpeed;
     }
-
     // A - 左移動
     if (GetAsyncKeyState('A') & 0x8000)
     {
-        float leftX = sinf(m_rotation.y - 1.57f);  // 1.57 ? π/2
-        float leftZ = cosf(m_rotation.y - 1.57f);
-        m_position.x += leftX * moveSpeed;
-        m_position.z += leftZ * moveSpeed;
+        m_position.x += sinf(m_rotation.y - HALF_PI) * moveSpeed;
+        m_position.z += cosf(m_rotation.y - HALF_PI) * moveSpeed;
     }
-
     // D - 右移動
     if (GetAsyncKeyState('D') & 0x8000)
     {
-        float rightX = sinf(m_rotation.y + 1.57f);
-        float rightZ = cosf(m_rotation.y + 1.57f);
-        m_position.x += rightX * moveSpeed;
-        m_position.z += rightZ * moveSpeed;
+        m_position.x += sinf(m_rotation.y + HALF_PI) * moveSpeed;
+        m_position.z += cosf(m_rotation.y + HALF_PI) * moveSpeed;
     }
 
-    //  目線の高さ
-    float eyeHeight = 1.8f;
+    // ========================================
+    //  ジャンプ入力
+    // ========================================
+    bool jumpPressed = (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
 
-    // もし高さが目線より下がっていたら、強制的に持ち上げる（床判定）
-    // (重力処理を入れたときに、これがないと無限に落ちていく)
-    if (m_position.y < eyeHeight)
+    // ジャンプバッファ：着地前の先行入力を覚えておく
+    if (jumpPressed)
     {
-        m_position.y = eyeHeight;
+        m_jumpBufferTimer = JUMP_BUFFER;
+    }
+    else if (m_jumpBufferTimer > 0.0f)
+    {
+        m_jumpBufferTimer -= deltaTime;
     }
 
+    // コヨーテタイム：地面を離れた直後の猶予
+    if (m_isGrounded)
+    {
+        m_coyoteTimer = COYOTE_TIME;
+    }
+    else
+    {
+        m_coyoteTimer -= deltaTime;
+    }
+
+    // ジャンプ実行
+    bool canJump = (m_coyoteTimer > 0.0f);
+    bool wantsJump = (m_jumpBufferTimer > 0.0f);
+
+    if (canJump && wantsJump)
+    {
+        m_velocityY = JUMP_FORCE;
+        m_isGrounded = false;
+        m_coyoteTimer = 0.0f;
+        m_jumpBufferTimer = 0.0f;
+
+        // === 前方ブースト ===
+        // WASDのどれかを押しながらジャンプ → その方向に少し飛ぶ
+        // 止まったままジャンプ → 真上に飛ぶ（ブーストなし）
+        bool anyMoveKey =
+            (GetAsyncKeyState('W') & 0x8000) ||
+            (GetAsyncKeyState('S') & 0x8000) ||
+            (GetAsyncKeyState('A') & 0x8000) ||
+            (GetAsyncKeyState('D') & 0x8000);
+
+        if (anyMoveKey)
+        {
+            m_position.x += sinf(m_rotation.y) * JUMP_FORWARD_BOOST;
+            m_position.z += cosf(m_rotation.y) * JUMP_FORWARD_BOOST;
+        }
+    }
+
+    // ========================================
+    //  重力の適用
+    // ========================================
+    m_velocityY -= GRAVITY * deltaTime;
+    m_position.y += m_velocityY * deltaTime;
+
+    // ========================================
+    //  安全ネット
+    // ========================================
+    // 本当の床判定は GamePlay.cpp の GetMeshFloorHeight が行う。
+    // ここは「ワールド外に落下した場合」の保険。
+    constexpr float WORLD_FLOOR = -200.0f;  // マップ最低地点より十分下
+    if (m_position.y <= WORLD_FLOOR)
+    {
+        m_position.y = WORLD_FLOOR;
+        m_velocityY = 0.0f;
+        m_isGrounded = true;
+    }
 }
 
 // UpdateMouseLook - マウス視点回転
@@ -222,9 +324,6 @@ void Player::Draw(
 // TakeDamage - ダメージを受ける
 bool Player::TakeDamage(int damage)
 {
-    return false;
-
-
     // 無敵時間中はダメージなし
     if (m_damageTimer > 0.0f)
         return false;

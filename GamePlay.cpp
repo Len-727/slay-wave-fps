@@ -588,8 +588,70 @@ void Game::UpdatePlayerMovement(float deltaTime)
 
         //  床の高さに合わせてY座標を更新
         {
-            float floorY = GetMeshFloorHeight(newPosition.x, newPosition.z, newPosition.y - 1.8f);
-            newPosition.y = floorY + 1.8f;  // 1.8 = 目の高さ
+            // プレイヤーの足元から真下にレイを撃つ
+           // → 天井ではなく、足元の床だけがヒットする
+            float playerFeetY = newPosition.y - Player::EYE_HEIGHT;
+            float floorY = GetFloorHeightBelow(
+                newPosition.x, playerFeetY, newPosition.z);
+
+            if (floorY > -9000.0f)
+            {
+                float groundLevel = floorY + Player::EYE_HEIGHT;
+
+                if (newPosition.y <= groundLevel)
+                {
+                    // --- 着地前の落下速度を保存（Land()でリセットされるので先に取る）---
+                    float fallSpeed = -(m_player->GetVelocityY());
+                    bool wasInAir = !m_player->IsGrounded();
+
+                    m_player->Land(groundLevel);
+                    newPosition.y = groundLevel;
+
+                    // ========================================
+                    //  着地インパクト演出
+                    //  落下速度に応じて強さが変わる
+                    // ========================================
+                    constexpr float LAND_MIN_SPEED = 5.0f;   // これ以下の落下は演出なし
+                    constexpr float LAND_REF_SPEED = 20.0f;  // この速度で演出が最大になる
+                    constexpr float LAND_SHAKE_MAX = 0.4f;   // カメラ揺れの最大強度
+                    constexpr float LAND_SHAKE_TIME = 0.2f;   // 揺れの持続時間
+                    constexpr float LAND_FOV_PUNCH = 8.0f;   // FOVの一時拡大量（度）
+                    constexpr float LAND_HITSTOP_TIME = 0.03f;  // 着地の一瞬のフリーズ（秒）
+
+                    if (wasInAir && fallSpeed > LAND_MIN_SPEED)
+                    {
+                        // 強度: 0.0〜1.0（落下速度に比例）
+                        float intensity = fallSpeed / LAND_REF_SPEED;
+                        if (intensity > 1.0f) intensity = 1.0f;
+
+                        // カメラシェイク（地面に叩きつけられた振動）
+                        m_cameraShake = LAND_SHAKE_MAX * intensity;
+                        m_cameraShakeTimer = LAND_SHAKE_TIME;
+
+                        // FOVパンチ（一瞬視界が広がる→衝撃感）
+                        m_currentFOV += LAND_FOV_PUNCH * intensity;
+
+                        // ヒットストップ（30ミリ秒の微フリーズ→「ドンッ」感）
+                        if (intensity > 0.5f)
+                        {
+                            m_hitStopTimer = LAND_HITSTOP_TIME;
+                            m_timeScale = 0.0f;
+                        }
+
+                        // 着地パーティクル（足元から粉塵が飛ぶ）
+                        if (m_gpuParticles)
+                        {
+                            DirectX::XMFLOAT3 feetPos = newPosition;
+                            feetPos.y = groundLevel - Player::EYE_HEIGHT;
+
+                            int dustCount = (int)(20.0f * intensity);
+                            float dustForce = 3.0f * intensity;
+                            m_gpuParticles->EmitMist(feetPos, dustCount, dustForce);
+                        }
+                    }
+                }
+            }
+            // 床が見つからない → 重力に任せる（安全ネットが拾う）
         }
 
         // === 敵との押し戻し ===
@@ -2259,18 +2321,39 @@ void Game::UpdateShieldSystem(float deltaTime)
 
             DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
             float dx = m_guardLockTargetPos.x - playerPos.x;
+            float dy = m_guardLockTargetPos.y - playerPos.y;  // Y差分を追加
             float dz = m_guardLockTargetPos.z - playerPos.z;
-            float len = sqrtf(dx * dx + dz * dz);
-            if (len > 0.01f)
-                m_chargeDirection = { dx / len, 0.0f, dz / len };
+
+            bool isAirCharge = !m_player->IsGrounded();
+
+            if (isAirCharge)
+            {
+                // === 空中チャージ ===
+                float len3D = sqrtf(dx * dx + dy * dy + dz * dz);
+                if (len3D > 0.01f)
+                    m_chargeDirection = { dx / len3D, dy / len3D, dz / len3D };
+                else
+                {
+                    float camYaw = m_player->GetRotation().y;
+                    m_chargeDirection = { sinf(camYaw), -0.5f, cosf(camYaw) };
+                }
+                float distToTarget = len3D;
+                m_chargeDuration = min(1.0f, max(0.2f, distToTarget / m_chargeSpeed));
+            }
             else
             {
-                float camYaw = m_player->GetRotation().y;
-                m_chargeDirection = { sinf(camYaw), 0.0f, cosf(camYaw) };
+                // === 地上チャージ   ===
+                float lenXZ = sqrtf(dx * dx + dz * dz);
+                if (lenXZ > 0.01f)
+                    m_chargeDirection = { dx / lenXZ, 0.0f, dz / lenXZ };
+                else
+                {
+                    float camYaw = m_player->GetRotation().y;
+                    m_chargeDirection = { sinf(camYaw), 0.0f, cosf(camYaw) };
+                }
+                float distToTarget = lenXZ;
+                m_chargeDuration = min(0.8f, max(0.2f, distToTarget / m_chargeSpeed));
             }
-
-            float distToTarget = len;
-            m_chargeDuration = min(0.8f, max(0.2f, distToTarget / m_chargeSpeed));
         }
 
         if (!rmbDown)
@@ -2294,8 +2377,34 @@ void Game::UpdateShieldSystem(float deltaTime)
         m_speedLineAlpha = 0.8f;
 
         DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
+
+        // XZ移動（地上・空中共通）
         playerPos.x += m_chargeDirection.x * m_chargeSpeed * deltaTime;
         playerPos.z += m_chargeDirection.z * m_chargeSpeed * deltaTime;
+
+        // === 空中チャージ：Y方向も移動＋重力 ===
+        if (m_chargeDirection.y != 0.0f)
+        {
+            // ダイブ方向にYも移動
+            playerPos.y += m_chargeDirection.y * m_chargeSpeed * deltaTime;
+        }
+
+        // === チャージ中も床判定 ===
+        {
+            float feetY = playerPos.y - Player::EYE_HEIGHT;
+            float floorY = GetFloorHeightBelow(playerPos.x, feetY, playerPos.z);
+            if (floorY > -9000.0f)
+            {
+                float groundLevel = floorY + Player::EYE_HEIGHT;
+                if (playerPos.y <= groundLevel)
+                {
+                    playerPos.y = groundLevel;
+                    // 地面に到達 → ダイブ方向をY=0に矯正（水平スライドに切替）
+                    m_chargeDirection.y = 0.0f;
+                }
+            }
+        }
+
         m_player->SetPosition(playerPos);
 
         float dxTarget = m_chargeTarget.x - playerPos.x;
@@ -2750,8 +2859,18 @@ void Game::UpdateBossAttacks(float deltaTime)
             {
                 DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
                 float dx = playerPos.x - enemy.position.x;
+                float dy = playerPos.y - enemy.position.y;
                 float dz = playerPos.z - enemy.position.z;
-                float dist = sqrtf(dx * dx + dz * dz);
+                float distXZ = sqrtf(dx * dx + dz * dz);
+                float dist = distXZ;  // XZ距離で範囲判定
+
+                // ジャンプで高い位置にいたらスラム回避
+                constexpr float SLAM_EVADE_HEIGHT = 3.0f;
+                if (dy > SLAM_EVADE_HEIGHT)
+                {
+                    enemy.attackJustLanded = false;
+                    continue;
+                }
 
                 float slamRadius = (enemy.type == EnemyType::BOSS) ? m_slamRadiusBoss : m_slamRadiusMidBoss;
                 float slamDamage = ((enemy.type == EnemyType::BOSS) ? m_slamDamageBoss : m_slamDamageMidBoss) * enemy.damageMultiplier;  //  ウェーブ倍率
@@ -3081,6 +3200,20 @@ void Game::UpdateBossAttacks(float deltaTime)
         // 攻撃が「今まさに当たった瞬間」のみ判定
         if (enemy.attackJustLanded)
         {
+            // ===高さチェック ===
+            // プレイヤーの足元Y座標と敵の頭上を比較
+            // プレイヤーが敵の攻撃届かない高さにいたらスキップ
+            constexpr float ATTACK_HEIGHT_RANGE = 2.5f; // 敵の攻撃が届くY方向の範囲（m）
+            float playerFeetY = m_player->GetPosition().y - Player::EYE_HEIGHT;
+            float heightDiff = playerFeetY - enemy.position.y;
+
+            // プレイヤーが敵より ATTACK_HEIGHT_RANGE 以上高い → 攻撃は空振り
+            if (heightDiff > ATTACK_HEIGHT_RANGE)
+            {
+                enemy.attackJustLanded = false;
+                continue;  // この敵の攻撃処理をスキップ
+            }
+
             if (m_gloryKillInvincibleTimer > 0)
                 break;
 

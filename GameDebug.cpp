@@ -989,6 +989,29 @@ void Game::DrawDebugUI()
                 m_meleeCharges = 0;
             }
         }
+
+        // === ジャンプデバッグ ===
+        if (ImGui::CollapsingHeader("Jump Debug"))
+        {
+            DirectX::XMFLOAT3 pos = m_player->GetPosition();
+            float feetY = pos.y - Player::EYE_HEIGHT;
+            float floorBelow = GetFloorHeightBelow(pos.x, feetY, pos.z);
+            float meshFloor = GetMeshFloorHeight(pos.x, pos.z, -9999.0f);
+
+            ImGui::Text("Player Y:       %.3f", pos.y);
+            ImGui::Text("Feet Y:         %.3f", feetY);
+            ImGui::Text("VelocityY:      %.3f", m_player->GetVelocityY());
+            ImGui::Text("IsGrounded:     %s", m_player->IsGrounded() ? "TRUE" : "FALSE");
+            ImGui::Separator();
+            ImGui::Text("FloorBelow:     %.3f (from feet)", floorBelow);
+            ImGui::Text("MeshFloor:      %.3f (from Y=100)", meshFloor);
+            ImGui::Separator();
+            float groundLevel = (floorBelow > -9000.0f)
+                ? floorBelow + Player::EYE_HEIGHT : -9999.0f;
+            ImGui::Text("GroundLevel:    %.3f", groundLevel);
+            ImGui::Text("Diff (Y-Ground):%.3f", pos.y - groundLevel);
+        }
+
         ImGui::End();
     }
 

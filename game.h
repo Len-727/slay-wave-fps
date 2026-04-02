@@ -270,6 +270,7 @@ private:
     void RemoveEnemyPhysicsBody(int enemyID);
     bool CheckMeshCollision(DirectX::XMFLOAT3 position, float radius);
     float GetMeshFloorHeight(float x, float z, float defaultY = 0.0f);
+    float GetFloorHeightBelow(float x, float startY, float z);
     void BuildNavGrid();
     void DrawNavGridDebug(DirectX::XMMATRIX view, DirectX::XMMATRIX proj);
     void TestMeshSlice();
@@ -419,6 +420,11 @@ private:
     float m_hitStopTimer = 0.0f;
     float m_currentFOV = 70.0f;
     float m_targetFOV = 70.0f;
+
+    // === カメラ行列キャッシュ（Renderで計算、HUDで参照）===
+    DirectX::XMMATRIX m_cachedView = DirectX::XMMatrixIdentity();
+    DirectX::XMMATRIX m_cachedProjection = DirectX::XMMatrixIdentity();
+
     float m_speedLineAlpha = 0.0f;
     float m_damageFlashAlpha = 0.0f;
 
@@ -680,6 +686,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_shieldHudParryFlash;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_shieldHudIcon;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_hpHudFrame;
+    ComPtr<ID3D11ShaderResourceView> m_fPromptTexture;  // グローリーキル「F」プロンプト
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_hpHudFillGreen;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_hpHudFillCritical;
     bool m_shieldHudLoaded = false;

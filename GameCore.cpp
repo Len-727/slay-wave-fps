@@ -811,6 +811,19 @@ void Game::CreateRenderResources()
                  ////OutputDebugStringA("[HUD_TEX] Loaded: melee_icon OK\n");
         }
 
+        // === グローリーキル「F」プロンプト ===
+        {
+            HRESULT hr = DirectX::CreateWICTextureFromFile(
+                m_d3dDevice.Get(),
+                L"Assets/Texture/HUD/f_prompt.png",
+                nullptr,
+                m_fPromptTexture.ReleaseAndGetAddressOf());
+            if (FAILED(hr))
+                OutputDebugStringA("[HUD] f_prompt.png load FAILED!\n");
+            else
+                OutputDebugStringA("[HUD] f_prompt.png load OK!\n");
+        }
+
         // === 汎用白ピクセルテクスチャ作成 ===
         {
             uint32_t whiteData = 0xFFFFFFFF;  // RGBA全部255 = 白
@@ -1421,11 +1434,11 @@ void Game::ResetGame()
         float spawnX = 0.0f;
         float spawnZ = -0.5f;
         float groundY = GetMeshFloorHeight(spawnX, spawnZ, 0.0f);
-        m_player->SetPosition(DirectX::XMFLOAT3(spawnX, groundY + 1.8f, spawnZ));
+        m_player->SetPosition(DirectX::XMFLOAT3(spawnX, groundY + Player::EYE_HEIGHT, spawnZ));
 
         char buf[256];
         sprintf_s(buf, "[SPAWN] Player at (%.2f, %.2f, %.2f) groundY=%.2f\n",
-            spawnX, groundY + 1.8f, spawnZ, groundY);
+            spawnX, groundY + Player::EYE_HEIGHT, spawnZ, groundY);
         OutputDebugStringA(buf);
     }
     m_player->SetRotation(DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f));   // 向きも正面にリセット

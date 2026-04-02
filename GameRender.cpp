@@ -129,6 +129,8 @@ void Game::RenderPlaying()
         DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
         DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
 
+        playerPos.y += m_player->GetLandingCameraOffset();  // 着地演出：カメラを沈ませる
+
         DirectX::XMFLOAT3 shakeOffset(0.0f, 0.0f, 0.0f);
         if (m_cameraShakeTimer > 0.0f)
         {
@@ -169,6 +171,10 @@ void Game::RenderPlaying()
         DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
             DirectX::XMConvertToRadians(m_currentFOV), aspectRatio, 0.1f, 1000.0f
         );
+
+        m_cachedView = viewMatrix;
+        m_cachedProjection = projectionMatrix;
+
         //  深度テストと深度書き込みを有効化
         m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 
@@ -410,6 +416,8 @@ void Game::RenderPlaying()
         DirectX::XMFLOAT3 playerPos = m_player->GetPosition();
         DirectX::XMFLOAT3 playerRot = m_player->GetRotation();
 
+        playerPos.y += m_player->GetLandingCameraOffset();  // 着地演出：カメラを沈ませる
+
         DirectX::XMFLOAT3 shakeOffset(0.0f, 0.0f, 0.0f);
         if (m_cameraShakeTimer > 0.0f)
         {
@@ -450,6 +458,9 @@ void Game::RenderPlaying()
         DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixPerspectiveFovLH(
             DirectX::XMConvertToRadians(m_currentFOV), aspectRatio, 0.1f, 1000.0f
         );
+
+        m_cachedView = viewMatrix;
+        m_cachedProjection = projectionMatrix;
 
         // マップ描画
         if (m_mapSystem)

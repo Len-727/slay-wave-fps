@@ -52,52 +52,63 @@ static const float3 COLOR_WHITE   = float3(1.0f,  0.9f,  1.0f);
 
 float4 main(PSInput input) : SV_TARGET
 {
-    float2 uv   = input.TexCoord * 2.0f - 1.0f;
-    float  dist = length(uv);
+    float2 uv = input.TexCoord * 2.0f - 1.0f; // -1〜+1 の座標系
+    float dist = length(uv); // 中心からの距離
 
-    // === 展開アニメーション ===
+    // === 展開アニメーション    ===
     float expandProgress = saturate(Time / EXPAND_DURATION);
-    float eased          = smoothstep(0.0f, 1.0f, expandProgress);
-    float ringRadius     = RING_RADIUS * eased;
+    float eased = smoothstep(0.0f, 1.0f, expandProgress);
+    float crossSize = RING_RADIUS * eased; // ✕の大きさ（展開中は小さい→大きく）
 
-    if (ringRadius < ALPHA_CUTOFF)
+    if (crossSize < ALPHA_CUTOFF)
         discard;
 
-    // === メインリング (ガウシアン分布) ===
-    float ring = exp(-pow(dist - ringRadius, 2.0f) / (2.0f * RING_WIDTH * RING_WIDTH));
+    // ==============================================
+    //  ✕ 形状の生成
+    //  2本の対角線（y=x と y=-x）からの距離を使う
+    // ==============================================
 
-    // === 外側ブルーム (展開中は強め) ===
+    // 各対角線からの距離（1.414 = √2）
+    float distLine1 = abs(uv.x - uv.y) / 1.414f; // ＼方向の線
+    float distLine2 = abs(uv.x + uv.y) / 1.414f; // ／方向の線
+
+    // 2本のうち近い方 = ✕ 形状
+    float lineDist = min(distLine1, distLine2);
+
+    // 腕の長さを制限（crossSizeより外はフェードアウト）
+    float lengthMask = smoothstep(crossSize + 0.05f, crossSize - 0.1f, dist);
+
+    // === メイン✕ライン（ガウシアン分布で太さを制御）===
+    float xLine = exp(-lineDist * lineDist / (2.0f * RING_WIDTH * RING_WIDTH))
+                * lengthMask;
+
+    // === ブルーム（✕の周りのぼんやりした光）===
     float bloomBoost = lerp(2.0f, 1.0f, eased);
-    float bloom      = exp(-pow(dist - ringRadius, 2.0f) / (2.0f * BLOOM_WIDTH * BLOOM_WIDTH))
-                     * BLOOM_BASE * bloomBoost;
+    float bloom = exp(-lineDist * lineDist / (2.0f * BLOOM_WIDTH * BLOOM_WIDTH))
+                * lengthMask * BLOOM_BASE * bloomBoost;
 
-    // === 内側フィル ===
-    float innerFill = 0.0f;
-    if (dist < ringRadius)
-    {
-        float fillFade = dist / max(ringRadius, EPSILON);
-        innerFill = fillFade * INNER_FILL_ALPHA;
-    }
+    // === 中心の光点（✕の交差点を強調）===
+    float centerGlow = exp(-dist * dist / 0.03f) * 0.5f * eased;
 
-    // === 脈動 (安定後のみ) ===
+    // === 脈動   ===
     float pulseStrength = saturate((Time - PULSE_DELAY) / PULSE_FADE_TIME);
     float pulse = 1.0f - pulseStrength * PULSE_AMPLITUDE * (1.0f - sin(Time * PULSE_SPEED));
 
-    // === 出現フラッシュ ===
+    // === 出現フラッシュ  ===
     float flashIntensity = exp(-Time * FLASH_DECAY);
 
     // === 合成 ===
-    float total = (ring + bloom + innerFill) * pulse + flashIntensity * FLASH_INTENSITY;
+    float total = (xLine + bloom + centerGlow) * pulse + flashIntensity * FLASH_INTENSITY;
     total = saturate(total);
 
     if (total < 0.005f)
         discard;
 
-    // === 色 (紫→白のグラデーション) ===
-    float coreBright = ring * pulse;
+    // === 色    ==
+    float coreBright = xLine * pulse;
     float3 color = lerp(COLOR_PURPLE, COLOR_WHITE, saturate(coreBright * 1.5f));
     color += COLOR_MAGENTA * bloom * 0.4f;
-    color += COLOR_WHITE * flashIntensity * 0.5f;
+    color += COLOR_WHITE * (flashIntensity * 0.5f + centerGlow);
     color *= pulse;
 
     return float4(color, total);
