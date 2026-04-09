@@ -172,9 +172,6 @@ void Game::RenderPlaying()
             DirectX::XMConvertToRadians(m_currentFOV), aspectRatio, 0.1f, 1000.0f
         );
 
-        m_cachedView = viewMatrix;
-        m_cachedProjection = projectionMatrix;
-
         //  深度テストと深度書き込みを有効化
         m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 
@@ -215,6 +212,9 @@ void Game::RenderPlaying()
         m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 
         DrawEnemies(viewMatrix, projectionMatrix, true);// trueでターゲット敵をスキップ
+
+        DrawKeyPrompt(viewMatrix, projectionMatrix);
+
         //  深度テストと深度書き込みを有効化
         m_d3dContext->OMSetDepthStencilState(m_states->DepthDefault(), 0);
 
@@ -459,9 +459,6 @@ void Game::RenderPlaying()
             DirectX::XMConvertToRadians(m_currentFOV), aspectRatio, 0.1f, 1000.0f
         );
 
-        m_cachedView = viewMatrix;
-        m_cachedProjection = projectionMatrix;
-
         // マップ描画
         if (m_mapSystem)
         {
@@ -491,6 +488,9 @@ void Game::RenderPlaying()
         // 3D描画（優先順位順）
         //DrawParticles();
         DrawEnemies(viewMatrix, projectionMatrix);
+
+        DrawKeyPrompt(viewMatrix, projectionMatrix);
+
         //DrawBillboard();
         DrawWeapon();
         DrawShield();
@@ -1962,6 +1962,27 @@ void Game::DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectio
     context->RSSetState(nullptr);
 }
 
+// ============================================================
+//  DrawKeyPrompt - グローリーキル「F」プロンプト描画
+//
+//  【前提】DrawEnemies() の後に呼ぶこと（深度テストOFF＋後描画で最前面）
+// ============================================================
+void Game::DrawKeyPrompt(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix)
+{
+    if (!m_keyPrompt || !m_gloryKillTargetEnemy) return;
+
+    DirectX::XMFLOAT3 promptPos = m_gloryKillTargetEnemy->position;
+    promptPos.y += 1.0f;
+    constexpr float PROMPT_SIZE = 0.4f;
+
+    m_keyPrompt->Render(
+        m_d3dContext.Get(),
+        promptPos,
+        PROMPT_SIZE,
+        m_gloryKillTargetEnemy->staggerTimer,
+        viewMatrix,
+        projectionMatrix);
+}
 
 // ============================================================
 //  DrawSingleEnemy - ボス/ミッドボスの単体描画

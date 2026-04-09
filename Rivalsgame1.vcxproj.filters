@@ -252,6 +252,9 @@
     <ClInclude Include="MeshSlicer.h">
       <Filter>ヘッダー ファイル</Filter>
     </ClInclude>
+    <ClInclude Include="KeyPrompt.h">
+      <Filter>ヘッダー ファイル</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -425,6 +428,9 @@
     <ClCompile Include="GameCore.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
+    <ClCompile Include="KeyPrompt.cpp">
+      <Filter>ソース ファイル</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\Models\Y_Bot\Y_Bot.fbx">
@@ -533,6 +539,9 @@
       <Filter>Assets\shader</Filter>
     </FxCompile>
     <FxCompile Include="Assets\Shaders\FlagVS.hlsl">
+      <Filter>Assets\shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\KeyPromptPS.hlsl">
       <Filter>Assets\shader</Filter>
     </FxCompile>
   </ItemGroup>

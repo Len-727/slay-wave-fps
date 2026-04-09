@@ -256,6 +256,7 @@
     <ClInclude Include="imgui-master\imstb_textedit.h" />
     <ClInclude Include="imgui-master\imstb_truetype.h" />
     <ClInclude Include="InstanceData.h" />
+    <ClInclude Include="KeyPrompt.h" />
     <ClInclude Include="MapSystem.h" />
     <ClInclude Include="MeshSlicer.h" />
     <ClInclude Include="Model.h" />
@@ -351,6 +352,7 @@
     <ClCompile Include="imgui-master\imgui_draw.cpp" />
     <ClCompile Include="imgui-master\imgui_tables.cpp" />
     <ClCompile Include="imgui-master\imgui_widgets.cpp" />
+    <ClCompile Include="KeyPrompt.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MapSystem.cpp" />
     <ClCompile Include="MeshSlicer.cpp" />
@@ -556,6 +558,14 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Assets\Shaders\KeyPromptPS.hlsl">
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">5.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assets/Shaders/%(Filename).cso</ObjectFileOutput>
+      <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Assets/Shaders/%(Filename).cso</ObjectFileOutput>
     </FxCompile>
     <FxCompile Include="Assets\Shaders\MenuPostProcessPS.hlsl">
       <ObjectFileOutput Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Assets/Shaders/%(Filename).cso</ObjectFileOutput>

@@ -96,7 +96,7 @@ Game::Game() noexcept :
     m_deltaTime(0.0f),
     m_accumulatedAnimTime(0.0f),
     m_gloryKillTargetID(-1),
-    m_gloryKillRange(2.5f),
+    m_gloryKillRange(5.0f),
     m_gloryKillActive(false),
     m_gloryKillInvincibleTimer(0.0f),
     m_gloryKillFlashTimer(0.0f),
@@ -811,19 +811,6 @@ void Game::CreateRenderResources()
                  ////OutputDebugStringA("[HUD_TEX] Loaded: melee_icon OK\n");
         }
 
-        // === グローリーキル「F」プロンプト ===
-        {
-            HRESULT hr = DirectX::CreateWICTextureFromFile(
-                m_d3dDevice.Get(),
-                L"Assets/Texture/HUD/f_prompt.png",
-                nullptr,
-                m_fPromptTexture.ReleaseAndGetAddressOf());
-            if (FAILED(hr))
-                OutputDebugStringA("[HUD] f_prompt.png load FAILED!\n");
-            else
-                OutputDebugStringA("[HUD] f_prompt.png load OK!\n");
-        }
-
         // === 汎用白ピクセルテクスチャ作成 ===
         {
             uint32_t whiteData = 0xFFFFFFFF;  // RGBA全部255 = 白
@@ -1192,7 +1179,7 @@ void Game::CreateRenderResources()
         if (m_mapSystem->LoadMapFBX(
             "Assets/Models/Map/Market AL_DANUBE.fbx",
             L"Assets/Models/Map/textures",
-            1.0f))
+            MAP_SCALE))
         {
             OutputDebugStringA("FBX Map loaded!\n");
 
@@ -1243,7 +1230,7 @@ void Game::CreateRenderResources()
             m_mapSystem->SetMapTransform(
                 XMFLOAT3(0.0f, -0.1f, 0.0f),
                 0.0f,
-                1.0f
+                MAP_SCALE
             );
         }
 
@@ -1290,6 +1277,13 @@ void Game::CreateRenderResources()
     if (!m_stunRing->Initialize(m_d3dDevice.Get()))
     {
         OutputDebugStringA("[StunRing] Failed to initialize!\n");
+    }
+
+    //  === KeyPromptの初期化   ===
+    m_keyPrompt = std::make_unique<KeyPrompt>();
+    if (!m_keyPrompt->Initialize(m_d3dDevice.Get(), L"Assets/Texture/HUD/f_prompt.png"))
+    {
+        OutputDebugStringA("[KeyPrompt] Failed to initialize!\n");
     }
 
     //  === TargetMarkerの初期化    ===

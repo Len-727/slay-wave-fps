@@ -2184,9 +2184,14 @@ void Game::UpdateShieldSystem(float deltaTime)
     {
         // ─── 通常状態 ───
     case ShieldState::Idle:
-    {
-        // 右クリック押した瞬間 → パリィウィンドウ開始
-        if (rmbDown && !rmbPressed)
+
+    { 
+        // パリィクールダウンを減らす
+        if (m_parryCooldown > 0.0f)
+            m_parryCooldown -= deltaTime;
+
+        // 右クリック押した瞬間 → パリィウィンドウ開始（クールダウン中は不可）
+        if (rmbDown && !rmbPressed && m_parryCooldown <= 0.0f)
         {
             m_shieldState = ShieldState::Parrying;
             m_parryWindowTimer = m_parryWindowDuration;  // 0.15秒
@@ -2224,19 +2229,19 @@ void Game::UpdateShieldSystem(float deltaTime)
 
         if (m_parryWindowTimer <= 0.0f)
         {
-            // パリィウィンドウ終了
+            // パリィウィンドウ終了 → クールダウン開始
+            m_parryCooldown = PARRY_COOLDOWN;
+
             if (rmbDown)
             {
                 // まだ押してる → ガードに移行
                 m_shieldState = ShieldState::Guarding;
                 m_isGuarding = true;
-                //OutputDebugStringA("[SHIELD] State: GUARDING (hold)\n");
             }
             else
             {
                 // もう離した → タップだった、Idleに戻る
                 m_shieldState = ShieldState::Idle;
-                //OutputDebugStringA("[SHIELD] State: IDLE (parry tap ended)\n");
             }
         }
         break;
@@ -3200,6 +3205,20 @@ void Game::UpdateBossAttacks(float deltaTime)
         // 攻撃が「今まさに当たった瞬間」のみ判定
         if (enemy.attackJustLanded)
         {
+            // === XZ距離チェック ===
+            // 敵の攻撃射程内にいなければ空振り
+            constexpr float ATTACK_XZ_RANGE = 2.5f;  // 敵の腕が届く最大距離（m）
+            DirectX::XMFLOAT3 pPos = m_player->GetPosition();
+            float adx = pPos.x - enemy.position.x;
+            float adz = pPos.z - enemy.position.z;
+            float distXZ = sqrtf(adx * adx + adz * adz);
+
+            if (distXZ > ATTACK_XZ_RANGE)
+            {
+                enemy.attackJustLanded = false;
+                continue;  // 射程外 → 空振り
+            }
+
             // ===高さチェック ===
             // プレイヤーの足元Y座標と敵の頭上を比較
             // プレイヤーが敵の攻撃届かない高さにいたらスキップ

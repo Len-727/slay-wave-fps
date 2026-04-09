@@ -96,6 +96,7 @@
 #include "Shadow.h"
 #include "FurRenderer.h"
 #include "StunRing.h"
+#include "KeyPrompt.h"
 #include "TargetMarker.h"
 
 
@@ -227,6 +228,7 @@ private:
     // --- GameRender.cpp: 3D描画パイプライン ---
     void RenderPlaying();
     void DrawEnemies(DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix, bool skipGloryKillTarget = false);
+    void DrawKeyPrompt(DirectX::XMMATRIX view, DirectX::XMMATRIX proj);
     void DrawSingleEnemy(const Enemy& enemy, DirectX::XMMATRIX viewMatrix, DirectX::XMMATRIX projectionMatrix);
     float CheckRayIntersection(DirectX::XMFLOAT3 rayStart, DirectX::XMFLOAT3 rayDir,
         DirectX::XMFLOAT3 enemyPos, float enemyRotationY, EnemyType enemyType);
@@ -336,9 +338,11 @@ private:
     std::unique_ptr<GPUParticleSystem> m_gpuParticles;
     std::unique_ptr<MapSystem>       m_mapSystem;
     std::unique_ptr<Shadow>          m_shadow;
+    static constexpr float MAP_SCALE = 0.4f;  // マップの大きさ（1.0 = 原寸）
     std::unique_ptr<FurRenderer>     m_furRenderer;
     std::unique_ptr<WeaponSpawnSystem> m_weaponSpawnSystem;
     std::unique_ptr<StunRing>        m_stunRing;
+    std::unique_ptr<KeyPrompt>       m_keyPrompt;
     std::unique_ptr<TargetMarker>    m_targetMarker;
     std::unique_ptr<TitleScene>      m_titleScene;
     bool m_enemiesInitialized = false;
@@ -421,10 +425,6 @@ private:
     float m_currentFOV = 70.0f;
     float m_targetFOV = 70.0f;
 
-    // === カメラ行列キャッシュ（Renderで計算、HUDで参照）===
-    DirectX::XMMATRIX m_cachedView = DirectX::XMMatrixIdentity();
-    DirectX::XMMATRIX m_cachedProjection = DirectX::XMMatrixIdentity();
-
     float m_speedLineAlpha = 0.0f;
     float m_damageFlashAlpha = 0.0f;
 
@@ -470,6 +470,8 @@ private:
     ShieldState m_shieldState = ShieldState::Idle;
     float m_parryWindowTimer = 0.0f;
     float m_parryWindowDuration = 0.15f;
+    float m_parryCooldown = 0.0f;   // パリィクールダウン残り時間
+    static constexpr float PARRY_COOLDOWN = 0.4f;   // パリィ後の再パリィ不可時間
     bool  m_parrySuccess = false;
     float m_parryFlashTimer = 0.0f;
     bool  m_isGuarding = false;
@@ -686,7 +688,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_shieldHudParryFlash;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_shieldHudIcon;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_hpHudFrame;
-    ComPtr<ID3D11ShaderResourceView> m_fPromptTexture;  // グローリーキル「F」プロンプト
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_hpHudFillGreen;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_hpHudFillCritical;
     bool m_shieldHudLoaded = false;
