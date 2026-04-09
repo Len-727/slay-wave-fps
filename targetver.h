@@ -1,4 +1,4 @@
-﻿//	targetver.h
+//	targetver.h
 
 #pragma once
 

@@ -1,5 +1,5 @@
 // ========================================
-// FlagMesh.h - Šø‚ÌƒƒbƒVƒ…ƒNƒ‰ƒX
+// FlagMesh.h - ï¿½ï¿½ï¿½Ìƒï¿½ï¿½bï¿½Vï¿½ï¿½ï¿½Nï¿½ï¿½ï¿½X
 // ========================================
 
 #pragma once
@@ -8,12 +8,12 @@
 #include <wrl/client.h>
 #include <vector>
 
-// Šø‚Ì’¸“_\‘¢‘Ì
+// ï¿½ï¿½ï¿½Ì’ï¿½ï¿½_ï¿½\ï¿½ï¿½ï¿½ï¿½
 struct FlagVertex
 {
-    DirectX::XMFLOAT3 position;  // ˆÊ’u
-    DirectX::XMFLOAT2 texCoord;  // UVÀ•W
-    DirectX::XMFLOAT3 normal;    // –@üiƒ‰ƒCƒeƒBƒ“ƒO—pj
+    DirectX::XMFLOAT3 position;  // ï¿½Ê’u
+    DirectX::XMFLOAT2 texCoord;  // UVï¿½ï¿½ï¿½W
+    DirectX::XMFLOAT3 normal;    // ï¿½@ï¿½ï¿½ï¿½iï¿½ï¿½ï¿½Cï¿½eï¿½Bï¿½ï¿½ï¿½Oï¿½pï¿½j
 };
 
 class FlagMesh
@@ -22,28 +22,28 @@ public:
     FlagMesh();
     ~FlagMesh();
 
-    // ‰Šú‰»
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     void Initialize(ID3D11Device* device, int width, int height);
 
-    // •`‰æ
+    // ï¿½`ï¿½ï¿½
     void Draw(ID3D11DeviceContext* context);
 
-    // ƒQƒbƒ^[
+    // ï¿½Qï¿½bï¿½^ï¿½[
     int GetVertexCount() const { return m_vertexCount; }
     int GetIndexCount() const { return m_indexCount; }
 
 private:
-    // DirectX ƒoƒbƒtƒ@
+    // DirectX ï¿½oï¿½bï¿½tï¿½@
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_vertexBuffer;
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_indexBuffer;
 
-    // ƒƒbƒVƒ…î•ñ
-    int m_width;         // ‰¡•ûŒü‚Ì’¸“_”
-    int m_height;        // c•ûŒü‚Ì’¸“_”
-    int m_vertexCount;   // ‘’¸“_”
-    int m_indexCount;    // ‘ƒCƒ“ƒfƒbƒNƒX”
+    // ï¿½ï¿½ï¿½bï¿½Vï¿½ï¿½ï¿½ï¿½ï¿½
+    int m_width;         // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ì’ï¿½ï¿½_ï¿½ï¿½
+    int m_height;        // ï¿½cï¿½ï¿½ï¿½ï¿½ï¿½Ì’ï¿½ï¿½_ï¿½ï¿½
+    int m_vertexCount;   // ï¿½ï¿½ï¿½ï¿½ï¿½_ï¿½ï¿½
+    int m_indexCount;    // ï¿½ï¿½ï¿½Cï¿½ï¿½ï¿½fï¿½bï¿½Nï¿½Xï¿½ï¿½
 
-    // ƒƒbƒVƒ…¶¬
+    // ï¿½ï¿½ï¿½bï¿½Vï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     void CreateMesh(
         std::vector<FlagVertex>& vertices,
         std::vector<uint16_t>& indices

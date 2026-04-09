@@ -2,7 +2,7 @@
 #include <DirectXMath.h>
 
 // ========================================
-// ƒxƒWƒF‹ÈüƒNƒ‰ƒXi3ŸƒxƒWƒF‹Èüj
+// ï¿½xï¿½Wï¿½Fï¿½Èï¿½ï¿½Nï¿½ï¿½ï¿½Xï¿½i3ï¿½ï¿½ï¿½xï¿½Wï¿½Fï¿½Èï¿½ï¿½j
 // ========================================
 
 class BezierCurve
@@ -11,23 +11,23 @@ public:
     BezierCurve();
     ~BezierCurve();
 
-    // §Œä“_‚ğİ’è
+    // ï¿½ï¿½ï¿½ï¿½_ï¿½ï¿½İ’ï¿½
     void SetControlPoints(
-        DirectX::XMFLOAT3 p0,  // ŠJn“_
-        DirectX::XMFLOAT3 p1,  // §Œä“_1
-        DirectX::XMFLOAT3 p2,  // §Œä“_2
-        DirectX::XMFLOAT3 p3   // I—¹“_
+        DirectX::XMFLOAT3 p0,  // ï¿½Jï¿½nï¿½_
+        DirectX::XMFLOAT3 p1,  // ï¿½ï¿½ï¿½ï¿½_1
+        DirectX::XMFLOAT3 p2,  // ï¿½ï¿½ï¿½ï¿½_2
+        DirectX::XMFLOAT3 p3   // ï¿½Iï¿½ï¿½ï¿½_
     );
 
-    // ti0.0`1.0j‚É‚¨‚¯‚éˆÊ’u‚ğæ“¾
+    // tï¿½i0.0ï¿½`1.0ï¿½jï¿½É‚ï¿½ï¿½ï¿½ï¿½ï¿½Ê’uï¿½ï¿½ï¿½æ“¾
     DirectX::XMFLOAT3 GetPosition(float t) const;
 
-    // t ‚É‚¨‚¯‚éÚüƒxƒNƒgƒ‹iis•ûŒüj‚ğæ“¾
+    // t ï¿½É‚ï¿½ï¿½ï¿½ï¿½ï¿½Úï¿½ï¿½xï¿½Nï¿½gï¿½ï¿½ï¿½iï¿½iï¿½sï¿½ï¿½ï¿½ï¿½ï¿½jï¿½ï¿½ï¿½æ“¾
     DirectX::XMFLOAT3 GetTangent(float t) const;
 
 private:
-    DirectX::XMFLOAT3 m_p0;  // ŠJn“_
-    DirectX::XMFLOAT3 m_p1;  // §Œä“_1
-    DirectX::XMFLOAT3 m_p2;  // §Œä“_2
-    DirectX::XMFLOAT3 m_p3;  // I—¹“_
+    DirectX::XMFLOAT3 m_p0;  // ï¿½Jï¿½nï¿½_
+    DirectX::XMFLOAT3 m_p1;  // ï¿½ï¿½ï¿½ï¿½_1
+    DirectX::XMFLOAT3 m_p2;  // ï¿½ï¿½ï¿½ï¿½_2
+    DirectX::XMFLOAT3 m_p3;  // ï¿½Iï¿½ï¿½ï¿½_
 };

@@ -1,6 +1,6 @@
 // ============================================================
 //  BloodSystem.cpp
-//  ŒŒ‚µ‚Ô‚«•ŒŒƒfƒJ[ƒ‹ŠÇ— (ƒJƒXƒ^ƒ€HLSLƒVƒF[ƒ_[‘Î‰”Å)
+//  ï¿½ï¿½ï¿½ï¿½ï¿½Ô‚ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½fï¿½Jï¿½[ï¿½ï¿½ï¿½Ç—ï¿½ (ï¿½Jï¿½Xï¿½^ï¿½ï¿½HLSLï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½Î‰ï¿½ï¿½ï¿½)
 // ============================================================
 
 #include "BloodSystem.h"
@@ -11,7 +11,7 @@
 #pragma comment(lib, "d3dcompiler.lib")
 
 // ============================================================
-//  ƒRƒ“ƒXƒgƒ‰ƒNƒ^
+//  ï¿½Rï¿½ï¿½ï¿½Xï¿½gï¿½ï¿½ï¿½Nï¿½^
 // ============================================================
 BloodSystem::BloodSystem()
 {
@@ -20,7 +20,7 @@ BloodSystem::BloodSystem()
 }
 
 // ============================================================
-//  ƒVƒF[ƒ_[ƒRƒ“ƒpƒCƒ‹
+//  ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½Rï¿½ï¿½ï¿½pï¿½Cï¿½ï¿½
 // ============================================================
 bool BloodSystem::CompileShaders(ID3D11Device* device)
 {
@@ -29,7 +29,7 @@ bool BloodSystem::CompileShaders(ID3D11Device* device)
     Microsoft::WRL::ComPtr<ID3DBlob> psBlob;
     Microsoft::WRL::ComPtr<ID3DBlob> errBlob;
 
-    // === ’¸“_ƒVƒF[ƒ_[ƒRƒ“ƒpƒCƒ‹ ===
+    // === ï¿½ï¿½ï¿½_ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½Rï¿½ï¿½ï¿½pï¿½Cï¿½ï¿½ ===
     hr = D3DCompileFromFile(
         L"Assets/Shaders/BloodVS.hlsl",
         nullptr, nullptr,
@@ -46,13 +46,13 @@ bool BloodSystem::CompileShaders(ID3D11Device* device)
         return false;
     }
 
-    // === ’¸“_ƒVƒF[ƒ_[ì¬ ===
+    // === ï¿½ï¿½ï¿½_ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½ì¬ ===
     hr = device->CreateVertexShader(
         vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
         nullptr, m_bloodVS.GetAddressOf());
     if (FAILED(hr)) return false;
 
-    // === “ü—ÍƒŒƒCƒAƒEƒgì¬ ===
+    // === ï¿½ï¿½ï¿½Íƒï¿½ï¿½Cï¿½Aï¿½Eï¿½gï¿½ì¬ ===
     D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -64,7 +64,7 @@ bool BloodSystem::CompileShaders(ID3D11Device* device)
         m_bloodIL.GetAddressOf());
     if (FAILED(hr)) return false;
 
-    // === ƒsƒNƒZƒ‹ƒVƒF[ƒ_[ƒRƒ“ƒpƒCƒ‹ ===
+    // === ï¿½sï¿½Nï¿½Zï¿½ï¿½ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½Rï¿½ï¿½ï¿½pï¿½Cï¿½ï¿½ ===
     errBlob.Reset();
     hr = D3DCompileFromFile(
         L"Assets/Shaders/BloodPS.hlsl",
@@ -82,13 +82,13 @@ bool BloodSystem::CompileShaders(ID3D11Device* device)
         return false;
     }
 
-    // === ƒsƒNƒZƒ‹ƒVƒF[ƒ_[ì¬ ===
+    // === ï¿½sï¿½Nï¿½Zï¿½ï¿½ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½ì¬ ===
     hr = device->CreatePixelShader(
         psBlob->GetBufferPointer(), psBlob->GetBufferSize(),
         nullptr, m_bloodPS.GetAddressOf());
     if (FAILED(hr)) return false;
 
-    // === ’è”ƒoƒbƒtƒ@ì¬ ===
+    // === ï¿½è”ï¿½oï¿½bï¿½tï¿½@ï¿½ì¬ ===
     D3D11_BUFFER_DESC cbDesc = {};
     cbDesc.ByteWidth = sizeof(BloodCBData);
     cbDesc.Usage = D3D11_USAGE_DYNAMIC;
@@ -102,7 +102,7 @@ bool BloodSystem::CompileShaders(ID3D11Device* device)
 }
 
 // ============================================================
-//  ‰Šú‰»
+//  ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 // ============================================================
 void BloodSystem::Initialize(
     ID3D11Device* device,
@@ -124,7 +124,7 @@ void BloodSystem::Initialize(
 }
 
 // ============================================================
-//  ’è”ƒoƒbƒtƒ@XV
+//  ï¿½è”ï¿½oï¿½bï¿½tï¿½@ï¿½Xï¿½V
 // ============================================================
 void BloodSystem::SetupBloodCB(
     DirectX::XMMATRIX wvp,
@@ -147,7 +147,7 @@ void BloodSystem::SetupBloodCB(
 }
 
 // ============================================================
-//  XV
+//  ï¿½Xï¿½V
 // ============================================================
 void BloodSystem::Update(float deltaTime)
 {
@@ -157,7 +157,7 @@ void BloodSystem::Update(float deltaTime)
 }
 
 // ============================================================
-//  ƒgƒŠƒK[
+//  ï¿½gï¿½ï¿½ï¿½Kï¿½[
 // ============================================================
 void BloodSystem::OnEnemyKilled(
     DirectX::XMFLOAT3 enemyPos,
@@ -217,7 +217,7 @@ void BloodSystem::OnMeleeKill(DirectX::XMFLOAT3 enemyPos)
 }
 
 // ============================================================
-//  ƒXƒNƒŠ[ƒ“ƒuƒ‰ƒbƒh - ¶¬
+//  ï¿½Xï¿½Nï¿½ï¿½ï¿½[ï¿½ï¿½ï¿½uï¿½ï¿½ï¿½bï¿½h - ï¿½ï¿½ï¿½ï¿½
 // ============================================================
 void BloodSystem::SpawnScreenBlood(int count, float intensity)
 {
@@ -278,7 +278,7 @@ void BloodSystem::SpawnScreenBlood(int count, float intensity)
 }
 
 // ============================================================
-//  ƒXƒNƒŠ[ƒ“ƒuƒ‰ƒbƒh - XV (swap-and-pop)
+//  ï¿½Xï¿½Nï¿½ï¿½ï¿½[ï¿½ï¿½ï¿½uï¿½ï¿½ï¿½bï¿½h - ï¿½Xï¿½V (swap-and-pop)
 // ============================================================
 void BloodSystem::UpdateScreenBlood(float deltaTime)
 {
@@ -305,7 +305,7 @@ void BloodSystem::UpdateScreenBlood(float deltaTime)
 }
 
 // ============================================================
-//  ƒXƒNƒŠ[ƒ“ƒuƒ‰ƒbƒh - •`‰æ
+//  ï¿½Xï¿½Nï¿½ï¿½ï¿½[ï¿½ï¿½ï¿½uï¿½ï¿½ï¿½bï¿½h - ï¿½`ï¿½ï¿½
 // ============================================================
 void BloodSystem::DrawScreenBlood(int screenWidth, int screenHeight)
 {
@@ -380,7 +380,7 @@ void BloodSystem::DrawScreenBlood(int screenWidth, int screenHeight)
 }
 
 // ============================================================
-//  °ƒfƒJ[ƒ‹ - ¶¬
+//  ï¿½ï¿½ï¿½fï¿½Jï¿½[ï¿½ï¿½ - ï¿½ï¿½ï¿½ï¿½
 // ============================================================
 void BloodSystem::SpawnBloodDecal(DirectX::XMFLOAT3 position, float size)
 {
@@ -405,7 +405,7 @@ void BloodSystem::SpawnBloodDecal(DirectX::XMFLOAT3 position, float size)
 }
 
 // ============================================================
-//  °ƒfƒJ[ƒ‹ - XV (swap-and-pop)
+//  ï¿½ï¿½ï¿½fï¿½Jï¿½[ï¿½ï¿½ - ï¿½Xï¿½V (swap-and-pop)
 // ============================================================
 void BloodSystem::UpdateBloodDecals(float deltaTime)
 {
@@ -431,7 +431,7 @@ void BloodSystem::UpdateBloodDecals(float deltaTime)
 }
 
 // ============================================================
-//  °ƒfƒJ[ƒ‹ - •`‰æ
+//  ï¿½ï¿½ï¿½fï¿½Jï¿½[ï¿½ï¿½ - ï¿½`ï¿½ï¿½
 // ============================================================
 void BloodSystem::DrawBloodDecals(
     DirectX::XMMATRIX view,

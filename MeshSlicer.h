@@ -1,54 +1,54 @@
 // MeshSlicer.h
-// ƒŠƒAƒ‹ƒ^ƒCƒ€ƒƒbƒVƒ…Ø’fƒVƒXƒeƒ€
+// ï¿½ï¿½ï¿½Aï¿½ï¿½ï¿½^ï¿½Cï¿½ï¿½ï¿½ï¿½ï¿½bï¿½Vï¿½ï¿½ï¿½Ø’fï¿½Vï¿½Xï¿½eï¿½ï¿½
 #pragma once
 #include <vector>
 #include <DirectXMath.h>
 
-// === Ø’f—p‚Ì’¸“_ƒf[ƒ^ ===
+// === ï¿½Ø’fï¿½pï¿½Ì’ï¿½ï¿½_ï¿½fï¿½[ï¿½^ ===
 struct SliceVertex
 {
-    DirectX::XMFLOAT3 position;     // ˆÊ’u
-    DirectX::XMFLOAT3 normal;       // –@ü
-    DirectX::XMFLOAT2 uv;          // ƒeƒNƒXƒ`ƒƒÀ•W
+    DirectX::XMFLOAT3 position;     // ï¿½Ê’u
+    DirectX::XMFLOAT3 normal;       // ï¿½@ï¿½ï¿½
+    DirectX::XMFLOAT2 uv;          // ï¿½eï¿½Nï¿½Xï¿½`ï¿½ï¿½ï¿½ï¿½ï¿½W
 };
 
-// === Ø’fŒ‹‰Ê ===
+// === ï¿½Ø’fï¿½ï¿½ï¿½ï¿½ ===
 struct SliceResult
 {
-    // ã‘¤ƒƒbƒVƒ…i–@ü‚Ì•ûŒü‘¤j
+    // ï¿½ã‘¤ï¿½ï¿½ï¿½bï¿½Vï¿½ï¿½ï¿½iï¿½@ï¿½ï¿½ï¿½Ì•ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½j
     std::vector<SliceVertex> upperVertices;
     std::vector<uint32_t>    upperIndices;
 
-    // ‰º‘¤ƒƒbƒVƒ…i–@ü‚Ì”½‘Î‘¤j
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½bï¿½Vï¿½ï¿½ï¿½iï¿½@ï¿½ï¿½ï¿½Ì”ï¿½ï¿½Î‘ï¿½ï¿½j
     std::vector<SliceVertex> lowerVertices;
     std::vector<uint32_t>    lowerIndices;
 
-    // ’f–Ê‚Ì—ÖŠs“_
+    // ï¿½fï¿½Ê‚Ì—ÖŠsï¿½_
     std::vector<DirectX::XMFLOAT3> crossPoints;
 
-    bool success = false;  // Ø’f‚ªÀÛ‚És‚í‚ê‚½‚©
+    bool success = false;  // ï¿½Ø’fï¿½ï¿½ï¿½ï¿½ï¿½Û‚Ésï¿½ï¿½ê‚½ï¿½ï¿½
 };
 
-// === ƒƒbƒVƒ…Ø’fƒNƒ‰ƒX ===
+// === ï¿½ï¿½ï¿½bï¿½Vï¿½ï¿½ï¿½Ø’fï¿½Nï¿½ï¿½ï¿½X ===
 class MeshSlicer
 {
 public:
-    // ƒƒbƒVƒ…‚ğ•½–Ê‚ÅØ’f‚·‚é
-    // vertices:    Œ³‚ÌƒƒbƒVƒ…‚Ì’¸“_”z—ñ
-    // indices:     Œ³‚ÌƒƒbƒVƒ…‚ÌƒCƒ“ƒfƒbƒNƒX”z—ñ
-    // planePoint:  Ø’f–Êã‚Ì1“_iƒ[ƒ‹ƒhÀ•Wj
-    // planeNormal: Ø’f–Ê‚Ì–@üi³‹K‰»Ï‚İj
+    // ï¿½ï¿½ï¿½bï¿½Vï¿½ï¿½ï¿½ğ•½–Ê‚ÅØ’fï¿½ï¿½ï¿½ï¿½
+    // vertices:    ï¿½ï¿½ï¿½Ìƒï¿½ï¿½bï¿½Vï¿½ï¿½ï¿½Ì’ï¿½ï¿½_ï¿½zï¿½ï¿½
+    // indices:     ï¿½ï¿½ï¿½Ìƒï¿½ï¿½bï¿½Vï¿½ï¿½ï¿½ÌƒCï¿½ï¿½ï¿½fï¿½bï¿½Nï¿½Xï¿½zï¿½ï¿½
+    // planePoint:  ï¿½Ø’fï¿½Êï¿½ï¿½1ï¿½_ï¿½iï¿½ï¿½ï¿½[ï¿½ï¿½ï¿½hï¿½ï¿½ï¿½Wï¿½j
+    // planeNormal: ï¿½Ø’fï¿½Ê‚Ì–@ï¿½ï¿½ï¿½iï¿½ï¿½ï¿½Kï¿½ï¿½ï¿½Ï‚İj
     static SliceResult Slice(
         const std::vector<SliceVertex>& vertices,
         const std::vector<uint32_t>& indices,
         DirectX::XMFLOAT3 planePoint,
         DirectX::XMFLOAT3 planeNormal);
 
-    // ’f–Êƒ|ƒŠƒSƒ“‚ğ¶¬iØ‚èŒû‚ÌŠWj
-    // crossPoints: Ø’f–Êã‚ÌŒğ“_ƒyƒAiSlice‚Åæ“¾Ï‚İj
-    // planeNormal: Ø’f–Ê‚Ì–@ü
-    // upperVerts/Inds: ãƒƒbƒVƒ…‚É’f–Ê‚ğ//
-    // lowerVerts/Inds: ‰ºƒƒbƒVƒ…‚É’f–Ê‚ğ//
+    // ï¿½fï¿½Êƒ|ï¿½ï¿½ï¿½Sï¿½ï¿½ï¿½ğ¶ï¿½ï¿½iï¿½Ø‚ï¿½ï¿½ï¿½ÌŠWï¿½j
+    // crossPoints: ï¿½Ø’fï¿½Êï¿½ÌŒï¿½_ï¿½yï¿½Aï¿½iSliceï¿½Åæ“¾ï¿½Ï‚İj
+    // planeNormal: ï¿½Ø’fï¿½Ê‚Ì–@ï¿½ï¿½
+    // upperVerts/Inds: ï¿½ãƒï¿½bï¿½Vï¿½ï¿½ï¿½É’fï¿½Ê‚ï¿½//
+    // lowerVerts/Inds: ï¿½ï¿½ï¿½ï¿½ï¿½bï¿½Vï¿½ï¿½ï¿½É’fï¿½Ê‚ï¿½//
     static void GenerateCap(
         const std::vector<DirectX::XMFLOAT3>& crossPoints,
         DirectX::XMFLOAT3 planeNormal,
@@ -58,13 +58,13 @@ public:
         std::vector<uint32_t>& lowerInds);
 
 private:
-    // ’¸“_‚ª•½–Ê‚Ì‚Ç‚¿‚ç‘¤‚É‚ ‚é‚©i³=ã, •‰=‰º, 0=–Êãj
+    // ï¿½ï¿½ï¿½_ï¿½ï¿½ï¿½ï¿½ï¿½Ê‚Ì‚Ç‚ï¿½ï¿½ç‘¤ï¿½É‚ï¿½ï¿½é‚©ï¿½iï¿½ï¿½=ï¿½ï¿½, ï¿½ï¿½=ï¿½ï¿½, 0=ï¿½Êï¿½j
     static float DistanceToPlane(
         const DirectX::XMFLOAT3& point,
         const DirectX::XMFLOAT3& planePoint,
         const DirectX::XMFLOAT3& planeNormal);
 
-    // 2’¸“_‚ÌŠÔ‚Å•½–Ê‚Æ‚ÌŒğ“_‚ğŒvZiüŒ`•âŠÔj
+    // 2ï¿½ï¿½ï¿½_ï¿½ÌŠÔ‚Å•ï¿½ï¿½Ê‚Æ‚ÌŒï¿½_ï¿½ï¿½ï¿½vï¿½Zï¿½iï¿½ï¿½ï¿½`ï¿½ï¿½Ôj
     static SliceVertex LerpVertex(
         const SliceVertex& a,
         const SliceVertex& b,

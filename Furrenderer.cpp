@@ -1,27 +1,27 @@
 // =============================================================
-// FurRenderer.cpp - ƒtƒ@[/‘ÛƒŒƒ“ƒ_ƒ‰[‚ÌÀ‘•
+// FurRenderer.cpp - ï¿½tï¿½@ï¿½[/ï¿½Ûƒï¿½ï¿½ï¿½ï¿½_ï¿½ï¿½ï¿½[ï¿½Ìï¿½ï¿½ï¿½
 // =============================================================
 
 #include "FurRenderer.h"
 #include <d3dcompiler.h>    // D3DCompileFromFile
 #include <vector>
 
-// d3dcompiler.lib ‚ğƒŠƒ“ƒN
+// d3dcompiler.lib ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½N
 #pragma comment(lib, "d3dcompiler.lib")
 
 // =============================================================
-// ƒRƒ“ƒXƒgƒ‰ƒNƒ^
+// ï¿½Rï¿½ï¿½ï¿½Xï¿½gï¿½ï¿½ï¿½Nï¿½^
 // =============================================================
 FurRenderer::FurRenderer()
     : m_shellCount(12)
-    , m_furLength(0.08f)     // ‘Û‚Ì‚‚³iƒ[ƒgƒ‹’PˆÊj
-    , m_furDensity(0.80f)     // –§“xi0.0?1.0j
+    , m_furLength(0.08f)     // ï¿½Û‚Ìï¿½ï¿½ï¿½ï¿½iï¿½ï¿½ï¿½[ï¿½gï¿½ï¿½ï¿½Pï¿½Êj
+    , m_furDensity(0.80f)     // ï¿½ï¿½ï¿½xï¿½i0.0?1.0ï¿½j
     , m_indexCount(0)
 {
 }
 
 // =============================================================
-// Initialize - ‰Šú‰»
+// Initialize - ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 // =============================================================
 bool FurRenderer::Initialize(ID3D11Device* device)
 {
@@ -37,10 +37,10 @@ bool FurRenderer::Initialize(ID3D11Device* device)
         return false;
     }
 
-    // --- ’è”ƒoƒbƒtƒ@ì¬ ---
+    // --- ï¿½è”ï¿½oï¿½bï¿½tï¿½@ï¿½ì¬ ---
     D3D11_BUFFER_DESC cbDesc = {};
-    cbDesc.ByteWidth = sizeof(FurCB);           // ƒoƒbƒtƒ@ƒTƒCƒY
-    cbDesc.Usage = D3D11_USAGE_DYNAMIC;          // CPU‘‚«Š·‚¦‰Â”\
+    cbDesc.ByteWidth = sizeof(FurCB);           // ï¿½oï¿½bï¿½tï¿½@ï¿½Tï¿½Cï¿½Y
+    cbDesc.Usage = D3D11_USAGE_DYNAMIC;          // CPUï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â”\
     cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
@@ -51,12 +51,12 @@ bool FurRenderer::Initialize(ID3D11Device* device)
         return false;
     }
 
-    // --- ƒAƒ‹ƒtƒ@ƒuƒŒƒ“ƒhƒXƒe[ƒg ---
-    // –Ñ‚Ìæ’[‚ª”¼“§–¾‚Å‰º‚Ì‘w‚ª“§‚¯‚ÄŒ©‚¦‚é•K—v‚ª‚ ‚é
+    // --- ï¿½Aï¿½ï¿½ï¿½tï¿½@ï¿½uï¿½ï¿½ï¿½ï¿½ï¿½hï¿½Xï¿½eï¿½[ï¿½g ---
+    // ï¿½Ñ‚Ìï¿½[ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Å‰ï¿½ï¿½Ì‘wï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÄŒï¿½ï¿½ï¿½ï¿½ï¿½Kï¿½vï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     D3D11_BLEND_DESC blendDesc = {};
     blendDesc.RenderTarget[0].BlendEnable = TRUE;
-    blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;        // ƒ\[ƒX‚ÌƒAƒ‹ƒtƒ@
-    blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;   // 1-ƒ\[ƒXƒAƒ‹ƒtƒ@
+    blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;        // ï¿½\ï¿½[ï¿½Xï¿½ÌƒAï¿½ï¿½ï¿½tï¿½@
+    blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;   // 1-ï¿½\ï¿½[ï¿½Xï¿½Aï¿½ï¿½ï¿½tï¿½@
     blendDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
     blendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
     blendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
@@ -70,11 +70,11 @@ bool FurRenderer::Initialize(ID3D11Device* device)
         return false;
     }
 
-    // --- —¼–Ê•`‰æiƒJƒŠƒ“ƒO‚È‚µj---
-    // ‘Û‚Í”–‚¢‘w‚È‚Ì‚Å— –Ê‚àŒ©‚¦‚é•K—v‚ª‚ ‚é
+    // --- ï¿½ï¿½ï¿½Ê•`ï¿½ï¿½iï¿½Jï¿½ï¿½ï¿½ï¿½ï¿½Oï¿½È‚ï¿½ï¿½j---
+    // ï¿½Û‚Í”ï¿½ï¿½ï¿½ï¿½wï¿½È‚Ì‚Å—ï¿½ï¿½Ê‚ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Kï¿½vï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     D3D11_RASTERIZER_DESC rsDesc = {};
     rsDesc.FillMode = D3D11_FILL_SOLID;
-    rsDesc.CullMode = D3D11_CULL_NONE;    // —¼–Ê•`‰æ
+    rsDesc.CullMode = D3D11_CULL_NONE;    // ï¿½ï¿½ï¿½Ê•`ï¿½ï¿½
     rsDesc.DepthClipEnable = TRUE;
 
     hr = device->CreateRasterizerState(&rsDesc, m_noCullState.GetAddressOf());
@@ -84,11 +84,11 @@ bool FurRenderer::Initialize(ID3D11Device* device)
         return false;
     }
 
-    // --- [“xƒeƒXƒg‚ ‚èE‘‚«‚İ‚È‚µ ---
-    // ‘¼‚ÌƒIƒuƒWƒFƒNƒg‚Ì‘OŒãŠÖŒW‚Í•Û‚Â‚ªAƒtƒ@[‘w“¯m‚Í[“x‚ğ‘‚©‚È‚¢
+    // --- ï¿½[ï¿½xï¿½eï¿½Xï¿½gï¿½ï¿½ï¿½ï¿½Eï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½İ‚È‚ï¿½ ---
+    // ï¿½ï¿½ï¿½ÌƒIï¿½uï¿½Wï¿½Fï¿½Nï¿½gï¿½Ì‘Oï¿½ï¿½ÖŒWï¿½Í•Û‚Â‚ï¿½ï¿½Aï¿½tï¿½@ï¿½[ï¿½wï¿½ï¿½ï¿½mï¿½Í[ï¿½xï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È‚ï¿½
     D3D11_DEPTH_STENCIL_DESC dsDesc = {};
-    dsDesc.DepthEnable = TRUE;                          // [“xƒeƒXƒgON
-    dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO; // [“x‘‚«‚İOFF
+    dsDesc.DepthEnable = TRUE;                          // ï¿½[ï¿½xï¿½eï¿½Xï¿½gON
+    dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO; // ï¿½[ï¿½xï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½OFF
     dsDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
 
     hr = device->CreateDepthStencilState(&dsDesc, m_depthWriteOff.GetAddressOf());
@@ -103,7 +103,7 @@ bool FurRenderer::Initialize(ID3D11Device* device)
 }
 
 // =============================================================
-// CompileShaders - HLSLƒtƒ@ƒCƒ‹‚©‚çƒVƒF[ƒ_[‚ğƒRƒ“ƒpƒCƒ‹
+// CompileShaders - HLSLï¿½tï¿½@ï¿½Cï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½ï¿½ï¿½Rï¿½ï¿½ï¿½pï¿½Cï¿½ï¿½
 // =============================================================
 bool FurRenderer::CompileShaders(ID3D11Device* device)
 {
@@ -112,14 +112,14 @@ bool FurRenderer::CompileShaders(ID3D11Device* device)
     ComPtr<ID3DBlob> psBlob;
     ComPtr<ID3DBlob> errorBlob;
 
-    // --- ’¸“_ƒVƒF[ƒ_[‚ÌƒRƒ“ƒpƒCƒ‹ ---
+    // --- ï¿½ï¿½ï¿½_ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½ÌƒRï¿½ï¿½ï¿½pï¿½Cï¿½ï¿½ ---
     hr = D3DCompileFromFile(
-        L"FurVS.hlsl",  // ƒtƒ@ƒCƒ‹ƒpƒX
-        nullptr,                        // ƒ}ƒNƒ’è‹`
-        nullptr,                        // ƒCƒ“ƒNƒ‹[ƒh
-        "main",                         // ƒGƒ“ƒgƒŠ[ƒ|ƒCƒ“ƒg
-        "vs_5_0",                       // ƒVƒF[ƒ_[ƒ‚ƒfƒ‹
-        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,  // ƒfƒoƒbƒO—pƒtƒ‰ƒO
+        L"FurVS.hlsl",  // ï¿½tï¿½@ï¿½Cï¿½ï¿½ï¿½pï¿½X
+        nullptr,                        // ï¿½}ï¿½Nï¿½ï¿½ï¿½ï¿½`
+        nullptr,                        // ï¿½Cï¿½ï¿½ï¿½Nï¿½ï¿½ï¿½[ï¿½h
+        "main",                         // ï¿½Gï¿½ï¿½ï¿½gï¿½ï¿½ï¿½[ï¿½|ï¿½Cï¿½ï¿½ï¿½g
+        "vs_5_0",                       // ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½ï¿½ï¿½fï¿½ï¿½
+        D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION,  // ï¿½fï¿½oï¿½bï¿½Oï¿½pï¿½tï¿½ï¿½ï¿½O
         0,
         vsBlob.GetAddressOf(),
         errorBlob.GetAddressOf()
@@ -137,7 +137,7 @@ bool FurRenderer::CompileShaders(ID3D11Device* device)
         return false;
     }
 
-    // --- ƒsƒNƒZƒ‹ƒVƒF[ƒ_[‚ÌƒRƒ“ƒpƒCƒ‹ ---
+    // --- ï¿½sï¿½Nï¿½Zï¿½ï¿½ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½ÌƒRï¿½ï¿½ï¿½pï¿½Cï¿½ï¿½ ---
     hr = D3DCompileFromFile(
         L"FurPS.hlsl",
         nullptr, nullptr,
@@ -160,7 +160,7 @@ bool FurRenderer::CompileShaders(ID3D11Device* device)
         return false;
     }
 
-    // --- ƒVƒF[ƒ_[ƒIƒuƒWƒFƒNƒgì¬ ---
+    // --- ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½Iï¿½uï¿½Wï¿½Fï¿½Nï¿½gï¿½ì¬ ---
     hr = device->CreateVertexShader(
         vsBlob->GetBufferPointer(),
         vsBlob->GetBufferSize(),
@@ -177,8 +177,8 @@ bool FurRenderer::CompileShaders(ID3D11Device* device)
     );
     if (FAILED(hr)) return false;
 
-    // --- “ü—ÍƒŒƒCƒAƒEƒg ---
-    // ’¸“_ƒVƒF[ƒ_[‚ªu‚Ç‚ñ‚Èƒf[ƒ^‚ª—ˆ‚é‚©v‚ğ’m‚é‚½‚ß‚Ì’è‹`
+    // --- ï¿½ï¿½ï¿½Íƒï¿½ï¿½Cï¿½Aï¿½Eï¿½g ---
+    // ï¿½ï¿½ï¿½_ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½ï¿½ï¿½uï¿½Ç‚ï¿½Èƒfï¿½[ï¿½^ï¿½ï¿½ï¿½ï¿½ï¿½é‚©ï¿½vï¿½ï¿½mï¿½é‚½ï¿½ß‚Ì’ï¿½`
     D3D11_INPUT_ELEMENT_DESC inputDesc[] = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -187,7 +187,7 @@ bool FurRenderer::CompileShaders(ID3D11Device* device)
 
     hr = device->CreateInputLayout(
         inputDesc,
-        3,                                // —v‘f”
+        3,                                // ï¿½vï¿½fï¿½ï¿½
         vsBlob->GetBufferPointer(),
         vsBlob->GetBufferSize(),
         m_inputLayout.GetAddressOf()
@@ -199,25 +199,25 @@ bool FurRenderer::CompileShaders(ID3D11Device* device)
 }
 
 // =============================================================
-// CreateGroundQuad - ’n–Ê‚ÌlŠpŒ`ƒƒbƒVƒ…‚ğì¬
+// CreateGroundQuad - ï¿½nï¿½Ê‚Ìlï¿½pï¿½`ï¿½ï¿½ï¿½bï¿½Vï¿½ï¿½ï¿½ï¿½ï¿½ì¬
 // 
-// Šù‘¶‚Ì’n–Êi50x50j‚æ‚è­‚µ‘å‚«‚ß‚ÌƒNƒAƒbƒh‚ğì‚é
-// –@ü‚ÍãŒü‚«(0,1,0)AUV‚Í0?1
+// ï¿½ï¿½ï¿½ï¿½ï¿½Ì’nï¿½Êi50x50ï¿½jï¿½ï¿½è­ï¿½ï¿½ï¿½å‚«ï¿½ß‚ÌƒNï¿½Aï¿½bï¿½hï¿½ï¿½ï¿½ï¿½ï¿½
+// ï¿½@ï¿½ï¿½ï¿½Íï¿½ï¿½ï¿½ï¿½(0,1,0)ï¿½AUVï¿½ï¿½0?1
 //
 // =============================================================
 bool FurRenderer::CreateGroundQuad(ID3D11Device* device)
 {
-    // ’n–Ê‚ÌƒTƒCƒYiMapSystem‚ÌFloor‚É‡‚í‚¹‚éF50x50j
+    // ï¿½nï¿½Ê‚ÌƒTï¿½Cï¿½Yï¿½iMapSystemï¿½ï¿½Floorï¿½Éï¿½ï¿½í‚¹ï¿½ï¿½F50x50ï¿½j
     float halfSize = 25.0f;
-    float groundY = 0.0f;  // ’n–Ê‚Ì‚‚³i’n–Ê‚ÌBox‚Ìã–Ê‚É‡‚í‚¹‚éj
+    float groundY = 0.0f;  // ï¿½nï¿½Ê‚Ìï¿½ï¿½ï¿½ï¿½iï¿½nï¿½Ê‚ï¿½Boxï¿½Ìï¿½Ê‚Éï¿½ï¿½í‚¹ï¿½ï¿½j
 
-    // --- ’¸“_ƒf[ƒ^ ---
+    // --- ï¿½ï¿½ï¿½_ï¿½fï¿½[ï¿½^ ---
     FurVertex vertices[] = {
         // Position                        Normal           TexCoord
-        { {-halfSize, groundY, -halfSize}, {0, 1, 0},      {0, 0} },  // ¶‰œ
-        { { halfSize, groundY, -halfSize}, {0, 1, 0},      {1, 0} },  // ‰E‰œ
-        { {-halfSize, groundY,  halfSize}, {0, 1, 0},      {0, 1} },  // ¶è‘O
-        { { halfSize, groundY,  halfSize}, {0, 1, 0},      {1, 1} },  // ‰Eè‘O
+        { {-halfSize, groundY, -halfSize}, {0, 1, 0},      {0, 0} },  // ï¿½ï¿½ï¿½ï¿½
+        { { halfSize, groundY, -halfSize}, {0, 1, 0},      {1, 0} },  // ï¿½Eï¿½ï¿½
+        { {-halfSize, groundY,  halfSize}, {0, 1, 0},      {0, 1} },  // ï¿½ï¿½ï¿½ï¿½O
+        { { halfSize, groundY,  halfSize}, {0, 1, 0},      {1, 1} },  // ï¿½Eï¿½ï¿½O
     };
 
     D3D11_BUFFER_DESC vbDesc = {};
@@ -231,10 +231,10 @@ bool FurRenderer::CreateGroundQuad(ID3D11Device* device)
     HRESULT hr = device->CreateBuffer(&vbDesc, &vbData, m_vertexBuffer.GetAddressOf());
     if (FAILED(hr)) return false;
 
-    // --- ƒCƒ“ƒfƒbƒNƒXƒf[ƒ^iOŠpŒ`2‚Â‚ÅlŠpŒ`j---
+    // --- ï¿½Cï¿½ï¿½ï¿½fï¿½bï¿½Nï¿½Xï¿½fï¿½[ï¿½^ï¿½iï¿½Oï¿½pï¿½`2ï¿½Â‚Ålï¿½pï¿½`ï¿½j---
     UINT indices[] = {
-        0, 1, 2,    // OŠpŒ`1
-        1, 3, 2     // OŠpŒ`2
+        0, 1, 2,    // ï¿½Oï¿½pï¿½`1
+        1, 3, 2     // ï¿½Oï¿½pï¿½`2
     };
     m_indexCount = 6;
 
@@ -254,11 +254,11 @@ bool FurRenderer::CreateGroundQuad(ID3D11Device* device)
 }
 
 // =============================================================
-// DrawGroundMoss - ’n–Ê‚É‘Û‚ğ•`‰æ
+// DrawGroundMoss - ï¿½nï¿½Ê‚É‘Û‚ï¿½`ï¿½ï¿½
 //
-// yd‘g‚İz“¯‚¶ƒNƒAƒbƒh‚ğm_shellCount‰ñ•`‰æ‚·‚é
-// Še‰ñ‚Å CurrentLayer ‚Ì’l‚ğ•Ï‚¦‚é‚±‚Æ‚ÅA
-// –@ü•ûŒü‚Ö‚Ì‰Ÿ‚µo‚µ—Ê‚ª•Ï‚í‚é ¨ ‘w‚ªÏ‚İd‚È‚é
+// ï¿½yï¿½dï¿½gï¿½İzï¿½ï¿½ï¿½ï¿½ï¿½Nï¿½Aï¿½bï¿½hï¿½ï¿½m_shellCountï¿½ï¿½`ï¿½æ‚·ï¿½ï¿½
+// ï¿½eï¿½ï¿½ï¿½ CurrentLayer ï¿½Ì’lï¿½ï¿½Ï‚ï¿½ï¿½é‚±ï¿½Æ‚ÅA
+// ï¿½@ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö‚Ì‰ï¿½ï¿½ï¿½ï¿½oï¿½ï¿½ï¿½Ê‚ï¿½ï¿½Ï‚ï¿½ï¿½ ï¿½ï¿½ ï¿½wï¿½ï¿½ï¿½Ï‚İdï¿½È‚ï¿½
 // =============================================================
 void FurRenderer::DrawGroundMoss(
     ID3D11DeviceContext* context,
@@ -266,7 +266,7 @@ void FurRenderer::DrawGroundMoss(
     DirectX::XMMATRIX projection,
     float elapsedTime)
 {
-    // --- Œ»İ‚Ì•`‰æƒXƒe[ƒg‚ğ•Û‘¶ ---
+    // --- ï¿½ï¿½ï¿½İ‚Ì•`ï¿½ï¿½Xï¿½eï¿½[ï¿½gï¿½ï¿½Û‘ï¿½ ---
     ComPtr<ID3D11BlendState> prevBlend;
     FLOAT prevBlendFactor[4];
     UINT prevSampleMask;
@@ -279,75 +279,75 @@ void FurRenderer::DrawGroundMoss(
     UINT prevStencilRef;
     context->OMGetDepthStencilState(prevDS.GetAddressOf(), &prevStencilRef);
 
-    // --- •`‰æƒXƒe[ƒg‚ğİ’è ---
+    // --- ï¿½`ï¿½ï¿½Xï¿½eï¿½[ï¿½gï¿½ï¿½İ’ï¿½ ---
     float blendFactor[4] = { 0, 0, 0, 0 };
     context->OMSetBlendState(m_alphaBlendState.Get(), blendFactor, 0xFFFFFFFF);
     context->RSSetState(m_noCullState.Get());
     context->OMSetDepthStencilState(m_depthWriteOff.Get(), 0);
 
-    // --- ƒVƒF[ƒ_[‚ğƒZƒbƒg ---
+    // --- ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½ï¿½ï¿½Zï¿½bï¿½g ---
     context->VSSetShader(m_vertexShader.Get(), nullptr, 0);
     context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
     context->IASetInputLayout(m_inputLayout.Get());
 
-    // --- ’¸“_ƒoƒbƒtƒ@‚ğƒZƒbƒg ---
+    // --- ï¿½ï¿½ï¿½_ï¿½oï¿½bï¿½tï¿½@ï¿½ï¿½ï¿½Zï¿½bï¿½g ---
     UINT stride = sizeof(FurVertex);
     UINT offset = 0;
     context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride, &offset);
     context->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    // --- ’è”ƒoƒbƒtƒ@‚ğƒZƒbƒg ---
+    // --- ï¿½è”ï¿½oï¿½bï¿½tï¿½@ï¿½ï¿½ï¿½Zï¿½bï¿½g ---
     context->VSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
     context->PSSetConstantBuffers(0, 1, m_constantBuffer.GetAddressOf());
 
-    // --- ƒ[ƒ‹ƒhs—ñi’n–Ê‚ÍŒ´“_‚É”z’uj---
+    // --- ï¿½ï¿½ï¿½[ï¿½ï¿½ï¿½hï¿½sï¿½ï¿½iï¿½nï¿½Ê‚ÍŒï¿½ï¿½_ï¿½É”zï¿½uï¿½j---
     DirectX::XMMATRIX world = DirectX::XMMatrixIdentity();
 
     // ==============================================
-    // Še‘w‚ğ•`‰æ
+    // ï¿½eï¿½wï¿½ï¿½`ï¿½ï¿½
     // ==============================================
     for (int i = 0; i < m_shellCount; i++)
     {
-        // --- ’è”ƒoƒbƒtƒ@‚ğXV ---
+        // --- ï¿½è”ï¿½oï¿½bï¿½tï¿½@ï¿½ï¿½ï¿½Xï¿½V ---
         D3D11_MAPPED_SUBRESOURCE mapped;
         HRESULT hr = context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
         if (FAILED(hr)) continue;
 
         FurCB* cb = (FurCB*)mapped.pData;
 
-        // s—ñ‚ğŠi”[iXMMATRIX‚©‚çXMFLOAT4X4‚É•ÏŠ·j
+        // ï¿½sï¿½ï¿½ï¿½ï¿½iï¿½[ï¿½iXMMATRIXï¿½ï¿½ï¿½ï¿½XMFLOAT4X4ï¿½É•ÏŠï¿½ï¿½j
         DirectX::XMStoreFloat4x4(&cb->World, DirectX::XMMatrixTranspose(world));
         DirectX::XMStoreFloat4x4(&cb->View, DirectX::XMMatrixTranspose(view));
         DirectX::XMStoreFloat4x4(&cb->Projection, DirectX::XMMatrixTranspose(projection));
 
-        // ƒtƒ@[ƒpƒ‰ƒ[ƒ^
+        // ï¿½tï¿½@ï¿½[ï¿½pï¿½ï¿½ï¿½ï¿½ï¿½[ï¿½^
         cb->FurLength = m_furLength;
         cb->CurrentLayer = (float)i;
         cb->TotalLayers = (float)m_shellCount;
         cb->Time = elapsedTime;
 
-        // •—iŠÉ‚â‚©‚É—h‚ê‚é’ö“xj
+        // ï¿½ï¿½ï¿½iï¿½É‚â‚©ï¿½É—hï¿½ï¿½ï¿½ï¿½ï¿½xï¿½j
         cb->WindDirection = DirectX::XMFLOAT3(1.0f, 0.0f, 0.3f);
         cb->WindStrength = 0.015f;
 
-        // ‘Û‚ÌFiƒSƒVƒbƒN‚ÈˆÃ‚¢—Î?–¾‚é‚¢—Îj
-        cb->BaseColor = DirectX::XMFLOAT3(0.05f, 0.12f, 0.03f);  // ªŒ³FˆÃ‚¢—Î
+        // ï¿½Û‚ÌFï¿½iï¿½Sï¿½Vï¿½bï¿½Nï¿½ÈˆÃ‚ï¿½ï¿½ï¿½?ï¿½ï¿½ï¿½é‚¢ï¿½Îj
+        cb->BaseColor = DirectX::XMFLOAT3(0.05f, 0.12f, 0.03f);  // ï¿½ï¿½ï¿½ï¿½ï¿½Fï¿½Ã‚ï¿½ï¿½ï¿½
         cb->FurDensity = m_furDensity;
-        cb->TipColor = DirectX::XMFLOAT3(0.15f, 0.35f, 0.08f);   // æ’[F–¾‚é‚¢—Î
+        cb->TipColor = DirectX::XMFLOAT3(0.15f, 0.35f, 0.08f);   // ï¿½ï¿½[ï¿½Fï¿½ï¿½ï¿½é‚¢ï¿½ï¿½
         cb->Padding2 = 0.0f;
 
-        // ƒ‰ƒCƒeƒBƒ“ƒO
+        // ï¿½ï¿½ï¿½Cï¿½eï¿½Bï¿½ï¿½ï¿½O
         cb->LightDir = DirectX::XMFLOAT3(1.0f, -1.0f, 1.0f);
         cb->AmbientStrength = 0.4f;
 
         context->Unmap(m_constantBuffer.Get(), 0);
 
-        // --- ‚±‚Ì‘w‚ğ•`‰æ ---
+        // --- ï¿½ï¿½ï¿½Ì‘wï¿½ï¿½`ï¿½ï¿½ ---
         context->DrawIndexed(m_indexCount, 0, 0);
     }
 
-    // --- •`‰æƒXƒe[ƒg‚ğ•œŒ³ ---
+    // --- ï¿½`ï¿½ï¿½Xï¿½eï¿½[ï¿½gï¿½ğ•œŒï¿½ ---
     context->OMSetBlendState(prevBlend.Get(), prevBlendFactor, prevSampleMask);
     context->RSSetState(prevRS.Get());
     context->OMSetDepthStencilState(prevDS.Get(), prevStencilRef);

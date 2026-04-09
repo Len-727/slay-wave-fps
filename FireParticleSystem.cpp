@@ -7,7 +7,7 @@
 using namespace DirectX;
 
 // ========================================
-// ƒ‰ƒ“ƒ_ƒ€¶¬Ší
+// ï¿½ï¿½ï¿½ï¿½ï¿½_ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 // ========================================
 
 static std::random_device rd;
@@ -20,7 +20,7 @@ static float RandomFloat(float min, float max)
 }
 
 // ========================================
-// ƒRƒ“ƒXƒgƒ‰ƒNƒ^ / ƒfƒXƒgƒ‰ƒNƒ^
+// ï¿½Rï¿½ï¿½ï¿½Xï¿½gï¿½ï¿½ï¿½Nï¿½^ / ï¿½fï¿½Xï¿½gï¿½ï¿½ï¿½Nï¿½^
 // ========================================
 
 FireParticleSystem::FireParticleSystem()
@@ -36,7 +36,7 @@ FireParticleSystem::~FireParticleSystem()
 }
 
 // ========================================
-// ‰Šú‰»
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 // ========================================
 
 void FireParticleSystem::Initialize(ID3D11Device* device, int maxParticles)
@@ -44,7 +44,7 @@ void FireParticleSystem::Initialize(ID3D11Device* device, int maxParticles)
     m_maxParticles = maxParticles;
     m_particles.reserve(m_maxParticles);
 
-    // ƒfƒtƒHƒ‹ƒg‚ÌƒxƒWƒF‹Èüi¶‰º‚©‚ç‰Eãj
+    // ï¿½fï¿½tï¿½Hï¿½ï¿½ï¿½gï¿½Ìƒxï¿½Wï¿½Fï¿½Èï¿½ï¿½iï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Eï¿½ï¿½j
     SetBezierCurve(
         XMFLOAT3(-1.0f, -1.0f, 0.0f),
         XMFLOAT3(-0.5f, 0.0f, 0.0f),
@@ -59,7 +59,7 @@ void FireParticleSystem::Initialize(ID3D11Device* device, int maxParticles)
 }
 
 // ========================================
-// ƒxƒWƒF‹Èüİ’è
+// ï¿½xï¿½Wï¿½Fï¿½Èï¿½ï¿½İ’ï¿½
 // ========================================
 
 void FireParticleSystem::SetBezierCurve(
@@ -72,7 +72,7 @@ void FireParticleSystem::SetBezierCurve(
 }
 
 // ========================================
-// •úo§Œä
+// ï¿½ï¿½ï¿½oï¿½ï¿½ï¿½ï¿½
 // ========================================
 
 void FireParticleSystem::StartEmitting()
@@ -91,7 +91,7 @@ void FireParticleSystem::SetEmissionRate(float particlesPerSecond)
 }
 
 // ========================================
-// ƒp[ƒeƒBƒNƒ‹¶¬
+// ï¿½pï¿½[ï¿½eï¿½Bï¿½Nï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 // ========================================
 
 void FireParticleSystem::EmitParticle()
@@ -127,7 +127,7 @@ void FireParticleSystem::EmitParticle()
 }
 
 // ========================================
-// XV
+// ï¿½Xï¿½V
 // ========================================
 
 void FireParticleSystem::Update(float deltaTime)
@@ -188,7 +188,7 @@ void FireParticleSystem::UpdateParticle(FireParticle& particle, float deltaTime)
 }
 
 // ========================================
-// ƒoƒbƒtƒ@ì¬
+// ï¿½oï¿½bï¿½tï¿½@ï¿½ì¬
 // ========================================
 
 void FireParticleSystem::CreateBuffers(ID3D11Device* device)
@@ -229,17 +229,17 @@ void FireParticleSystem::CreateBuffers(ID3D11Device* device)
 }
 
 // ========================================
-// ƒVƒF[ƒ_[ì¬
+// ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½ì¬
 // ========================================
 void FireParticleSystem::CreateShaders(ID3D11Device* device)
 {
 
     HRESULT hr;
-    Microsoft::WRL::ComPtr<ID3DBlob> blob;  // .cso ƒoƒCƒiƒŠ‚Ì“ü‚ê•¨
+    Microsoft::WRL::ComPtr<ID3DBlob> blob;  // .cso ï¿½oï¿½Cï¿½iï¿½ï¿½ï¿½Ì“ï¿½ï¿½ê•¨
 
     // ========================================
-    // ’¸“_ƒVƒF[ƒ_[iFireParticleVSj
-    // y–ğŠ„zŠeƒp[ƒeƒBƒNƒ‹’¸“_‚ÌˆÊ’u‚ğƒrƒ‹ƒ{[ƒh“WŠJ‚·‚é
+    // ï¿½ï¿½ï¿½_ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½iFireParticleVSï¿½j
+    // ï¿½yï¿½ï¿½ï¿½ï¿½ï¿½zï¿½eï¿½pï¿½[ï¿½eï¿½Bï¿½Nï¿½ï¿½ï¿½ï¿½ï¿½_ï¿½ÌˆÊ’uï¿½ï¿½ï¿½rï¿½ï¿½ï¿½{ï¿½[ï¿½hï¿½Wï¿½Jï¿½ï¿½ï¿½ï¿½
     // ========================================
     hr = D3DReadFileToBlob(L"Assets/Shaders/FireParticleVS.cso", &blob);
     if (FAILED(hr))
@@ -256,7 +256,7 @@ void FireParticleSystem::CreateShaders(ID3D11Device* device)
         throw std::runtime_error("Failed to create FireParticle VS");
 
     // ========================================
-    // “ü—ÍƒŒƒCƒAƒEƒgi’¸“_ƒf[ƒ^‚Ì\‘¢‚ğ GPU ‚É‹³‚¦‚éj
+    // ï¿½ï¿½ï¿½Íƒï¿½ï¿½Cï¿½Aï¿½Eï¿½gï¿½iï¿½ï¿½ï¿½_ï¿½fï¿½[ï¿½^ï¿½Ì\ï¿½ï¿½ï¿½ï¿½ GPU ï¿½É‹ï¿½ï¿½ï¿½ï¿½ï¿½j
     // ========================================
     D3D11_INPUT_ELEMENT_DESC layout[] =
     {
@@ -277,10 +277,10 @@ void FireParticleSystem::CreateShaders(ID3D11Device* device)
     OutputDebugStringA("[FIRE] FireParticleVS loaded from CSO\n");
 
     // ========================================
-    // ƒsƒNƒZƒ‹ƒVƒF[ƒ_[iFireParticlePSj
-    // y–ğŠ„zŠeƒp[ƒeƒBƒNƒ‹‚ÌF‚ÆƒAƒ‹ƒtƒ@‚ğŒvZ‚·‚é
+    // ï¿½sï¿½Nï¿½Zï¿½ï¿½ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½iFireParticlePSï¿½j
+    // ï¿½yï¿½ï¿½ï¿½ï¿½ï¿½zï¿½eï¿½pï¿½[ï¿½eï¿½Bï¿½Nï¿½ï¿½ï¿½ÌFï¿½ÆƒAï¿½ï¿½ï¿½tï¿½@ï¿½ï¿½ï¿½vï¿½Zï¿½ï¿½ï¿½ï¿½
     // ========================================
-    blob.Reset();  // ‘O‚Ì blob ‚ğ‰ğ•ú‚µ‚Ä‚©‚çÄ—˜—p
+    blob.Reset();  // ï¿½Oï¿½ï¿½ blob ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä‚ï¿½ï¿½ï¿½Ä—ï¿½ï¿½p
     hr = D3DReadFileToBlob(L"Assets/Shaders/FireParticlePS.cso", &blob);
     if (FAILED(hr))
     {
@@ -365,7 +365,7 @@ void FireParticleSystem::CreateTexture(ID3D11Device* device)
 }
 
 // ========================================
-// ƒuƒŒƒ“ƒhƒXƒe[ƒgì¬
+// ï¿½uï¿½ï¿½ï¿½ï¿½ï¿½hï¿½Xï¿½eï¿½[ï¿½gï¿½ì¬
 // ========================================
 
 void FireParticleSystem::CreateBlendState(ID3D11Device* device)
@@ -390,7 +390,7 @@ void FireParticleSystem::CreateBlendState(ID3D11Device* device)
 }
 
 // ========================================
-// •`‰æ
+// ï¿½`ï¿½ï¿½
 // ========================================
 
 void FireParticleSystem::Render(ID3D11DeviceContext* context, XMMATRIX view, XMMATRIX projection)

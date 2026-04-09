@@ -1,5 +1,5 @@
 // ========================================
-// FlagMesh.cpp - Šø‚ÌƒƒbƒVƒ…À‘•
+// FlagMesh.cpp - ï¿½ï¿½ï¿½Ìƒï¿½ï¿½bï¿½Vï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 // ========================================
 
 #include "FlagMesh.h"
@@ -22,15 +22,15 @@ void FlagMesh::Initialize(ID3D11Device* device, int width, int height)
     m_width = width;
     m_height = height;
     m_vertexCount = width * height;
-    m_indexCount = (width - 1) * (height - 1) * 6;  // ŠelŠpŒ` = 2OŠpŒ` = 6’¸“_
+    m_indexCount = (width - 1) * (height - 1) * 6;  // ï¿½eï¿½lï¿½pï¿½` = 2ï¿½Oï¿½pï¿½` = 6ï¿½ï¿½ï¿½_
 
-    // === ’¸“_ƒf[ƒ^‚ÆƒCƒ“ƒfƒbƒNƒX‚ğ¶¬ ===
+    // === ï¿½ï¿½ï¿½_ï¿½fï¿½[ï¿½^ï¿½ÆƒCï¿½ï¿½ï¿½fï¿½bï¿½Nï¿½Xï¿½ğ¶ï¿½ ===
     std::vector<FlagVertex> vertices;
     std::vector<uint16_t> indices;
 
     CreateMesh(vertices, indices);
 
-    // === ’¸“_ƒoƒbƒtƒ@‚ğì¬ ===
+    // === ï¿½ï¿½ï¿½_ï¿½oï¿½bï¿½tï¿½@ï¿½ï¿½ï¿½ì¬ ===
     D3D11_BUFFER_DESC vertexBufferDesc = {};
     vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
     vertexBufferDesc.ByteWidth = sizeof(FlagVertex) * m_vertexCount;
@@ -45,7 +45,7 @@ void FlagMesh::Initialize(ID3D11Device* device, int width, int height)
         throw std::runtime_error("Failed to create flag vertex buffer");
     }
 
-    // === ƒCƒ“ƒfƒbƒNƒXƒoƒbƒtƒ@‚ğì¬ ===
+    // === ï¿½Cï¿½ï¿½ï¿½fï¿½bï¿½Nï¿½Xï¿½oï¿½bï¿½tï¿½@ï¿½ï¿½ï¿½ì¬ ===
     D3D11_BUFFER_DESC indexBufferDesc = {};
     indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
     indexBufferDesc.ByteWidth = sizeof(uint16_t) * m_indexCount;
@@ -68,49 +68,49 @@ void FlagMesh::CreateMesh(
     vertices.clear();
     indices.clear();
 
-    // === ’¸“_‚ğ¶¬iƒOƒŠƒbƒhój ===
+    // === ï¿½ï¿½ï¿½_ï¿½ğ¶ï¿½ï¿½iï¿½Oï¿½ï¿½ï¿½bï¿½hï¿½ï¿½j ===
     for (int y = 0; y < m_height; y++)
     {
         for (int x = 0; x < m_width; x++)
         {
             FlagVertex vertex;
 
-            // ˆÊ’ui-1.0 ~ 1.0 ‚Ì”ÍˆÍj
-            // X: ¶‰Ei-1.0‚ª¶’[A1.0‚ª‰E’[j
-            // Y: ã‰ºi-1.0‚ª‰º’[A1.0‚ªã’[j
-            // Z: ‰œs‚«i0.0‚ÅŒÅ’èAƒVƒF[ƒ_[‚Å“®‚©‚·j
+            // ï¿½Ê’uï¿½i-1.0 ~ 1.0 ï¿½Ì”ÍˆÍj
+            // X: ï¿½ï¿½ï¿½Eï¿½i-1.0ï¿½ï¿½ï¿½ï¿½ï¿½[ï¿½A1.0ï¿½ï¿½ï¿½Eï¿½[ï¿½j
+            // Y: ï¿½ã‰ºï¿½i-1.0ï¿½ï¿½ï¿½ï¿½ï¿½[ï¿½A1.0ï¿½ï¿½ï¿½ï¿½[ï¿½j
+            // Z: ï¿½ï¿½ï¿½sï¿½ï¿½ï¿½i0.0ï¿½ÅŒÅ’ï¿½Aï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½Å“ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½j
             vertex.position.x = (float)x / (m_width - 1) * 2.0f - 1.0f;
             vertex.position.y = (float)y / (m_height - 1) * 2.0f - 1.0f;
             vertex.position.z = 0.0f;
 
-            // UVÀ•Wi0.0 ~ 1.0j
+            // UVï¿½ï¿½ï¿½Wï¿½i0.0 ~ 1.0ï¿½j
             vertex.texCoord.x = (float)x / (m_width - 1);
             vertex.texCoord.y = (float)y / (m_height - 1);
 
-            // –@üi‰Šúó‘Ô‚Í³–ÊŒü‚«j
+            // ï¿½@ï¿½ï¿½ï¿½iï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô‚Íï¿½ï¿½ÊŒï¿½ï¿½ï¿½ï¿½j
             vertex.normal = DirectX::XMFLOAT3(0.0f, 0.0f, -1.0f);
 
             vertices.push_back(vertex);
         }
     }
 
-    // === ƒCƒ“ƒfƒbƒNƒX‚ğ¶¬iOŠpŒ`ƒŠƒXƒgj ===
+    // === ï¿½Cï¿½ï¿½ï¿½fï¿½bï¿½Nï¿½Xï¿½ğ¶ï¿½ï¿½iï¿½Oï¿½pï¿½`ï¿½ï¿½ï¿½Xï¿½gï¿½j ===
     for (int y = 0; y < m_height - 1; y++)
     {
         for (int x = 0; x < m_width - 1; x++)
         {
-            // lŠpŒ`‚Ì4‹÷
+            // ï¿½lï¿½pï¿½`ï¿½ï¿½4ï¿½ï¿½
             int topLeft = y * m_width + x;
             int topRight = topLeft + 1;
             int bottomLeft = (y + 1) * m_width + x;
             int bottomRight = bottomLeft + 1;
 
-            // OŠpŒ`1i¶ãj
+            // ï¿½Oï¿½pï¿½`1ï¿½iï¿½ï¿½ï¿½ï¿½j
             indices.push_back(topLeft);
             indices.push_back(bottomLeft);
             indices.push_back(topRight);
 
-            // OŠpŒ`2i‰E‰ºj
+            // ï¿½Oï¿½pï¿½`2ï¿½iï¿½Eï¿½ï¿½ï¿½j
             indices.push_back(topRight);
             indices.push_back(bottomLeft);
             indices.push_back(bottomRight);
@@ -120,17 +120,17 @@ void FlagMesh::CreateMesh(
 
 void FlagMesh::Draw(ID3D11DeviceContext* context)
 {
-    // ’¸“_ƒoƒbƒtƒ@‚ğƒZƒbƒg
+    // ï¿½ï¿½ï¿½_ï¿½oï¿½bï¿½tï¿½@ï¿½ï¿½ï¿½Zï¿½bï¿½g
     UINT stride = sizeof(FlagVertex);
     UINT offset = 0;
     context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride, &offset);
 
-    // ƒCƒ“ƒfƒbƒNƒXƒoƒbƒtƒ@‚ğƒZƒbƒg
+    // ï¿½Cï¿½ï¿½ï¿½fï¿½bï¿½Nï¿½Xï¿½oï¿½bï¿½tï¿½@ï¿½ï¿½ï¿½Zï¿½bï¿½g
     context->IASetIndexBuffer(m_indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
 
-    // ƒvƒŠƒ~ƒeƒBƒuƒgƒ|ƒƒW‚ğƒZƒbƒg
+    // ï¿½vï¿½ï¿½ï¿½~ï¿½eï¿½Bï¿½uï¿½gï¿½|ï¿½ï¿½ï¿½Wï¿½ï¿½ï¿½Zï¿½bï¿½g
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    // •`‰æ
+    // ï¿½`ï¿½ï¿½
     context->DrawIndexed(m_indexCount, 0, 0);
 }

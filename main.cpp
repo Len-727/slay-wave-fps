@@ -7,7 +7,7 @@
 #include <memory>
 #include "Game.h"
 
-// === ImGui —p‚Ì‘O•ûéŒ¾ ===
+// === ImGui ï¿½pï¿½Ì‘Oï¿½ï¿½ï¿½éŒ¾ ===
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 using namespace DirectX;
@@ -29,11 +29,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
     g_game = std::make_unique<Game>();
 
-    // === ƒEƒBƒ“ƒhƒEì¬•”•ªi—‰ğ‚·‚×‚«j ===
+    // === ï¿½Eï¿½Bï¿½ï¿½ï¿½hï¿½Eï¿½ì¬ï¿½ï¿½ï¿½ï¿½ï¿½iï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×‚ï¿½ï¿½j ===
     WNDCLASSEXW wcex = {};
     wcex.cbSize = sizeof(WNDCLASSEXW);
-    wcex.style = CS_HREDRAW | CS_VREDRAW;        // ƒEƒBƒ“ƒhƒEƒTƒCƒY•ÏX‚ÉÄ•`‰æ
-    wcex.lpfnWndProc = WndProc;                  // ƒƒbƒZ[ƒWˆ—ŠÖ”
+    wcex.style = CS_HREDRAW | CS_VREDRAW;        // ï¿½Eï¿½Bï¿½ï¿½ï¿½hï¿½Eï¿½Tï¿½Cï¿½Yï¿½ÏXï¿½ï¿½ï¿½ÉÄ•`ï¿½ï¿½
+    wcex.lpfnWndProc = WndProc;                  // ï¿½ï¿½ï¿½bï¿½Zï¿½[ï¿½Wï¿½ï¿½ï¿½ï¿½ï¿½Öï¿½
     wcex.hInstance = hInstance;
     wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
     wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
@@ -45,7 +45,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         return 1;
     }
 
-    // ƒEƒBƒ“ƒhƒEƒTƒCƒYİ’èi‚±‚±‚Í•ÏX‚µ‚Ä‚İ‚æ‚¤Ij
+    // ï¿½Eï¿½Bï¿½ï¿½ï¿½hï¿½Eï¿½Tï¿½Cï¿½Yï¿½İ’ï¿½iï¿½ï¿½ï¿½ï¿½ï¿½Í•ÏXï¿½ï¿½ï¿½Ä‚İ‚æ‚¤ï¿½Iï¿½j
     int width = 1280;  
     int height = 720;
 
@@ -53,7 +53,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
 
     HWND hwnd = CreateWindowExW(0, L"RivalsGameWindowClass",
-        L"Rivals Game - Phase 1", // ƒ^ƒCƒgƒ‹‚ğ•ÏX‚µ‚Ä‚İ‚æ‚¤I
+        L"Rivals Game - Phase 1", // ï¿½^ï¿½Cï¿½gï¿½ï¿½ï¿½ï¿½ÏXï¿½ï¿½ï¿½Ä‚İ‚æ‚¤ï¿½I
         WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
         rc.right - rc.left, rc.bottom - rc.top,
         nullptr, nullptr, hInstance, nullptr);
@@ -69,10 +69,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
     SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(g_game.get()));
 
-    // ƒQ[ƒ€‰Šú‰»
+    // ï¿½Qï¿½[ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     g_game->Initialize(hwnd, width, height);
 
-    // === ƒƒCƒ“ƒQ[ƒ€ƒ‹[ƒvid—vI—‰ğ‚·‚×‚«j ===
+    // === ï¿½ï¿½ï¿½Cï¿½ï¿½ï¿½Qï¿½[ï¿½ï¿½ï¿½ï¿½ï¿½[ï¿½vï¿½iï¿½dï¿½vï¿½Iï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×‚ï¿½ï¿½j ===
     MSG msg = {};
     while (WM_QUIT != msg.message)
     {
@@ -83,7 +83,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
         }
         else
         {
-            g_game->Tick();  // ƒQ[ƒ€‚ÌƒƒCƒ“ˆ—i‚±‚±‚É’–ÚIj
+            g_game->Tick();  // ï¿½Qï¿½[ï¿½ï¿½ï¿½Ìƒï¿½ï¿½Cï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½iï¿½ï¿½ï¿½ï¿½ï¿½É’ï¿½ï¿½ÚIï¿½j
         }
     }
 
@@ -91,10 +91,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     return (int)msg.wParam;
 }
 
-// === ƒEƒBƒ“ƒhƒEƒƒbƒZ[ƒWˆ—i—‰ğ{‰ü—Ç‘ÎÛj ===
+// === ï¿½Eï¿½Bï¿½ï¿½ï¿½hï¿½Eï¿½ï¿½ï¿½bï¿½Zï¿½[ï¿½Wï¿½ï¿½ï¿½ï¿½ï¿½iï¿½ï¿½ï¿½ï¿½ï¿½{ï¿½ï¿½ï¿½Ç‘ÎÛj ===
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    // === ImGui ‚ÉƒƒbƒZ[ƒW‚ğ“n‚·  ===
+    // === ImGui ï¿½Éƒï¿½ï¿½bï¿½Zï¿½[ï¿½Wï¿½ï¿½nï¿½ï¿½  ===
     if (ImGui_ImplWin32_WndProcHandler(hWnd, message, wParam, lParam))
         return true;
 
@@ -116,13 +116,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
         break;
 
-        // === ƒL[“ü—Íˆ—iŒã‚Å‰ü—Ç—\’èj ===
+        // === ï¿½Lï¿½[ï¿½ï¿½ï¿½Íï¿½ï¿½ï¿½ï¿½iï¿½ï¿½Å‰ï¿½ï¿½Ç—\ï¿½ï¿½j ===
     case WM_KEYDOWN:
         if (wParam == VK_ESCAPE)
         {
             PostQuitMessage(0);
         }
-        // TODO: ‚±‚±‚É‘¼‚ÌƒL[ˆ—‚ğ//‚µ‚Ä‚¢‚­
+        // TODO: ï¿½ï¿½ï¿½ï¿½ï¿½É‘ï¿½ï¿½ÌƒLï¿½[ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½//ï¿½ï¿½ï¿½Ä‚ï¿½ï¿½ï¿½
         break;
 
     case WM_DESTROY:

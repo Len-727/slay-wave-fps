@@ -1,4 +1,4 @@
-//  // WeaponSystem.h - •ŠíŠÇ—ƒVƒXƒeƒ€
+//  // WeaponSystem.h - ï¿½ï¿½ï¿½ï¿½Ç—ï¿½ï¿½Vï¿½Xï¿½eï¿½ï¿½
 
 #pragma once
 #pragma once
@@ -13,7 +13,7 @@ public:
     void SwitchWeapon(WeaponType newWeapon);
     void BuyWeapon(WeaponType weaponType, int& playerPoints);
 
-    // ƒQƒbƒ^[
+    // ï¿½Qï¿½bï¿½^ï¿½[
     WeaponType GetCurrentWeapon() const { return m_currentWeapon; }
     WeaponType GetPrimaryWeapon() const { return m_primaryWeapon; }
     WeaponType GetSecondaryWeapon() const { return m_secondaryWeapon; }
@@ -30,7 +30,7 @@ public:
 
     const WeaponData& GetWeaponData(WeaponType type) const { return m_weaponStats.at(type); }
 
-    // ƒZƒbƒ^[i’e–òXV‚È‚Çj
+    // ï¿½Zï¿½bï¿½^ï¿½[ï¿½iï¿½eï¿½ï¿½Xï¿½Vï¿½È‚Çj
     void SetCurrentAmmo(int ammo) { m_currentAmmo = ammo; }
     void SetReserveAmmo(int ammo) { m_reserveAmmo = ammo; }
     void SetReloading(bool reloading) { m_isReloading = reloading; }

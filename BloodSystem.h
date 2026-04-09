@@ -1,6 +1,6 @@
 // ============================================================
 //  BloodSystem.h
-//  ŒŒ‚µ‚Ô‚«•ŒŒƒfƒJ[ƒ‹ŠÇ— (ƒJƒXƒ^ƒ€HLSLƒVƒF[ƒ_[‘Î‰”Å)
+//  ï¿½ï¿½ï¿½ï¿½ï¿½Ô‚ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½fï¿½Jï¿½[ï¿½ï¿½ï¿½Ç—ï¿½ (ï¿½Jï¿½Xï¿½^ï¿½ï¿½HLSLï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½Î‰ï¿½ï¿½ï¿½)
 // ============================================================
 #pragma once
 
@@ -37,32 +37,32 @@ public:
         DirectX::XMMATRIX proj,
         DirectX::XMFLOAT3 cameraPos);
 
-    // === ƒgƒŠƒK[ ===
+    // === ï¿½gï¿½ï¿½ï¿½Kï¿½[ ===
     void OnEnemyKilled(DirectX::XMFLOAT3 enemyPos, DirectX::XMFLOAT3 playerPos, float maxRange = 8.0f);
     void OnGloryKill(DirectX::XMFLOAT3 enemyPos);
     void OnExplosionKill(DirectX::XMFLOAT3 enemyPos, DirectX::XMFLOAT3 playerPos);
     void OnMeleeKill(DirectX::XMFLOAT3 enemyPos);
 
 private:
-    // ƒXƒNƒŠ[ƒ“ƒuƒ‰ƒbƒh
+    // ï¿½Xï¿½Nï¿½ï¿½ï¿½[ï¿½ï¿½ï¿½uï¿½ï¿½ï¿½bï¿½h
     void SpawnScreenBlood(int count, float intensity);
     void UpdateScreenBlood(float deltaTime);
     std::vector<ScreenBlood> m_screenBloods;
 
-    // °ƒfƒJ[ƒ‹
+    // ï¿½ï¿½ï¿½fï¿½Jï¿½[ï¿½ï¿½
     void SpawnBloodDecal(DirectX::XMFLOAT3 position, float size);
     void UpdateBloodDecals(float deltaTime);
     std::vector<BloodDecal> m_bloodDecals;
     static const int MAX_BLOOD_DECALS = 200;
 
-    // ƒJƒXƒ^ƒ€ƒVƒF[ƒ_[(©‘O‚ÅŠ—L)
+    // ï¿½Jï¿½Xï¿½^ï¿½ï¿½ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[(ï¿½ï¿½ï¿½Oï¿½Åï¿½ï¿½L)
     Microsoft::WRL::ComPtr<ID3D11VertexShader>  m_bloodVS;
     Microsoft::WRL::ComPtr<ID3D11PixelShader>   m_bloodPS;
     Microsoft::WRL::ComPtr<ID3D11InputLayout>   m_bloodIL;
     Microsoft::WRL::ComPtr<ID3D11Buffer>        m_bloodCB;
     bool m_hasCustomShader = false;
 
-    // ’è”ƒoƒbƒtƒ@\‘¢‘Ì(HLSL‚Ìcbuffer‚ÆŠ®‘Sˆê’v)
+    // ï¿½è”ï¿½oï¿½bï¿½tï¿½@ï¿½\ï¿½ï¿½ï¿½ï¿½(HLSLï¿½ï¿½cbufferï¿½ÆŠï¿½ï¿½Sï¿½ï¿½v)
     struct alignas(16) BloodCBData
     {
         DirectX::XMFLOAT4X4 WorldViewProj;   // 64 bytes
@@ -73,20 +73,20 @@ private:
     };
     float m_totalTime = 0.0f;
 
-    // •`‰æƒŠƒ\[ƒX(Game‚©‚çØ‚è‚é)
+    // ï¿½`ï¿½æƒŠï¿½\ï¿½[ï¿½X(Gameï¿½ï¿½ï¿½ï¿½Ø‚ï¿½ï¿½)
     ID3D11DeviceContext* m_context = nullptr;
     DirectX::CommonStates* m_states = nullptr;
     ID3D11ShaderResourceView* m_bloodSRV = nullptr;
     DirectX::BasicEffect* m_particleEffect = nullptr;
     ID3D11InputLayout* m_particleInputLayout = nullptr;
 
-    // •`‰æƒoƒbƒ`
+    // ï¿½`ï¿½ï¿½oï¿½bï¿½`
     std::unique_ptr<DirectX::PrimitiveBatch<DirectX::VertexPositionColorTexture>> m_batch;
 
-    // ƒVƒF[ƒ_[ƒRƒ“ƒpƒCƒ‹
+    // ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[ï¿½Rï¿½ï¿½ï¿½pï¿½Cï¿½ï¿½
     bool CompileShaders(ID3D11Device* device);
 
-    // ’è”ƒoƒbƒtƒ@XV
+    // ï¿½è”ï¿½oï¿½bï¿½tï¿½@ï¿½Xï¿½V
     void SetupBloodCB(DirectX::XMMATRIX wvp, DirectX::XMFLOAT3 camPos,
         DirectX::XMFLOAT3 lightDir, float screenMode);
 };

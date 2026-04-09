@@ -34,22 +34,22 @@ private:
 	ComPtr<ID3D11Buffer> m_vertexBuffer;
 	ComPtr<ID3D11Buffer> m_indexBuffer;
 
-	// ŠÛ‚¢‰e‚Ì‰æ‘œƒf[ƒ^
+	// ï¿½Û‚ï¿½ï¿½eï¿½Ì‰æ‘œï¿½fï¿½[ï¿½^
 	ComPtr<ID3D11ShaderResourceView> m_textureView;
 
-	// ƒXƒe[ƒg
+	// ï¿½Xï¿½eï¿½[ï¿½g
 	ComPtr<ID3D11BlendState> m_blendState;
 	ComPtr<ID3D11DepthStencilState> m_depthStencilState;
 	ComPtr<ID3D11RasterizerState> m_rasterizerStateNoCull;
 
 	DirectX::XMFLOAT4 m_shadowColor;
 
-	// “à•”ŠÖ”
+	// ï¿½ï¿½ï¿½ï¿½ï¿½Öï¿½
 	bool CreateBuffers(ID3D11Device* device);
 	bool CreateBlendState(ID3D11Device* device);
 	bool CreateDepthStencilState(ID3D11Device* device);
 	bool CreateRasterizerState(ID3D11Device* device);
 
-	// ŠÛ‚¢‰æ‘œ‚ğƒvƒƒOƒ‰ƒ€‚Åì‚éŠÖ”
+	// ï¿½Û‚ï¿½ï¿½æ‘œï¿½ï¿½ï¿½vï¿½ï¿½ï¿½Oï¿½ï¿½ï¿½ï¿½ï¿½Åï¿½ï¿½Öï¿½
 	bool CreateCircleTexture(ID3D11Device* device);
 };

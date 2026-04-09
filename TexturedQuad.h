@@ -1,5 +1,5 @@
 //	TexturedQuad.h
-//	3D‹óŠÔ‚ÉƒeƒNƒXƒ`ƒƒ‚ğ“\‚Á‚½”Â‚ğ•`‰æ
+//	3Dï¿½ï¿½Ô‚Éƒeï¿½Nï¿½Xï¿½`ï¿½ï¿½ï¿½ï¿½\ï¿½ï¿½ï¿½ï¿½ï¿½Â‚ï¿½`ï¿½ï¿½
 #pragma once
 #include <d3d11.h>
 #include <DirectXMath.h>
@@ -8,41 +8,41 @@
 #include "Effects.h"
 #include "CommonStates.h"
 
-//	===	ƒeƒNƒXƒ`ƒƒ•t‚«’¸“_ƒf[ƒ^
+//	===	ï¿½eï¿½Nï¿½Xï¿½`ï¿½ï¿½ï¿½tï¿½ï¿½ï¿½ï¿½ï¿½_ï¿½fï¿½[ï¿½^
 struct VertexPositionTexture
 {
-	DirectX::XMFLOAT3 position;	//	ˆÊ’u(3DÀ•W): ’¸“_‚ª3D‹óŠÔ‚Ì‚Ç‚±‚É‚ ‚é‚Ì‚©
-	DirectX::XMFLOAT2 texCoord;	//	UVÀ•W:	’¸“_‚ÌƒeƒNƒXƒ`ƒƒã‚Ì‘Î‰ˆÊ’u
+	DirectX::XMFLOAT3 position;	//	ï¿½Ê’u(3Dï¿½ï¿½ï¿½W): ï¿½ï¿½ï¿½_ï¿½ï¿½3Dï¿½ï¿½Ô‚Ì‚Ç‚ï¿½ï¿½É‚ï¿½ï¿½ï¿½Ì‚ï¿½
+	DirectX::XMFLOAT2 texCoord;	//	UVï¿½ï¿½ï¿½W:	ï¿½ï¿½ï¿½_ï¿½Ìƒeï¿½Nï¿½Xï¿½`ï¿½ï¿½ï¿½ï¿½Ì‘Î‰ï¿½ï¿½Ê’u
 
-	VertexPositionTexture() = default;	//	ƒfƒtƒHƒ‹ƒgƒRƒ“ƒXƒgƒ‰ƒNƒ^
+	VertexPositionTexture() = default;	//	ï¿½fï¿½tï¿½Hï¿½ï¿½ï¿½gï¿½Rï¿½ï¿½ï¿½Xï¿½gï¿½ï¿½ï¿½Nï¿½^
 
-	//	‰Šú‰»ƒRƒ“ƒXƒgƒ‰ƒNƒ^
+	//	ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Rï¿½ï¿½ï¿½Xï¿½gï¿½ï¿½ï¿½Nï¿½^
 	VertexPositionTexture(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT2 uv)
 		: position(pos), texCoord(uv)
 	{
 	}
 
-	//	DIrectXTK—p‚Ì“ü—ÍƒŒƒCƒAƒEƒg
+	//	DIrectXTKï¿½pï¿½Ì“ï¿½ï¿½Íƒï¿½ï¿½Cï¿½Aï¿½Eï¿½g
 	static const D3D11_INPUT_ELEMENT_DESC InputElements[];
 	static const int InputElementCount = 2;
 };
 
 
-//	===	ƒeƒNƒXƒ`ƒƒ•t‚«”Âƒ|ƒŠƒSƒ“ƒNƒ‰ƒX	===
+//	===	ï¿½eï¿½Nï¿½Xï¿½`ï¿½ï¿½ï¿½tï¿½ï¿½ï¿½Âƒ|ï¿½ï¿½ï¿½Sï¿½ï¿½ï¿½Nï¿½ï¿½ï¿½X	===
 class TexturedQuad
 {
 public:
 
-	//	---	ƒRƒ“ƒXƒgƒ‰ƒNƒ^	---
+	//	---	ï¿½Rï¿½ï¿½ï¿½Xï¿½gï¿½ï¿½ï¿½Nï¿½^	---
 	TexturedQuad();
 
-	//	---	‰Šú‰»	---
+	//	---	ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½	---
 	bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context);
 
-	//	---	ƒeƒNƒXƒ`ƒƒ“Ç‚İ‚İ	---
+	//	---	ï¿½eï¿½Nï¿½Xï¿½`ï¿½ï¿½ï¿½Ç‚İï¿½ï¿½ï¿½	---
 	bool LoadTexture(ID3D11Device* device, const wchar_t* filename);
 
-	//	---	•`‰æ	---
+	//	---	ï¿½`ï¿½ï¿½	---
 	void Draw(ID3D11DeviceContext* context,
 		DirectX::XMMATRIX world,
 		DirectX::XMMATRIX view,
@@ -50,22 +50,22 @@ public:
 
 private:
 	
-	//	’¸“_ƒoƒbƒtƒ@(”Â‚ÌŒ`ó‚Å[‚½)
+	//	ï¿½ï¿½ï¿½_ï¿½oï¿½bï¿½tï¿½@(ï¿½Â‚ÌŒ`ï¿½ï¿½Å[ï¿½ï¿½)
 	Microsoft::WRL::ComPtr<ID3D11Buffer> m_vertexBuffer;
 
-	//	ƒCƒ“ƒfƒbƒNƒXƒoƒbƒtƒ@(OŠpŒ`‚Ì•À‚Ñ)
+	//	ï¿½Cï¿½ï¿½ï¿½fï¿½bï¿½Nï¿½Xï¿½oï¿½bï¿½tï¿½@(ï¿½Oï¿½pï¿½`ï¿½Ì•ï¿½ï¿½ï¿½)
 	Microsoft::WRL::ComPtr<ID3D11Buffer> m_indexBuffer;
 
-	//	ƒeƒNƒXƒ`ƒƒ
+	//	ï¿½eï¿½Nï¿½Xï¿½`ï¿½ï¿½
 	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_texture;
 
-	//	ƒGƒbƒtƒFƒNƒg(ƒVƒF[ƒ_[)
+	//	ï¿½Gï¿½bï¿½tï¿½Fï¿½Nï¿½g(ï¿½Vï¿½Fï¿½[ï¿½_ï¿½[)
 	std::unique_ptr<DirectX::BasicEffect> m_effect;
 
-	//	“ü—ÍƒŒƒCƒAƒEƒg
+	//	ï¿½ï¿½ï¿½Íƒï¿½ï¿½Cï¿½Aï¿½Eï¿½g
 	Microsoft::WRL::ComPtr<ID3D11InputLayout> m_inputLayout;
 
-	//	‹¤’ÊƒXƒe[ƒg
+	//	ï¿½ï¿½ï¿½ÊƒXï¿½eï¿½[ï¿½g
 	std::unique_ptr<DirectX::CommonStates> m_states;
 };
 

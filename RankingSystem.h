@@ -1,31 +1,31 @@
 // RankingSystem.h
-// y–ğŠ„zƒ‰ƒ“ƒLƒ“ƒOƒf[ƒ^‚ÌŠÇ—i•Û‘¶E“Ç‚İ‚İEƒ\[ƒgj
-// y‰i‘±‰»zƒoƒCƒiƒŠƒtƒ@ƒCƒ‹ "ranking.dat" ‚É•Û‘¶
-//          ƒQ[ƒ€‚ğ•Â‚¶‚Ä‚àƒf[ƒ^‚ªc‚é
+// ï¿½yï¿½ï¿½ï¿½ï¿½ï¿½zï¿½ï¿½ï¿½ï¿½ï¿½Lï¿½ï¿½ï¿½Oï¿½fï¿½[ï¿½^ï¿½ÌŠÇ—ï¿½ï¿½iï¿½Û‘ï¿½ï¿½Eï¿½Ç‚İï¿½ï¿½İEï¿½\ï¿½[ï¿½gï¿½j
+// ï¿½yï¿½iï¿½ï¿½ï¿½ï¿½ï¿½zï¿½oï¿½Cï¿½iï¿½ï¿½ï¿½tï¿½@ï¿½Cï¿½ï¿½ "ranking.dat" ï¿½É•Û‘ï¿½
+//          ï¿½Qï¿½[ï¿½ï¿½ï¿½ï¿½Â‚ï¿½ï¿½Ä‚ï¿½ï¿½fï¿½[ï¿½^ï¿½ï¿½ï¿½cï¿½ï¿½
 
 #pragma once
 
 #include <string>
 #include <vector>
-#include <ctime>        // time_ti“ú‹L˜^—pj
+#include <ctime>        // time_tï¿½iï¿½ï¿½ï¿½ï¿½ï¿½Lï¿½^ï¿½pï¿½j
 
 // =============================================
-// ƒ‰ƒ“ƒLƒ“ƒO1Œ•ª‚Ìƒf[ƒ^
+// ï¿½ï¿½ï¿½ï¿½ï¿½Lï¿½ï¿½ï¿½O1ï¿½ï¿½ï¿½ï¿½ï¿½Ìƒfï¿½[ï¿½^
 // =============================================
 struct RankingEntry
 {
-    int   score;            // ‡ŒvƒXƒRƒAim_goTotalScorej
-    int   wave;             // “’BƒEƒF[ƒu
-    int   kills;            // ƒLƒ‹”
-    int   headshots;        // ƒwƒbƒhƒVƒ‡ƒbƒg”
-    int   rank;             // ƒ‰ƒ“ƒN (0=C, 1=B, 2=A, 3=S)
-    float survivalTime;     // ¶‘¶ŠÔi•bj
-    time_t timestamp;       // ‹L˜^‚µ‚½“úiUNIXŠÔj
+    int   score;            // ï¿½ï¿½ï¿½vï¿½Xï¿½Rï¿½Aï¿½im_goTotalScoreï¿½j
+    int   wave;             // ï¿½ï¿½ï¿½Bï¿½Eï¿½Fï¿½[ï¿½u
+    int   kills;            // ï¿½Lï¿½ï¿½ï¿½ï¿½
+    int   headshots;        // ï¿½wï¿½bï¿½hï¿½Vï¿½ï¿½ï¿½bï¿½gï¿½ï¿½
+    int   rank;             // ï¿½ï¿½ï¿½ï¿½ï¿½N (0=C, 1=B, 2=A, 3=S)
+    float survivalTime;     // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ôiï¿½bï¿½j
+    time_t timestamp;       // ï¿½Lï¿½^ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½iUNIXï¿½ï¿½ï¿½Ôj
 
-    // // ƒvƒŒƒCƒ„[–¼iÅ‘å15•¶š + nullI’[j
+    // // ï¿½vï¿½ï¿½ï¿½Cï¿½ï¿½ï¿½[ï¿½ï¿½ï¿½iï¿½Å‘ï¿½15ï¿½ï¿½ï¿½ï¿½ + nullï¿½Iï¿½[ï¿½j
     char  name[16];
 
-    // ƒfƒtƒHƒ‹ƒgƒRƒ“ƒXƒgƒ‰ƒNƒ^: ‘S•”0‚Å‰Šú‰»
+    // ï¿½fï¿½tï¿½Hï¿½ï¿½ï¿½gï¿½Rï¿½ï¿½ï¿½Xï¿½gï¿½ï¿½ï¿½Nï¿½^: ï¿½Sï¿½ï¿½0ï¿½Åï¿½ï¿½ï¿½ï¿½ï¿½
     RankingEntry()
         : score(0), wave(0), kills(0), headshots(0)
         , rank(0), survivalTime(0.0f), timestamp(0)
@@ -35,27 +35,27 @@ struct RankingEntry
 };
 
 // =============================================
-// ƒ‰ƒ“ƒLƒ“ƒOŠÇ—ƒNƒ‰ƒX
+// ï¿½ï¿½ï¿½ï¿½ï¿½Lï¿½ï¿½ï¿½Oï¿½Ç—ï¿½ï¿½Nï¿½ï¿½ï¿½X
 // =============================================
 class RankingSystem
 {
 public:
-    // --- ’è” ---
-    static constexpr int MAX_ENTRIES = 10;  // Top10‚Ü‚Å•Û‘¶
+    // --- ï¿½è” ---
+    static constexpr int MAX_ENTRIES = 10;  // Top10ï¿½Ü‚Å•Û‘ï¿½
 
-    // --- ƒRƒ“ƒXƒgƒ‰ƒNƒ^ ---
+    // --- ï¿½Rï¿½ï¿½ï¿½Xï¿½gï¿½ï¿½ï¿½Nï¿½^ ---
     RankingSystem();
 
-    // --- ƒXƒRƒA‚ğ// ---
+    // --- ï¿½Xï¿½Rï¿½Aï¿½ï¿½// ---
     int AddEntry(const RankingEntry& entry);
 
-    // --- ƒ‰ƒ“ƒLƒ“ƒOˆê——‚ğæ“¾ ---
+    // --- ï¿½ï¿½ï¿½ï¿½ï¿½Lï¿½ï¿½ï¿½Oï¿½ê——ï¿½ï¿½ï¿½æ“¾ ---
     const std::vector<RankingEntry>& GetEntries() const { return m_entries; }
 
-    // --- V‹L˜^‚©‚Ç‚¤‚©”»’è ---
+    // --- ï¿½Vï¿½Lï¿½^ï¿½ï¿½ï¿½Ç‚ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ---
     bool IsNewRecord(int score) const;
 
-    // --- ƒtƒ@ƒCƒ‹‘€ì ---
+    // --- ï¿½tï¿½@ï¿½Cï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ---
     bool Load();
     bool Save() const;
     void Clear();

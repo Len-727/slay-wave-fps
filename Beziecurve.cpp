@@ -31,7 +31,7 @@ XMFLOAT3 BezierCurve::GetPosition(float t) const
    
     t = (t < 0.0f) ? 0.0f : (t > 1.0f) ? 1.0f : t;
 
-    // === 3ŸƒxƒWƒF‹Èü‚ÌŒvZ ===
+    // === 3ï¿½ï¿½ï¿½xï¿½Wï¿½Fï¿½Èï¿½ï¿½ÌŒvï¿½Z ===
     // B(t) = (1-t)?P? + 3(1-t)?tP? + 3(1-t)t?P? + t?P?
 
     float t2 = t * t;        // t?
@@ -40,13 +40,13 @@ XMFLOAT3 BezierCurve::GetPosition(float t) const
     float mt2 = mt * mt;     // (1-t)?
     float mt3 = mt2 * mt;    // (1-t)?
 
-    // Še€‚ÌŒW”
+    // ï¿½eï¿½ï¿½ï¿½ÌŒWï¿½ï¿½
     float c0 = mt3;          // (1-t)?
     float c1 = 3.0f * mt2 * t;  // 3(1-t)?t
     float c2 = 3.0f * mt * t2;  // 3(1-t)t?
     float c3 = t3;           // t?
 
-    // Še²‚ğŒvZ
+    // ï¿½eï¿½ï¿½ï¿½ï¿½ï¿½vï¿½Z
     XMFLOAT3 result;
     result.x = c0 * m_p0.x + c1 * m_p1.x + c2 * m_p2.x + c3 * m_p3.x;
     result.y = c0 * m_p0.y + c1 * m_p1.y + c2 * m_p2.y + c3 * m_p3.y;
@@ -60,7 +60,7 @@ XMFLOAT3 BezierCurve::GetTangent(float t) const
    
     t = (t < 0.0f) ? 0.0f : (t > 1.0f) ? 1.0f : t;
 
-    // === ƒxƒWƒF‹Èü‚Ì”÷•ªiÚüƒxƒNƒgƒ‹j===
+    // === ï¿½xï¿½Wï¿½Fï¿½Èï¿½ï¿½Ì”ï¿½ï¿½ï¿½ï¿½iï¿½Úï¿½ï¿½xï¿½Nï¿½gï¿½ï¿½ï¿½j===
     // B'(t) = 3(1-t)?(P?-P?) + 6(1-t)t(P?-P?) + 3t?(P?-P?)
 
     float t2 = t * t;
@@ -89,7 +89,7 @@ XMFLOAT3 BezierCurve::GetTangent(float t) const
     tangent.y = c0 * d0.y + c1 * d1.y + c2 * d2.y;
     tangent.z = c0 * d0.z + c1 * d1.z + c2 * d2.z;
 
-    // ³‹K‰»
+    // ï¿½ï¿½ï¿½Kï¿½ï¿½
     XMVECTOR v = XMLoadFloat3(&tangent);
     v = XMVector3Normalize(v);
     XMStoreFloat3(&tangent, v);

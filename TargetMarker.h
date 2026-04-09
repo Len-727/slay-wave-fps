@@ -1,4 +1,4 @@
-// TargetMarker.h - ‚\‚¦’†‚ÌƒƒbƒNƒIƒ“ƒ}[ƒJ[
+// TargetMarker.h - ï¿½ï¿½ï¿½\ï¿½ï¿½ï¿½ï¿½ï¿½Ìƒï¿½ï¿½bï¿½Nï¿½Iï¿½ï¿½ï¿½}ï¿½[ï¿½Jï¿½[
 #pragma once
 
 #include <d3d11.h>
@@ -14,7 +14,7 @@ public:
 
     bool Initialize(ID3D11Device* device);
 
-    // ƒ}[ƒJ[‚ğ1‚Â•`‰æ
+    // ï¿½}ï¿½[ï¿½Jï¿½[ï¿½ï¿½1ï¿½Â•`ï¿½ï¿½
     void Render(
         ID3D11DeviceContext* context,
         DirectX::XMFLOAT3 targetPos,
@@ -35,13 +35,13 @@ private:
         DirectX::XMFLOAT2 TexCoord;
     };
 
-    // HLSL‚ÆŠ®‘Sˆê’viStunRingVS.hlsl‚Æ“¯‚¶\‘¢j
+    // HLSLï¿½ÆŠï¿½ï¿½Sï¿½ï¿½vï¿½iStunRingVS.hlslï¿½Æ“ï¿½ï¿½ï¿½ï¿½\ï¿½ï¿½ï¿½j
     struct MarkerCB
     {
         DirectX::XMMATRIX View;
         DirectX::XMMATRIX Projection;
-        DirectX::XMFLOAT3 EnemyPos;    // ƒ^[ƒQƒbƒgˆÊ’u
-        float              RingSize;     // ƒ}[ƒJ[ƒTƒCƒY
+        DirectX::XMFLOAT3 EnemyPos;    // ï¿½^ï¿½[ï¿½Qï¿½bï¿½gï¿½Ê’u
+        float              RingSize;     // ï¿½}ï¿½[ï¿½Jï¿½[ï¿½Tï¿½Cï¿½Y
         float              Time;
         DirectX::XMFLOAT3 Padding;
     };
