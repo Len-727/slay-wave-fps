@@ -1,4 +1,4 @@
-// UISystem.cpp - UI•`‰æƒVƒXƒeƒ€‚ÌÀ‘•
+// UISystem.cpp - UIæç”»ã‚·ã‚¹ãƒ†ãƒ ã®å®Ÿè£…
 #include "UISystem.h"
 #include "Player.h"
 #include "WeaponSystem.h"
@@ -6,31 +6,31 @@
 #include <vector>
 #include <string>
 
-// ƒRƒ“ƒXƒgƒ‰ƒNƒ^
+// ã‚³ãƒ³ã‚¹ãƒˆãƒ©ã‚¯ã‚¿
 UISystem::UISystem(int screenWidth, int screenHeight) :
     m_screenWidth(screenWidth),
     m_screenHeight(screenHeight)
 {
 }
 
-// ‰æ–ÊƒTƒCƒY•ÏX
+// ç”»é¢ã‚µã‚¤ã‚ºå¤‰æ›´
 void UISystem::OnScreenSizeChanged(int width, int height)
 {
     m_screenWidth = width;
     m_screenHeight = height;
 }
 
-// ‘SUI—v‘f‚ğ•`‰æ
+// å…¨UIè¦ç´ ã‚’æç”»
 void UISystem::DrawAll(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
     const Player* player,
     const WeaponSystem* weaponSystem,
     const WaveManager* waveManager)
 {
-    // NULLƒ`ƒFƒbƒNiˆÀ‘S‚Ì‚½‚ßj
+    // NULLãƒã‚§ãƒƒã‚¯ï¼ˆå®‰å…¨ã®ãŸã‚ï¼‰
     if (!batch || !player || !weaponSystem || !waveManager)
         return;
 
-    // ŠeUI—v‘f‚ğ•`‰æ
+    // å„UIè¦ç´ ã‚’æç”»
     //DrawHealthBar(batch, player->GetHealth());
     DrawCrosshair(batch);
     //DrawWaveNumber(batch, waveManager->GetCurrentWave());
@@ -41,7 +41,7 @@ void UISystem::DrawAll(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* ba
     DrawWeaponNumber(batch, (int)weaponSystem->GetCurrentWeapon() + 1);
 }
 
-// ‘Ì—Íƒo[•`‰æi¶‰ºj
+// ä½“åŠ›ãƒãƒ¼æç”»ï¼ˆå·¦ä¸‹ï¼‰
 void UISystem::DrawHealthBar(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch, int health)
 {
     float barWidth = 200.0f;
@@ -50,7 +50,7 @@ void UISystem::DrawHealthBar(DirectX::PrimitiveBatch<DirectX::VertexPositionColo
     float startX = padding;
     float startY = m_screenHeight - padding - barHeight;
 
-    // ”wŒiiˆÃ‚¢ŠDFj
+    // èƒŒæ™¯ï¼ˆæš—ã„ç°è‰²ï¼‰
     DirectX::XMFLOAT4 bgColor(0.2f, 0.2f, 0.2f, 0.8f);
     for (float i = 0; i < barHeight; ++i)
     {
@@ -60,7 +60,7 @@ void UISystem::DrawHealthBar(DirectX::PrimitiveBatch<DirectX::VertexPositionColo
         );
     }
 
-    // HP•”•ªiF‚ª•Ï‚í‚éj
+    // HPéƒ¨åˆ†ï¼ˆè‰²ãŒå¤‰ã‚ã‚‹ï¼‰
     float healthPercent = (float)health / 100.0f;
     float currentBarWidth = barWidth * healthPercent;
 
@@ -68,11 +68,11 @@ void UISystem::DrawHealthBar(DirectX::PrimitiveBatch<DirectX::VertexPositionColo
     {
         DirectX::XMFLOAT4 healthColor;
         if (healthPercent > 0.6f)
-            healthColor = DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);  // —Î
+            healthColor = DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);  // ç·‘
         else if (healthPercent > 0.3f)
-            healthColor = DirectX::XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f);  // ‰©
+            healthColor = DirectX::XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f);  // é»„
         else
-            healthColor = DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);  // Ô
+            healthColor = DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);  // èµ¤
 
         for (float i = 0; i < barHeight; ++i)
         {
@@ -83,7 +83,7 @@ void UISystem::DrawHealthBar(DirectX::PrimitiveBatch<DirectX::VertexPositionColo
         }
     }
 
-    // ˜güi”’j
+    // æ ç·šï¼ˆç™½ï¼‰
     DirectX::XMFLOAT4 borderColor(1.0f, 1.0f, 1.0f, 1.0f);
     batch->DrawLine(
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(startX, startY, 1.0f), borderColor),
@@ -103,7 +103,7 @@ void UISystem::DrawHealthBar(DirectX::PrimitiveBatch<DirectX::VertexPositionColo
     );
 }
 
-// ƒNƒƒXƒwƒA•`‰æi’†‰›j
+// ã‚¯ãƒ­ã‚¹ãƒ˜ã‚¢æç”»ï¼ˆä¸­å¤®ï¼‰
 void UISystem::DrawCrosshair(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch)
 {
     DirectX::XMFLOAT4 crosshairColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -111,23 +111,23 @@ void UISystem::DrawCrosshair(DirectX::PrimitiveBatch<DirectX::VertexPositionColo
     float centerY = m_screenHeight / 2.0f;
     float size = 20.0f;
 
-    // cü
+    // ç¸¦ç·š
     batch->DrawLine(
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(centerX, centerY - size, 1.0f), crosshairColor),
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(centerX, centerY + size, 1.0f), crosshairColor)
     );
 
-    // ‰¡ü
+    // æ¨ªç·š
     batch->DrawLine(
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(centerX - size, centerY, 1.0f), crosshairColor),
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(centerX + size, centerY, 1.0f), crosshairColor)
     );
 }
 
-// ƒEƒF[ƒu”Ô†•`‰æiã’†‰›j
+// ã‚¦ã‚§ãƒ¼ãƒ–ç•ªå·æç”»ï¼ˆä¸Šä¸­å¤®ï¼‰
 void UISystem::DrawWaveNumber(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch, int wave)
 {
-    DirectX::XMFLOAT4 color(1.0f, 1.0f, 0.0f, 1.0f);  // ‰©F
+    DirectX::XMFLOAT4 color(1.0f, 1.0f, 0.0f, 1.0f);  // é»„è‰²
     float digitWidth = 15.0f;
     float digitSpacing = 20.0f;
 
@@ -137,7 +137,7 @@ void UISystem::DrawWaveNumber(DirectX::PrimitiveBatch<DirectX::VertexPositionCol
     }
     else
     {
-        // Œ…‚ğ•ª‰ğ
+        // æ¡ã‚’åˆ†è§£
         std::vector<int> digits;
         int temp = wave;
         while (temp > 0)
@@ -146,13 +146,13 @@ void UISystem::DrawWaveNumber(DirectX::PrimitiveBatch<DirectX::VertexPositionCol
             temp /= 10;
         }
 
-        // ’†‰›‘µ‚¦
+        // ä¸­å¤®æƒãˆ
         int numDigits = digits.size();
         float totalWidth = numDigits * digitWidth + (numDigits - 1) * (digitSpacing - digitWidth);
         float startX = (m_screenWidth - totalWidth) / 2.0f;
         float startY = 50.0f;
 
-        // ‹t‡‚Å•`‰æiŒ…‚ğ³‚µ‚¢‡˜‚Éj
+        // é€†é †ã§æç”»ï¼ˆæ¡ã‚’æ­£ã—ã„é †åºã«ï¼‰
         for (int i = 0; i < numDigits; ++i)
         {
             DrawSimpleNumber(batch, digits[numDigits - 1 - i],
@@ -161,10 +161,10 @@ void UISystem::DrawWaveNumber(DirectX::PrimitiveBatch<DirectX::VertexPositionCol
     }
 }
 
-// ƒ|ƒCƒ“ƒg•`‰æi‰Eãj
+// ãƒã‚¤ãƒ³ãƒˆæç”»ï¼ˆå³ä¸Šï¼‰
 void UISystem::DrawPoints(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch, int points)
 {
-    DirectX::XMFLOAT4 color(0.1f, 1.0f, 1.0f, 1.0f);  // ƒVƒAƒ“
+    DirectX::XMFLOAT4 color(0.1f, 1.0f, 1.0f, 1.0f);  // ã‚·ã‚¢ãƒ³
     float digitWidth = 15.0f;
     float digitSpacing = 20.0f;
     float padding = 50.0f;
@@ -175,7 +175,7 @@ void UISystem::DrawPoints(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>*
     }
     else
     {
-        // Œ…‚ğ•ª‰ğ
+        // æ¡ã‚’åˆ†è§£
         std::vector<int> digits;
         int temp = points;
         while (temp > 0)
@@ -184,13 +184,13 @@ void UISystem::DrawPoints(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>*
             temp /= 10;
         }
 
-        // ‰E‘µ‚¦
+        // å³æƒãˆ
         int numDigits = digits.size();
         float totalWidth = numDigits * digitWidth + (numDigits - 1) * (digitSpacing - digitWidth);
         float startX = m_screenWidth - padding - totalWidth;
         float startY = padding;
 
-        // ‹t‡‚Å•`‰æ
+        // é€†é †ã§æç”»
         for (int i = 0; i < numDigits; ++i)
         {
             DrawSimpleNumber(batch, digits[numDigits - 1 - i],
@@ -199,12 +199,12 @@ void UISystem::DrawPoints(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>*
     }
 }
 
-// ’e–ò•`‰æi‰E‰ºj
+// å¼¾è–¬æç”»ï¼ˆå³ä¸‹ï¼‰
 void UISystem::DrawAmmo(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
     int currentAmmo, int reserveAmmo, bool isReloading)
 {
-    DirectX::XMFLOAT4 normalColor(1.0f, 1.0f, 1.0f, 1.0f);     // ”’
-    DirectX::XMFLOAT4 reloadColor(1.0f, 0.2f, 0.2f, 1.0f);     // Ô
+    DirectX::XMFLOAT4 normalColor(1.0f, 1.0f, 1.0f, 1.0f);     // ç™½
+    DirectX::XMFLOAT4 reloadColor(1.0f, 0.2f, 0.2f, 1.0f);     // èµ¤
 
     float digitHeight = 25.0f;
     float digitWidth = 15.0f;
@@ -212,14 +212,14 @@ void UISystem::DrawAmmo(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* b
     float separatorWidth = 20.0f;
     float padding = 50.0f;
 
-    // ƒŠƒ[ƒh’†‚È‚çÔF
+    // ãƒªãƒ­ãƒ¼ãƒ‰ä¸­ãªã‚‰èµ¤è‰²
     DirectX::XMFLOAT4 currentColor = isReloading ? reloadColor : normalColor;
 
-    // ”š‚ğ•¶š—ñ‚É•ÏŠ·
+    // æ•°å­—ã‚’æ–‡å­—åˆ—ã«å¤‰æ›
     std::string currentAmmoStr = std::to_string(currentAmmo);
     std::string reserveAmmoStr = std::to_string(reserveAmmo);
 
-    // ˆÊ’uŒvZ
+    // ä½ç½®è¨ˆç®—
     float currentWidth = currentAmmoStr.length() * digitWidth +
         (currentAmmoStr.length() - 1) * (digitSpacing - digitWidth);
     float reserveWidth = reserveAmmoStr.length() * digitWidth +
@@ -228,7 +228,7 @@ void UISystem::DrawAmmo(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* b
     float startX = m_screenWidth - padding - totalWidth;
     float startY = m_screenHeight - padding - digitHeight;
 
-    // Œ»İ’e”‚ğ•`‰æiƒŠƒ[ƒh’†‚È‚çÔj
+    // ç¾åœ¨å¼¾æ•°ã‚’æç”»ï¼ˆãƒªãƒ­ãƒ¼ãƒ‰ä¸­ãªã‚‰èµ¤ï¼‰
     float currentX = startX;
     for (char c : currentAmmoStr)
     {
@@ -236,14 +236,14 @@ void UISystem::DrawAmmo(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* b
         currentX += digitSpacing;
     }
 
-    // ƒXƒ‰ƒbƒVƒ…i”’j
+    // ã‚¹ãƒ©ãƒƒã‚·ãƒ¥ï¼ˆç™½ï¼‰
     currentX += (separatorWidth - digitSpacing) / 2;
     batch->DrawLine(
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(currentX, startY + digitHeight, 1.0f), normalColor),
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(currentX + 10.0f, startY, 1.0f), normalColor)
     );
 
-    // —\”õ’e”‚ğ•`‰æií‚É”’j
+    // äºˆå‚™å¼¾æ•°ã‚’æç”»ï¼ˆå¸¸ã«ç™½ï¼‰
     currentX += separatorWidth - (separatorWidth - digitSpacing) / 2;
     for (char c : reserveAmmoStr)
     {
@@ -252,7 +252,7 @@ void UISystem::DrawAmmo(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* b
     }
 }
 
-// •Ší”Ô†•`‰æi’†‰›‰ºj
+// æ­¦å™¨ç•ªå·æç”»ï¼ˆä¸­å¤®ä¸‹ï¼‰
 void UISystem::DrawWeaponNumber(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch, int weaponNum)
 {
     DirectX::XMFLOAT4 weaponColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -262,7 +262,7 @@ void UISystem::DrawWeaponNumber(DirectX::PrimitiveBatch<DirectX::VertexPositionC
     DrawSimpleNumber(batch, weaponNum, centerX - 30, bottomY, weaponColor);
 }
 
-// ”š•`‰æƒwƒ‹ƒp[
+// æ•°å­—æç”»ãƒ˜ãƒ«ãƒ‘ãƒ¼
 void UISystem::DrawSimpleNumber(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
     int digit, float x, float y, DirectX::XMFLOAT4 color)
 {
@@ -350,44 +350,44 @@ void UISystem::DrawWeaponPrompt(
     if (!weaponSpawn)
         return;
 
-    // === ‰æ–Ê’†‰›‰º•”‚É•\¦ ===
+    // === ç”»é¢ä¸­å¤®ä¸‹éƒ¨ã«è¡¨ç¤º ===
     float centerX = m_screenWidth * 0.5f;
     float promptY = m_screenHeight * 0.7f;
 
-    // === ”wŒii”¼“§–¾‚Ì•j===
+    // === èƒŒæ™¯ï¼ˆåŠé€æ˜ã®é»’ï¼‰===
     float bgWidth = 300.0f;
     float bgHeight = 60.0f;
     DirectX::XMFLOAT4 bgColor(0.0f, 0.0f, 0.0f, 0.7f);
 
     DrawBox(batch, centerX - bgWidth / 2, promptY - bgHeight / 2, bgWidth, bgHeight, bgColor);
 
-    // === w“ü‰Â”\/•s‰Â‚ÌF ===
+    // === è³¼å…¥å¯èƒ½/ä¸å¯ã®è‰² ===
     DirectX::XMFLOAT4 textColor;
     if (alreadyOwned)
     {
-        // ’e–ò•â[
+        // å¼¾è–¬è£œå……
         int ammoCost = weaponSpawn->cost / 2;
         textColor = (playerPoints >= ammoCost) ?
-            DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f) :  // —Îiw“ü‰Âj
-            DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);   // Ôi‚¨‹à•s‘«j
+            DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f) :  // ç·‘ï¼ˆè³¼å…¥å¯ï¼‰
+            DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);   // èµ¤ï¼ˆãŠé‡‘ä¸è¶³ï¼‰
     }
     else
     {
-        // •Šíw“ü
+        // æ­¦å™¨è³¼å…¥
         textColor = (playerPoints >= weaponSpawn->cost) ?
             DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f) :
             DirectX::XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);
     }
 
-    // ˜güiF•t‚«j
+    // æ ç·šï¼ˆè‰²ä»˜ãï¼‰
     DrawBoxOutline(batch, centerX - bgWidth / 2, promptY - bgHeight / 2, bgWidth, bgHeight, textColor);
 }
 
 void UISystem::DrawBox(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
     float x, float y, float width, float height, DirectX::XMFLOAT4 color)
 {
-    // y–ğŠ„zlŠpŒ`‚ğ“h‚è‚Â‚Ô‚·i‰¡ü‚ğ‰½–{‚àˆø‚­j
-    // yˆø”zx, y: ¶ãÀ•W, width, height: ƒTƒCƒY
+    // ã€å½¹å‰²ã€‘å››è§’å½¢ã‚’å¡—ã‚Šã¤ã¶ã™ï¼ˆæ¨ªç·šã‚’ä½•æœ¬ã‚‚å¼•ãï¼‰
+    // ã€å¼•æ•°ã€‘x, y: å·¦ä¸Šåº§æ¨™, width, height: ã‚µã‚¤ã‚º
 
     for (float i = 0; i < height; ++i)
     {
@@ -401,28 +401,28 @@ void UISystem::DrawBox(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* ba
 void UISystem::DrawBoxOutline(DirectX::PrimitiveBatch<DirectX::VertexPositionColor>* batch,
     float x, float y, float width, float height, DirectX::XMFLOAT4 color)
 {
-    // y–ğŠ„zlŠpŒ`‚Ì˜gü‚¾‚¯‚ğ•`‰æi4–{‚Ìüj
-    // yˆø”zx, y: ¶ãÀ•W, width, height: ƒTƒCƒY
+    // ã€å½¹å‰²ã€‘å››è§’å½¢ã®æ ç·šã ã‘ã‚’æç”»ï¼ˆ4æœ¬ã®ç·šï¼‰
+    // ã€å¼•æ•°ã€‘x, y: å·¦ä¸Šåº§æ¨™, width, height: ã‚µã‚¤ã‚º
 
-    // ã‚Ìü
+    // ä¸Šã®ç·š
     batch->DrawLine(
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(x, y, 1.0f), color),
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(x + width, y, 1.0f), color)
     );
 
-    // ‰º‚Ìü
+    // ä¸‹ã®ç·š
     batch->DrawLine(
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(x, y + height, 1.0f), color),
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(x + width, y + height, 1.0f), color)
     );
 
-    // ¶‚Ìü
+    // å·¦ã®ç·š
     batch->DrawLine(
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(x, y, 1.0f), color),
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(x, y + height, 1.0f), color)
     );
 
-    // ‰E‚Ìü
+    // å³ã®ç·š
     batch->DrawLine(
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(x + width, y, 1.0f), color),
         DirectX::VertexPositionColor(DirectX::XMFLOAT3(x + width, y + height, 1.0f), color)

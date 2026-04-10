@@ -62,7 +62,7 @@ public:
 	/***************************************************/
 
 	/**
-   * \brief solve algorithm adapted from : Fast Implementation of Lemke’s Algorithm for Rigid Body Contact Simulation (John E. Lloyd)
+   * \brief solve algorithm adapted from : Fast Implementation of Lemke窶冱 Algorithm for Rigid Body Contact Simulation (John E. Lloyd)
    */
 	btVectorXu solve(unsigned int maxloops = 0);
 
