@@ -351,11 +351,11 @@ void Game::RenderPlaying()
 
         m_gpuParticles->Draw(viewMatrix, projectionMatrix, m_player->GetPosition());
         //  流体レンダリング: シーンをコピーしてからDrawFluid
-        //m_d3dContext->CopyResource(m_sceneCopyTex.Get(), m_offscreenTexture.Get());
-        /*m_gpuParticles->DrawFluid(viewMatrix, projectionMatrix, m_player->GetPosition(),
+        /*m_d3dContext->CopyResource(m_sceneCopyTex.Get(), m_offscreenTexture.Get());
+        m_gpuParticles->DrawFluid(viewMatrix, projectionMatrix, m_player->GetPosition(),
             nullptr, m_offscreenRTV.Get());*/
 
-            // UI描画（オフスクリーンへ）
+        // UI描画（オフスクリーンへ）
         DrawUI();
         DrawScorePopups();
         RenderWaveBanner();
@@ -644,7 +644,7 @@ void Game::RenderPlaying()
         /* m_gpuParticles->DrawFluid(viewMatrix, projectionMatrix, m_player->GetPosition(),
              nullptr, m_renderTargetView.Get());*/
 
-             // UI描画
+        // UI描画
         DrawUI();
         DrawScorePopups();
         RenderWaveBanner();

@@ -601,7 +601,6 @@ void Game::DrawUI()
                 { L"Side Button",   L"Melee" },
                 { L"E",             L"Shield Throw" },
                 { L"Space",         L"Jump" },
-                { L"F1",            L"Debug" },
             };
 
             for (const auto& ctrl : controls)

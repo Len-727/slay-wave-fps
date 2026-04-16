@@ -230,8 +230,42 @@ void TitleScene::Render(
     else
     {
         // === 燃焼中：旗の3D描画===
-        RenderToTexture(context);
-        ApplyBlur(context, backBufferRTV, depthStencilView);
+       // バックバッファに直接描画（ブラーなし）
+        context->OMSetRenderTargets(1, &backBufferRTV, depthStencilView);
+        float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+        context->ClearRenderTargetView(backBufferRTV, clearColor);
+
+        D3D11_VIEWPORT viewport = {};
+        viewport.Width = static_cast<float>(m_screenWidth);
+        viewport.Height = static_cast<float>(m_screenHeight);
+        viewport.MinDepth = 0.0f;
+        viewport.MaxDepth = 1.0f;
+        context->RSSetViewports(1, &viewport);
+
+        BurnBufferType burnData;
+        burnData.burnProgress = m_burnProgress;
+        burnData.time = m_time;
+        burnData.emberWidth = m_emberWidth;
+        burnData.burnDirection = 0.0f;
+        context->UpdateSubresource(m_burnBuffer.Get(), 0, nullptr, &burnData, 0, 0);
+
+        context->VSSetShader(m_postProcessVS.Get(), nullptr, 0);
+        context->PSSetShader(m_burnPixelShader.Get(), nullptr, 0);
+        context->IASetInputLayout(m_postProcessLayout.Get());
+        context->PSSetConstantBuffers(0, 1, m_burnBuffer.GetAddressOf());
+
+        ID3D11ShaderResourceView* textures[2] = { m_flagTexture.Get(), m_noiseTexture.Get() };
+        context->PSSetShaderResources(0, 2, textures);
+        context->PSSetSamplers(0, 1, m_samplerState.GetAddressOf());
+
+        UINT stride = sizeof(DirectX::XMFLOAT3) + sizeof(DirectX::XMFLOAT2);
+        UINT offset = 0;
+        context->IASetVertexBuffers(0, 1, m_fullscreenQuadVB.GetAddressOf(), &stride, &offset);
+        context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+        context->Draw(4, 0);
+
+        ID3D11ShaderResourceView* nullSRV[2] = { nullptr, nullptr };
+        context->PSSetShaderResources(0, 2, nullSRV);
     }
 }
 void TitleScene::CreateShaders(ID3D11Device* device)
