@@ -81,7 +81,7 @@ https://youtu.be/gX0uiv2PbhA
 
 | 項目 | 詳細 |
 |------|------|
-| 言語 | C++17 |
+| 言語 | C++14 |
 | グラフィックスAPI | DirectX 11 |
 | シェーダー | HLSL（`D3DCompileFromFile` によるランタイムコンパイル） |
 | 物理エンジン | Bullet Physics 3.x |
