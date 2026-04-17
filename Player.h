@@ -26,7 +26,7 @@ public:
     // static constexpr: コンパイル時に確定する定数。メモリを食わない。
     static constexpr float GRAVITY = 43.0f;   // 重力加速度（大きい=重い着地感）
     static constexpr float JUMP_FORWARD_BOOST = 1.4f;  // ジャンプ時の前方ブースト量
-    static constexpr float JUMP_FORCE = 27.0f;    // ジャンプ初速（大きい=高く跳ぶ）
+    static constexpr float JUMP_FORCE = 25.0f;    // ジャンプ初速（大きい=高く跳ぶ）
     static constexpr float EYE_HEIGHT = 1.8f;    // 目線の高さ（地面からの距離）
     static constexpr float COYOTE_TIME = 0.1f;    // 崖から落ちた直後のジャンプ猶予（秒）
     static constexpr float JUMP_BUFFER = 0.15f;   // 着地前の先行入力受付（秒）
