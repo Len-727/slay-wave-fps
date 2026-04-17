@@ -6,51 +6,33 @@
 *.sln.docstates
 
 # ===== ビルド出力 =====
-[Dd]ebug/
-[Dd]ebugPublic/
-[Rr]elease/
-[Rr]eleases/
 x64/
 x86/
 [Ww][Ii][Nn]32/
-[Aa][Rr][Mm]/
-[Aa][Rr][Mm]64/
 bld/
 [Bb]in/
 [Oo]bj/
 
-# ===== DirectX中間ファイル =====
+# ===== 中間ファイル =====
 *.pdb
 *.idb
 *.ilk
 *.obj
 *.pch
 *.exp
-*.lib
-*.dll
+
+# ===== 実行ファイル =====
 *.exe
-
-# ===== DLL（必要なものは除外） =====
-# 必要なDLLは後で追加
-
-# DLLは基本的に除外
-*.dll
-
-# でも必要なDLLは含める（否定パターン）
-!x64/Release/assimp-vc143-mt.dll
-!x64/Release/poly2tri.dll
-!x64/Release/minizip.dll
-!x64/Release/zlib1.dll
-!x64/Release/kubazip.dll
-!x64/Release/pugixml.dll
-
-# ===== アセット（大きいファイル） =====
-# 必要に応じて調整
-*.fbx
-*.png
-*.jpg
 
 # ===== Windows =====
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# ===== 巨大ファイル（GitHub 100MB制限対策） =====
+Assets/Models/Shield/Textury/02_Shield_BaseColor.png
+Assets/Models/Shield/Textury/02_Shield_Displacement.png
+Assets/Models/Shield/Textury/02_Shield_Metallic.png
+Assets/Models/Shield/Textury/02_Shield_Normal.png
+Assets/Models/Shield/Textury/02_Shield_Roughness.png
+x64/Release.zip
