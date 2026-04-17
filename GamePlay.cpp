@@ -1918,19 +1918,25 @@ void Game::UpdateEnemyAI(float deltaTime)
                 case EnemyType::BOSS:    typeIdx = 4; break;
                 }
 
-                float animSpeed = 0.1f;
-                if (enemy.currentAnimation == "Idle")        animSpeed = m_enemySystem->m_animSpeed_Idle[typeIdx];
-                else if (enemy.currentAnimation == "Walk")   animSpeed = m_enemySystem->m_animSpeed_Walk[typeIdx];
-                else if (enemy.currentAnimation == "Run")    animSpeed = m_enemySystem->m_animSpeed_Run[typeIdx];
-                else if (enemy.currentAnimation == "Attack") animSpeed = 0.0f;
-                else if (enemy.currentAnimation == "AttackJump") animSpeed = 0.0f;
-                else if (enemy.currentAnimation == "AttackSlash") animSpeed = 0.0f;
-                else                                         animSpeed = 0.1f;
+                //  Attack系アニメは EnemySystem.cpp が時間管理（二重管理防止）
+                const bool isAttackAnim =
+                    (enemy.currentAnimation == "Attack" ||
+                        enemy.currentAnimation == "AttackJump" ||
+                        enemy.currentAnimation == "AttackSlash");
 
-                enemy.animationTime += deltaTime * animSpeed;
-                if (enemy.animationTime >= duration)
+                if (!isAttackAnim)
                 {
-                    enemy.animationTime = 0.0f;
+                    float animSpeed = 0.1f;
+                    if (enemy.currentAnimation == "Idle")       animSpeed = m_enemySystem->m_animSpeed_Idle[typeIdx];
+                    else if (enemy.currentAnimation == "Walk")  animSpeed = m_enemySystem->m_animSpeed_Walk[typeIdx];
+                    else if (enemy.currentAnimation == "Run")   animSpeed = m_enemySystem->m_animSpeed_Run[typeIdx];
+                    else                                        animSpeed = 0.1f;
+
+                    enemy.animationTime += deltaTime * animSpeed;
+                    if (enemy.animationTime >= duration)
+                    {
+                        enemy.animationTime = 0.0f;
+                    }
                 }
             }
         }
@@ -2869,6 +2875,14 @@ void Game::UpdateBossAttacks(float deltaTime)
                 float distXZ = sqrtf(dx * dx + dz * dz);
                 float dist = distXZ;  // XZ距離で範囲判定
 
+                //  着地エフェクトは常に再生（ダメージとは独立）
+                if (m_effectGroundSlam != nullptr && m_effekseerManager != nullptr)
+                {
+                    m_effekseerManager->Play(
+                        m_effectGroundSlam,
+                        enemy.position.x, enemy.position.y + 0.1f, enemy.position.z);
+                }
+
                 // ジャンプで高い位置にいたらスラム回避
                 constexpr float SLAM_EVADE_HEIGHT = 3.0f;
                 if (dy > SLAM_EVADE_HEIGHT)
@@ -2972,14 +2986,6 @@ void Game::UpdateBossAttacks(float deltaTime)
                 if (m_particleSystem)
                 {
                     //m_particleSystem->CreateExplosion(enemy.position);
-                }
-
-                //  衝撃波エフェクト//
-                if (m_effectGroundSlam != nullptr && m_effekseerManager != nullptr)
-                {
-                    m_effekseerManager->Play(
-                        m_effectGroundSlam,
-                        enemy.position.x, enemy.position.y + 0.1f, enemy.position.z);
                 }
 
                 enemy.attackJustLanded = false;

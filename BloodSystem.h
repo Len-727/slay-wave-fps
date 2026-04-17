@@ -72,6 +72,7 @@ private:
         float                ScreenMode;      // 4  bytes (0=3D, 1=2D)
     };
     float m_totalTime = 0.0f;
+    float m_lastScreenBloodTime = -1.0f;    //  最後に血を生成した時刻(連続キル演出用)
 
     // 描画リソース(Gameから借りる)
     ID3D11DeviceContext* m_context = nullptr;

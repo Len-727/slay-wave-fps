@@ -58,12 +58,23 @@ public:
 	void SeMaxEnemies(int max) { m_maxEnemies = max; }
 
     // アタックタイミング　IMGui
-    float m_normalAttackHitTime = 1.22f;
-    float m_normalAttackDuration = 3.83f;
+    float m_normalAttackHitTime = 0.62f;
+    float m_normalAttackDuration = 1.43f;
     float m_runnerAttackHitTime = 1.2f;
     float m_runnerAttackDuration = 2.20f;
     float m_tankAttackHitTime = 1.2f;
     float m_tankAttackDuration = 3.17f;
+    float m_attackStartRange = 2.0f;
+    float m_attackExitRange = 3.0f;
+
+    //  Walk ↔ Run 切り替え距離（ヒステリシス付き）
+    float m_runStartRange = 6.0f;   // この距離以上離れたら Run
+    float m_walkStartRange = 4.0f;  // この距離以内に入ったら Walk
+
+    //  Run 時の速度倍率（Walk = 1.0 基準）
+    float m_runSpeedMult = 1.8f;   // Run は Walk の1.8倍速
+
+    float m_runnerRunBonus = 1.3f;  //  Runner専用
 
     // デバッグ用：指定タイプの敵を1体スポーン
     void SpawnEnemyOfType(EnemyType type, DirectX::XMFLOAT3 playerPos);

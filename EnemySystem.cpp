@@ -255,12 +255,19 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 	// --- 現在「攻撃モーション中」かどうか ---
 	bool isInAttackAnim = (enemy.currentAnimation == "Attack");
 
+	//	距離ベースの状態遷移
+	//	- 近い (< attackStartRange): Attack 開始
+	//	- 遠い (> attackExitRange):  Walk に戻る
+	//	- 中間ゾーン: 現状維持（ヒステリシス）
+	const bool inStartRange = (playerDist < m_attackStartRange);
+	const bool outOfExitRange = (playerDist > m_attackExitRange);
+
 	// =============================================
 	//  攻撃モーション再生中 → 最後まで振り切る
 	// =============================================
 	if (isInAttackAnim)
 	{
-		//  ヒット前: プレイヤーに向かってランジ
+		// ヒット前: プレイヤーに向かってランジ
 		if (enemy.animationTime < attackHitTime)
 		{
 			float dx = playerPos.x - enemy.position.x;
@@ -278,12 +285,11 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 		}
 		else
 		{
-			// ヒット後は足を止める
 			enemy.velocity.x = 0.0f;
 			enemy.velocity.z = 0.0f;
 		}
 
-		//  アニメーション時間を進める（元のコード復元）
+		// アニメーション時間を進める
 		float prevTime = enemy.animationTime;
 		enemy.animationTime += deltaTime * attackAnimSpeed;
 
@@ -300,39 +306,48 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 			enemy.attackJustLanded = false;
 		}
 
-		// アニメーション完了 → 次のアクションを決定
+		// アニメーション完了 → 距離で次の状態を決定
 		if (enemy.animationTime >= attackDuration)
 		{
 			enemy.animationTime = 0.0f;
 			enemy.attackJustLanded = false;
 
-			if (enemy.touchingPlayer)
+			if (outOfExitRange)
 			{
-				// まだ近い → 連続攻撃
-			}
-			else
-			{
-				// 離れた → 追いかけに切り替え
 				enemy.currentAnimation = "Walk";
+
+				//	velocity を即プレイヤー方向に復活
+				//	Attack中に velocity=0 にされたため、このままだと次の
+				//		方向転換タイマー(1〜3秒)まで動かない。即追跡再開させる
+				float dx = playerPos.x - enemy.position.x;
+				float dz = playerPos.z - enemy.position.z;
+				float dist = sqrtf(dx * dx + dz * dz);
+				if (dist > 0.1f)
+				{
+					enemy.velocity.x = (dx / dist) * 0.5f;
+					enemy.velocity.z = (dz / dist) * 0.5f;
+				}
+				// 方向転換タイマーもリセットして即次の方向判定へ
+				enemy.moveTimer = enemy.nextDirectionChange;
 			}
+			// 近いまま → Attack 状態維持
 		}
 	}
 
 	// =============================================
-	// パターン2: 攻撃中じゃない & プレイヤーが近い → 攻撃開始
+	// 攻撃中じゃない & 攻撃範囲内 → 攻撃開始
 	// =============================================
-	else if (enemy.touchingPlayer)
+	else if (inStartRange)
 	{
-		// 攻撃モーション開始
 		enemy.currentAnimation = "Attack";
 
 		// 敵同士の攻撃が同時にならないようにランダムオフセット
 		float maxOffset;
 		switch (enemy.type)
 		{
-		case EnemyType::RUNNER:  maxOffset = m_runnerAttackHitTime * 0.5f; break;
+		case EnemyType::RUNNER: maxOffset = m_runnerAttackHitTime * 0.5f; break;
 		case EnemyType::TANK:   maxOffset = m_tankAttackHitTime * 0.5f;   break;
-		default:                maxOffset = m_normalAttackHitTime * 0.5f;  break;
+		default:                maxOffset = m_normalAttackHitTime * 0.5f; break;
 		}
 		enemy.animationTime = ((float)rand() / RAND_MAX) * maxOffset;
 		enemy.attackJustLanded = false;
@@ -348,11 +363,44 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 	{
 		enemy.attackJustLanded = false;
 
-		// 速度の長さ（スピード計算）
+		//	距離ベースの Walk/Run 切り替え
+		//	遠い  → Run  (全力追跡)
+		//	近い  → Walk (威圧歩き)
+		//	中間  → 現状維持
+		bool isCurrentlyRunning = (enemy.currentAnimation == "Run");
+		std::string moveAnim;
+
+		if (playerDist > m_runStartRange)
+		{
+			// 遠い → Run へ遷移
+			moveAnim = "Run";
+		}
+		else if (playerDist < m_walkStartRange)
+		{
+			// 近い → Walk へ遷移
+			moveAnim = "Walk";
+		}
+		else
+		{
+			// 中間ゾーン → 現状のアニメ維持
+			moveAnim = isCurrentlyRunning ? "Run" : "Walk";
+		}
+
+
+		//	TankはRunアニメーションがないからWalkにフォールバック
+		if (enemy.type == EnemyType::TANK && moveAnim == "Run")
+		{
+			moveAnim = "Walk";
+		}
+
+		if (enemy.currentAnimation != moveAnim)
+			enemy.currentAnimation = moveAnim;
+
+
+		// --- 実際の移動速度を計算 ---
 		float speed = sqrtf(enemy.velocity.x * enemy.velocity.x +
 			enemy.velocity.z * enemy.velocity.z);
 
-		// タイプ別の速度倍率
 		float speedMultiplier = 1.0f;
 		switch (enemy.type)
 		{
@@ -361,15 +409,18 @@ void EnemySystem::UpdateEnemyMovement(Enemy& enemy, DirectX::XMFLOAT3 playerPos,
 		case EnemyType::TANK:   speedMultiplier = 1.5f; break;
 		}
 
-		float finalSpeed = speed * speedMultiplier * m_waveSpeedMult;
+		// Run 中はさらに速度を上げる（アニメと実速度を連動）
+		float runBoost = 1.0f;
+		if (moveAnim == "Run")
+		{
+			runBoost = m_runSpeedMult;
+			if (enemy.type == EnemyType::RUNNER)
+			{
+				runBoost = m_runSpeedMult * m_runnerRunBonus;  // Runner 特権
+			}
+		}
 
-		// アニメーション選択
-		std::string moveAnim = (finalSpeed > 4.0f) ? "Run" : "Walk";
-		if (finalSpeed < 0.1f)
-			moveAnim = "Idle";
-
-		if (enemy.currentAnimation != moveAnim)
-			enemy.currentAnimation = moveAnim;
+		float finalSpeed = speed * speedMultiplier * m_waveSpeedMult * runBoost;
 
 		// 位置を更新
 		enemy.position.x += enemy.velocity.x * finalSpeed * deltaTime;

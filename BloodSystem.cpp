@@ -15,7 +15,7 @@
 // ============================================================
 BloodSystem::BloodSystem()
 {
-    m_screenBloods.reserve(200);
+    m_screenBloods.reserve(SCREEN_BLOOD_HARD_LIMIT);
     m_bloodDecals.reserve(MAX_BLOOD_DECALS);
 }
 
@@ -219,8 +219,46 @@ void BloodSystem::OnMeleeKill(DirectX::XMFLOAT3 enemyPos)
 // ============================================================
 //  スクリーンブラッド - 生成
 // ============================================================
+static constexpr int SCREEN_BLOOD_SOFT_LIMIT = 200;
+static constexpr int SCREEN_BLOOD_HARD_LIMIT = 400;
 void BloodSystem::SpawnScreenBlood(int count, float intensity)
 {
+    //  既存量に応じた負荷制御
+    const int existing = (int)m_screenBloods.size();
+
+    //  ハード上限: 完全スキップ
+    if (existing >= SCREEN_BLOOD_HARD_LIMIT)
+        return;
+
+    // ソフト上限: 既存数に応じて線形減衰
+    //   200個なら100%、400個なら0% になるよう傾斜
+    if (existing >= SCREEN_BLOOD_SOFT_LIMIT)
+    {
+        const float remainingRatio =
+            (float)(SCREEN_BLOOD_HARD_LIMIT - existing) /
+            (float)(SCREEN_BLOOD_HARD_LIMIT - SCREEN_BLOOD_SOFT_LIMIT);
+
+        count = (int)(count * remainingRatio);
+        intensity *= remainingRatio;  // 血の大きさも控えめに
+
+        if (count < 1) return;
+    }
+
+    //  時間ベースのスロットリング
+    //  50ms以内に連続生成され、かつ既に100個以上あるなら count を1/4に削減
+    //  「キル間隔が短い＋既存量が多い」両方の条件で発動するので、
+    //  ウェーブクリアの大量爆発など瞬間的な連鎖ケースを緩和できる
+    constexpr float BURST_INTERVAL = 0.05f;   // 50ms
+    constexpr int   BURST_THRESHOLD = 100;
+    constexpr int   BURST_REDUCTION = 4;
+
+    if (m_totalTime - m_lastScreenBloodTime < BURST_INTERVAL
+        && existing > BURST_THRESHOLD)
+    {
+        count = (std::max)(1, count / BURST_REDUCTION);
+    }
+    m_lastScreenBloodTime = m_totalTime;
+
     int impactCount = 2 + count / 2;
     for (int imp = 0; imp < impactCount; imp++)
     {
