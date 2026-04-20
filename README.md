@@ -24,7 +24,6 @@ https://youtu.be/gX0uiv2PbhA
 
 ### 物理演算
 - **Bullet Physics** による剛体物理シミュレーション
-- 敵死亡時のラグドール反応
 - メッシュスライス時の破片・欠片の飛散
 
 ### 敵AI
@@ -34,7 +33,7 @@ https://youtu.be/gX0uiv2PbhA
 
 ### 設計
 - 責務ごとにファイルを分離（Physics、Debug、Render など）
-- `constexpr` による定数管理 — マジックナンバーなし
+- `constexpr` による定数管理
 - **ImGui** デバッグオーバーレイによるリアルタイム検査
 
 ---
@@ -60,14 +59,7 @@ https://youtu.be/gX0uiv2PbhA
 - **Visual Studio 2022**
 - Windows 10 / 11
 
-### 依存ライブラリ
-| ライブラリ | 役割 |
-|-----------|------|
-| [DirectXTK](https://github.com/microsoft/DirectXTK) | スプライト描画、モデル読み込み |
-| [Bullet Physics](https://github.com/bulletphysics/bullet3) | 剛体物理・衝突判定 |
-| [Assimp](https://github.com/assimp/assimp) | FBX／OBJモデルのインポート |
-| [Effekseer](https://github.com/effekseer/Effekseer) | パーティクル・リボンエフェクト |
-| [Dear ImGui](https://github.com/ocornut/imgui) | デバッグUI |
+
 
 ### 手順
 1. このリポジトリをクローンする
