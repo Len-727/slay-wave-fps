@@ -64,8 +64,7 @@ https://youtu.be/gX0uiv2PbhA
 ### 手順
 1. このリポジトリをクローンする
 2. Visual Studio 2022 で `Rivalsgame1.sln` を開く
-3. 上記の依存ライブラリがリンクされていることを確認
-4. **Release**（x64）でビルド・実行する
+3. **Release**（x64）でビルド・実行する
 
 ---
 
